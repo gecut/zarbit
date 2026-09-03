@@ -4,8 +4,39 @@
 :root {
   font-family: system-ui, sans-serif;
   direction: rtl;
+  background: #f6f7f8;
 }
 
 body {
   margin: 0;
+  min-width: 320px;
+  background: #f6f7f8;
+}
+
+.app-shell {
+  min-height: 100svh;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem calc(5.5rem + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  max-width: 42rem;
+  margin: 0 auto 1.25rem;
+}
+
+.app-content {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.app-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: max(0.5rem, env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  z-index: 10;
 }

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ReactDOM from "react-dom/client";
 
 import { routeTree } from "./routeTree.gen";
+import { initializeTelegramWebApp } from "./lib/telegram";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ if (!rootElement) {
 }
 
 if (!rootElement.innerHTML) {
+  initializeTelegramWebApp();
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <QueryClientProvider client={queryClient}>

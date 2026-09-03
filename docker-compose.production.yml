@@ -66,9 +66,11 @@ services:
         required: false
     environment:
       NODE_ENV: production
-      WORKER_KEEP_ALIVE: "true"
+      DATABASE_URL: file:/data/zarbit.db
+      TELEGRAM_SESSION_PATH: /session/zarbit.session
     volumes:
-      - zarbit-worker-session:/data
+      - zarbit-data:/data
+      - zarbit-worker-session:/session
     networks:
       - dokploy-network
     restart: unless-stopped

@@ -56,3 +56,27 @@ services:
         bind:
           create_host_path: false
     restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    init: true
+    env_file:
+      - path: apps/worker/.env
+        required: false
+    environment:
+      DATABASE_URL: file:/data/local.db
+      TELEGRAM_SESSION_PATH: /session/zarbit.session
+    volumes:
+      - type: bind
+        source: ./.data
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./.session
+        target: /session
+        bind:
+          create_host_path: false
+    restart: unless-stopped

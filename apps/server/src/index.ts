@@ -1,31 +1,153 @@
+import { serve } from "@hono/node-server";
+import {
+  RequestStatus,
+  cancelActiveRequest,
+  createRequest,
+  getRequestForUser,
+  listRequestsForUser,
+  updateActiveRequest,
+  upsertTelegramUser,
+  type RequestInput,
+} from "@zarbit/db";
+import { compactQuoteToHumanPrice, humanPriceToCompactQuote } from "@zarbit/domain";
 import { env } from "@zarbit/env/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { z } from "zod";
 
-const app = new Hono();
+import { authenticateTelegramRequest } from "./auth.js";
+import { createTelegramBot } from "./telegram.js";
 
-app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
-  }),
-);
-
-app.get("/", (c) => {
-  return c.text("OK");
+const requestInputSchema = z.object({
+  condition: z.enum(["LTE", "GTE"]),
+  targetPrice: z.number().int().positive(),
+  action: z.enum(["ALERT", "BUY", "SELL"]),
+  units: z.number().int().positive().nullable().optional(),
+}).superRefine((value, context) => {
+  if (value.action !== "ALERT" && !value.units) {
+    context.addIssue({ code: "custom", message: "تعداد واحد برای خرید و فروش الزامی است.", path: ["units"] });
+  }
 });
 
-import { serve } from "@hono/node-server";
+function requestDto(request: {
+  id: string;
+  condition: "LTE" | "GTE";
+  targetPrice: number;
+  action: "ALERT" | "BUY" | "SELL";
+  units: number | null;
+  status: RequestStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  triggeredQuote: number | null;
+  completedAt: Date | null;
+  failureReason: string | null;
+}) {
+  return {
+    id: request.id,
+    condition: request.condition,
+    targetPrice: compactQuoteToHumanPrice(request.targetPrice),
+    action: request.action,
+    units: request.units,
+    status: request.status,
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+    triggeredQuote: request.triggeredQuote ? compactQuoteToHumanPrice(request.triggeredQuote) : null,
+    completedAt: request.completedAt,
+    failureReason: request.failureReason,
+  };
+}
 
-serve(
-  {
-    fetch: app.fetch,
-    port: 3000,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-  },
-);
+function errorResponse(message: string, status = 400) {
+  return { error: { message, status } };
+}
+
+export const app = new Hono<{ Variables: { user: { id: string } } }>();
+
+app.use(logger());
+app.use("/*", cors({
+  origin: env.CORS_ORIGIN,
+  allowHeaders: ["Content-Type", "X-Telegram-Init-Data"],
+  allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+}));
+app.get("/", (c) => c.text("OK"));
+
+async function currentUser(initData: string | undefined) {
+  return upsertTelegramUser(authenticateTelegramRequest(initData));
+}
+
+app.post("/api/auth/telegram", async (c) => {
+  try {
+    const body = await c.req.json<{ initData?: unknown }>();
+    const user = await currentUser(typeof body.initData === "string" ? body.initData : undefined);
+    return c.json({ data: { telegramUserId: user.telegramUserId, firstName: user.firstName } });
+  } catch (error) {
+    return c.json(errorResponse(error instanceof Error ? error.message : "ورود ناموفق بود.", 401), 401);
+  }
+});
+
+app.use("/api/requests/*", async (c, next) => {
+  try {
+    c.set("user", await currentUser(c.req.header("X-Telegram-Init-Data")));
+    await next();
+  } catch (error) {
+    return c.json(errorResponse(error instanceof Error ? error.message : "دسترسی نامعتبر است.", 401), 401);
+  }
+});
+
+app.get("/api/requests", async (c) => {
+  const filter = c.req.query("status");
+  const status = filter && Object.values(RequestStatus).includes(filter as RequestStatus) ? filter as RequestStatus : undefined;
+  const requests = await listRequestsForUser(c.get("user").id, status);
+  return c.json({ data: requests.map(requestDto) });
+});
+
+app.get("/api/requests/:id", async (c) => {
+  const request = await getRequestForUser(c.get("user").id, c.req.param("id"));
+  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("درخواست پیدا نشد.", 404), 404);
+});
+
+async function parseRequestInput(body: unknown): Promise<{ data: RequestInput } | { error: string }> {
+  const parsed = requestInputSchema.safeParse(body);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "اطلاعات درخواست نامعتبر است." };
+  try {
+    return { data: {
+      ...parsed.data,
+      units: parsed.data.action === "ALERT" ? null : parsed.data.units ?? null,
+      targetPrice: humanPriceToCompactQuote(parsed.data.targetPrice),
+    } };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "قیمت نامعتبر است." };
+  }
+}
+
+app.post("/api/requests", async (c) => {
+  const input = await parseRequestInput(await c.req.json());
+  if ("error" in input) return c.json(errorResponse(input.error), 400);
+  const request = await createRequest(c.get("user").id, input.data);
+  return c.json({ data: requestDto(request) }, 201);
+});
+
+app.patch("/api/requests/:id", async (c) => {
+  const input = await parseRequestInput(await c.req.json());
+  if ("error" in input) return c.json(errorResponse(input.error), 400);
+  const request = await updateActiveRequest(c.get("user").id, c.req.param("id"), input.data);
+  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل ویرایش است.", 409), 409);
+});
+
+app.delete("/api/requests/:id", async (c) => {
+  const request = await cancelActiveRequest(c.get("user").id, c.req.param("id"));
+  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل لغو است.", 409), 409);
+});
+
+export function startServer() {
+  if (env.TELEGRAM_BOT_TOKEN) {
+    const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
+    bot.start({ drop_pending_updates: false }).catch((error: unknown) => {
+      console.error("Telegram bot failed to start", error instanceof Error ? error.message : error);
+    });
+  }
+  return serve({ fetch: app.fetch, port: 3000 }, (info) => console.info(`Server is running on http://localhost:${info.port}`));
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) startServer();

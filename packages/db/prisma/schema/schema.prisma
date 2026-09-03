@@ -8,3 +8,53 @@ generator client {
 datasource db {
   provider = "sqlite"
 }
+
+enum RequestCondition {
+  LTE
+  GTE
+}
+
+enum RequestAction {
+  ALERT
+  BUY
+  SELL
+}
+
+enum RequestStatus {
+  ACTIVE
+  DONE
+  CANCELLED
+  FAILED
+}
+
+model TelegramUser {
+  id             String    @id @default(cuid())
+  telegramUserId String    @unique
+  firstName      String?
+  username       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  requests       Request[]
+}
+
+model Request {
+  id                 String           @id @default(cuid())
+  userId             String
+  condition          RequestCondition
+  targetPrice        Int
+  action             RequestAction
+  units              Int?
+  status             RequestStatus    @default(ACTIVE)
+  claimToken         String?          @unique
+  claimedAt          DateTime?
+  triggeredQuote     Int?
+  triggeredMessageId Int?
+  completedAt        DateTime?
+  failureReason      String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  user               TelegramUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, claimToken])
+}

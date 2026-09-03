@@ -11,8 +11,12 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
+    "@zarbit/db": "workspace:*",
+    "@zarbit/domain": "workspace:*",
     "@zarbit/env": "workspace:*",
-    "hono": "^4.12.32"
+    "grammy": "^1.42.0",
+    "hono": "^4.12.32",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -1,0 +1,4 @@
+{
+  "extends": "@zarbit/config/tsconfig.base.json",
+  "include": ["src"]
+}

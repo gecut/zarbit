@@ -1,0 +1,56 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+import { allowedTelegramUserIds, env } from "@zarbit/env/server";
+
+export interface TelegramIdentity {
+  telegramUserId: string;
+  firstName?: string;
+  username?: string;
+}
+
+function invalidInitData(): never {
+  throw new Error("اطلاعات ورود تلگرام معتبر نیست.");
+}
+
+export function verifyTelegramInitData(initData: string): TelegramIdentity {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("اعتبارسنجی تلگرام روی سرور پیکربندی نشده است.");
+
+  const params = new URLSearchParams(initData);
+  const providedHash = params.get("hash");
+  const userValue = params.get("user");
+  const authDate = Number(params.get("auth_date"));
+  if (!providedHash || !userValue || !Number.isSafeInteger(authDate) || authDate <= 0) invalidInitData();
+  if (Math.floor(Date.now() / 1_000) - authDate > 86_400 || authDate > Math.floor(Date.now() / 1_000) + 60) invalidInitData();
+
+  const dataCheckString = [...params.entries()]
+    .filter(([key]) => key !== "hash")
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
+  const secretKey = createHmac("sha256", "WebAppData").update(env.TELEGRAM_BOT_TOKEN).digest();
+  const expectedHash = createHmac("sha256", secretKey).update(dataCheckString).digest();
+  const receivedHash = Buffer.from(providedHash, "hex");
+  if (receivedHash.length !== expectedHash.length || !timingSafeEqual(receivedHash, expectedHash)) invalidInitData();
+
+  let user: unknown;
+  try { user = JSON.parse(userValue); } catch { invalidInitData(); }
+  if (!user || typeof user !== "object" || !("id" in user)) invalidInitData();
+  const record = user as { id: unknown; first_name?: unknown; username?: unknown };
+  if ((typeof record.id !== "number" && typeof record.id !== "string") || !String(record.id).trim()) invalidInitData();
+
+  return {
+    telegramUserId: String(record.id),
+    firstName: typeof record.first_name === "string" ? record.first_name : undefined,
+    username: typeof record.username === "string" ? record.username : undefined,
+  };
+}
+
+export function authenticateTelegramRequest(initData: string | undefined): TelegramIdentity {
+  const identity = initData
+    ? verifyTelegramInitData(initData)
+    : env.NODE_ENV !== "production" && env.DEV_TELEGRAM_USER_ID
+      ? { telegramUserId: env.DEV_TELEGRAM_USER_ID, firstName: "کاربر توسعه" }
+      : (() => { throw new Error("برای ورود، برنامه را از داخل تلگرام باز کنید."); })();
+  if (!allowedTelegramUserIds.has(identity.telegramUserId)) throw new Error("دسترسی این حساب تلگرام مجاز نیست.");
+  return identity;
+}

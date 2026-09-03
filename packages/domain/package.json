@@ -1,0 +1,17 @@
+{
+  "name": "@zarbit/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@zarbit/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

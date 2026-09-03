@@ -41,7 +41,7 @@ ghcr.io/<owner>/<repository>-worker
 
 Set the repository variable `VITE_SERVER_URL` before publishing so the web image points at the public API URL. The workflow uses the repository `GITHUB_TOKEN`; no registry secret is stored in the repository.
 
-On the deployment host, copy `deploy/server.env.example` and `deploy/worker.env.example` to the corresponding `.env` files, set `GHCR_IMAGE_PREFIX` and `IMAGE_TAG`, then run:
+The complete variable reference is [.env.example](/Users/mm25zamanian/Codes/zarbit/.env.example). On the deployment host, copy `deploy/compose.env.example` to `.env`, copy `deploy/server.env.example` and `deploy/worker.env.example` to the corresponding runtime env files, replace every placeholder, then run:
 
 ```bash
 docker compose -f docker-compose.production.yml up -d

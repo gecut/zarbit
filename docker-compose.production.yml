@@ -2,7 +2,7 @@ name: zarbit
 
 services:
   web:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-web:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/user/zarbit}-web:${IMAGE_TAG:-latest}
     ports:
       - "${WEB_PORT:-3001}:80"
     depends_on:
@@ -18,7 +18,7 @@ services:
     init: true
 
   server:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/user/zarbit}-server:${IMAGE_TAG:-latest}
     ports:
       - "${SERVER_PORT:-3000}:3000"
     env_file:
@@ -40,7 +40,7 @@ services:
     init: true
 
   worker:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-worker:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:-latest}
     env_file:
       - path: ./deploy/worker.env
         required: false

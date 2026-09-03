@@ -1,11 +1,37 @@
+# ============================================================
+# Zarbit — Project Codex Configuration
+# ============================================================
+
+# ------------------------------------------------------------
+# Model
+# ------------------------------------------------------------
+
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+model_verbosity = "low"
+model_reasoning_summary = "detailed"
+
+
+# ============================================================
+# Project MCP Servers
+# ============================================================
+
+# Better-T-Stack repository/scaffold guidance.
+# Keep this project-scoped because it is only relevant to
+# repositories based on Better-T-Stack.
+
 [mcp_servers.better-t-stack]
 command = "pnpm"
 args = ["dlx", "create-better-t-stack@latest", "mcp"]
+enabled = true
+startup_timeout_sec = 20
 
-[mcp_servers.context7]
-command = "npx"
-args = ["-y", "@upstash/context7-mcp"]
 
-[mcp_servers.shadcn]
+# HeroUI v3 documentation and component source of truth.
+# Zarbit uses HeroUI as its only UI component system.
+
+[mcp_servers.heroui-react]
 command = "npx"
-args = ["-y", "shadcn@latest", "mcp"]
+args = ["-y", "@heroui/react-mcp@latest"]
+enabled = true
+startup_timeout_sec = 20

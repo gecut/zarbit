@@ -1,11 +1,11 @@
 FROM node:24-slim AS builder
-RUN npm install -g pnpm@11
+RUN npm install -g pnpm@10.26.0
 WORKDIR /app
-# prisma generate resolves DATABASE_URL at install time; the real value comes from compose at runtime
 ENV DATABASE_URL=file:./build.db
+ENV CI=true
 
 COPY . .
-RUN --mount=type=cache,target=/pnpm-store pnpm install --store-dir /pnpm-store
+RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 ARG VITE_SERVER_URL
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}

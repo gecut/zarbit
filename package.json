@@ -12,6 +12,7 @@
     "check-types": "turbo run check-types",
     "dev:web": "turbo run dev -F web --",
     "dev:server": "turbo run dev -F server --",
+    "dev:worker": "turbo run dev -F worker --",
     "db:push": "turbo run db:push -F @zarbit/db --",
     "db:studio": "turbo run db:studio -F @zarbit/db --",
     "db:generate": "turbo run db:generate -F @zarbit/db --",
@@ -19,15 +20,14 @@
     "db:local": "turbo run db:local -F @zarbit/db --",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d --build",
+    "docker:config:production": "docker compose -f docker-compose.production.yml config",
+    "docker:up:production": "docker compose -f docker-compose.production.yml up -d",
+    "docker:up:production:worker": "docker compose -f docker-compose.production.yml --profile worker up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "prepare": "husky"
   },
-  "dependencies": {
-    "@zarbit/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "catalog:",
     "@zarbit/config": "workspace:*",

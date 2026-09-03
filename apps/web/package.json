@@ -12,21 +12,17 @@
     "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-router": "^1.170.18",
     "@zarbit/env": "workspace:*",
-    "@zarbit/ui": "workspace:*",
-    "dotenv": "catalog:",
-    "lucide-react": "catalog:",
-    "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "sonner": "catalog:",
-    "vite-plugin-pwa": "^1.3.0",
-    "zod": "catalog:"
+    "vite-plugin-pwa": "^1.3.0"
   },
   "devDependencies": {
-    "@tanstack/react-router-devtools": "^1.167.0",
     "@tanstack/router-plugin": "^1.168.23",
     "@types/node": "catalog:",
     "@types/react": "catalog:",

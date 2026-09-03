@@ -9,9 +9,6 @@
     "skipLibCheck": true,
     "types": ["vite/client"],
     "rootDirs": ["."],
-    "paths": {
-      "@/*": ["./src/*"],
-      "@zarbit/ui/*": ["../../packages/ui/src/*"]
-    }
+    "paths": {"@/*": ["./src/*"]}
   }
 }

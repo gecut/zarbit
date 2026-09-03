@@ -10,6 +10,7 @@
     }
   },
   "scripts": {
+    "check-types": "tsc --noEmit",
     "db:local": "turso dev --db-file local.db",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

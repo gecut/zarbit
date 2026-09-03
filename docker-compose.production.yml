@@ -1,0 +1,57 @@
+name: zarbit
+
+services:
+  web:
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-web:${IMAGE_TAG:-latest}
+    ports:
+      - "${WEB_PORT:-3001}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    init: true
+
+  server:
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+    env_file:
+      - path: ./deploy/server.env
+        required: false
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/zarbit.db
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+    volumes:
+      - zarbit-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    init: true
+
+  worker:
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-worker:${IMAGE_TAG:-latest}
+    env_file:
+      - path: ./deploy/worker.env
+        required: false
+    environment:
+      NODE_ENV: production
+      WORKER_KEEP_ALIVE: "true"
+    volumes:
+      - zarbit-worker-session:/data
+    restart: unless-stopped
+    init: true
+
+volumes:
+  zarbit-data:
+  zarbit-worker-session:

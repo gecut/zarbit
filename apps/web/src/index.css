@@ -1,1 +1,11 @@
-@import "@zarbit/ui/globals.css";
+@import "tailwindcss";
+@import "@heroui/styles";
+
+:root {
+  font-family: system-ui, sans-serif;
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+}

@@ -41,13 +41,15 @@ ghcr.io/<owner>/<repository>-worker
 
 Set the repository variable `VITE_SERVER_URL` before publishing so the web image points at the public API URL. The workflow uses the repository `GITHUB_TOKEN`; no registry secret is stored in the repository.
 
-The complete variable reference is [.env.example](/Users/mm25zamanian/Codes/zarbit/.env.example). On the deployment host, copy `deploy/compose.env.example` to `.env`, copy `deploy/server.env.example` and `deploy/worker.env.example` to the corresponding runtime env files, replace every placeholder, then run:
+The complete variable reference is [.env.example](/Users/mm25zamanian/Codes/zarbit/.env.example). On the deployment host, copy `deploy/compose.env.example` to `.env`, copy `deploy/server.env.example` and `deploy/worker.env.example` to the corresponding runtime env files, replace the domain and credential placeholders, then run:
 
 ```bash
 docker compose -f docker-compose.production.yml up -d
 ```
 
 The worker currently stays alive as an idle foundation process until Telegram behavior is implemented. `zarbit-data` persists SQLite and `zarbit-worker-session` is reserved for the future mtcute session.
+
+The Dokploy compose uses the external `dokploy-network` and explicit Traefik labels. Add DNS A records for `WEB_DOMAIN` and `API_DOMAIN`. Use these labels as the routing source, or remove them and configure Dokploy's Domains UI—do not configure both for the same router. No host `ports` mapping is used, so it does not collide with other applications; Traefik routes to container ports 80 and 3000.
 
 ## Environment
 

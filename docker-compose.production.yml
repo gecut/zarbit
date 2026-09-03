@@ -2,12 +2,22 @@ name: zarbit
 
 services:
   web:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/user/zarbit}-web:${IMAGE_TAG:-latest}
-    ports:
-      - "${WEB_PORT:-3001}:80"
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-web:${IMAGE_TAG:-latest}
+    expose:
+      - "80"
     depends_on:
       server:
         condition: service_healthy
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zarbit-web.rule=Host(`${WEB_DOMAIN:-app.example.com}`)
+      - traefik.http.routers.zarbit-web.entrypoints=websecure
+      - traefik.http.routers.zarbit-web.tls=true
+      - traefik.http.routers.zarbit-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.zarbit-web.loadbalancer.server.port=80
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
       interval: 15s
@@ -18,18 +28,28 @@ services:
     init: true
 
   server:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/user/zarbit}-server:${IMAGE_TAG:-latest}
-    ports:
-      - "${SERVER_PORT:-3000}:3000"
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
+    expose:
+      - "3000"
     env_file:
       - path: ./deploy/server.env
         required: false
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/data/zarbit.db
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://app.example.com}
     volumes:
       - zarbit-data:/data
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zarbit-api.rule=Host(`${API_DOMAIN:-api.example.com}`)
+      - traefik.http.routers.zarbit-api.entrypoints=websecure
+      - traefik.http.routers.zarbit-api.tls=true
+      - traefik.http.routers.zarbit-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      - traefik.http.services.zarbit-api.loadbalancer.server.port=3000
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
@@ -40,7 +60,7 @@ services:
     init: true
 
   worker:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-worker:${IMAGE_TAG:-latest}
     env_file:
       - path: ./deploy/worker.env
         required: false
@@ -49,9 +69,15 @@ services:
       WORKER_KEEP_ALIVE: "true"
     volumes:
       - zarbit-worker-session:/data
+    networks:
+      - dokploy-network
     restart: unless-stopped
     init: true
 
 volumes:
   zarbit-data:
   zarbit-worker-session:
+
+networks:
+  dokploy-network:
+    external: true

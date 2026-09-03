@@ -1,0 +1,3 @@
+{
+  "extends": "@zarbit/config/tsconfig.base.json"
+}

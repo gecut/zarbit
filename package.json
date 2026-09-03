@@ -1,0 +1,43 @@
+{
+  "name": "zarbit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:web": "turbo run dev -F web --",
+    "dev:server": "turbo run dev -F server --",
+    "db:push": "turbo run db:push -F @zarbit/db --",
+    "db:studio": "turbo run db:studio -F @zarbit/db --",
+    "db:generate": "turbo run db:generate -F @zarbit/db --",
+    "db:migrate": "turbo run db:migrate -F @zarbit/db --",
+    "db:local": "turbo run db:local -F @zarbit/db --",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@zarbit/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@zarbit/config": "workspace:*",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.4.1",
+    "turbo": "^2.10.12",
+    "typescript": "catalog:"
+  },
+  "lint-staged": {
+    "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,vue,astro,svelte}": ""
+  },
+  "packageManager": "pnpm@10.26.0"
+}

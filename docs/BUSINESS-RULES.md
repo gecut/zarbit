@@ -217,7 +217,7 @@ The Telegram group does not allow message forwarding.
 
 This does not change the system architecture.
 
-The self-bot is a member of the group and directly receives updates through MTProto. Trade execution is a reply to the original message, not a forward.
+Each connected user account is a group member and directly receives updates through MTProto. Trade execution is a reply to the original message, not a forward.
 
 ## 14. Edited Messages
 

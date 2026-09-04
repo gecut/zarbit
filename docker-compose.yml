@@ -37,6 +37,7 @@ services:
     environment:
       CORS_ORIGIN: http://localhost:3001
       DATABASE_URL: file:/data/local.db
+      TELEGRAM_SESSIONS_DIR: /sessions
     healthcheck:
       test:
         [
@@ -55,6 +56,14 @@ services:
         target: /data
         bind:
           create_host_path: false
+      - type: bind
+        source: ./.session
+        target: /sessions
+        bind:
+          create_host_path: false
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   worker:
@@ -67,7 +76,8 @@ services:
         required: false
     environment:
       DATABASE_URL: file:/data/local.db
-      TELEGRAM_SESSION_PATH: /session/zarbit.session
+      RUST_LOG: info
+      TELEGRAM_SESSIONS_DIR: /sessions
     volumes:
       - type: bind
         source: ./.data
@@ -76,7 +86,25 @@ services:
           create_host_path: false
       - type: bind
         source: ./.session
-        target: /session
+        target: /sessions
         bind:
           create_host_path: false
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    command: ["node", "/app/packages/db/node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "/app/packages/db/prisma.config.ts"]
+    environment:
+      DATABASE_URL: file:/data/local.db
+    volumes:
+      - type: bind
+        source: ./.data
+        target: /data
+        bind:
+          create_host_path: false
+    restart: "no"

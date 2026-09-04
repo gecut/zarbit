@@ -27,6 +27,14 @@ enum RequestStatus {
   FAILED
 }
 
+enum TelegramSessionState {
+  PENDING_QR
+  ACTIVE
+  NOT_IN_GROUP
+  REVOKED
+  ERROR
+}
+
 model TelegramUser {
   id             String    @id @default(cuid())
   telegramUserId String    @unique
@@ -35,6 +43,23 @@ model TelegramUser {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   requests       Request[]
+  telegramSession TelegramSession?
+}
+
+model TelegramSession {
+  id                      String               @id @default(cuid())
+  userId                  String               @unique
+  storageKey              String?              @unique
+  connectedTelegramUserId String?              @unique
+  state                   TelegramSessionState @default(PENDING_QR)
+  membershipCheckedAt     DateTime?
+  lastError               String?
+  stateChangedAt          DateTime             @default(now())
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  user                    TelegramUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([state, updatedAt])
 }
 
 model Request {
@@ -51,6 +76,7 @@ model Request {
   triggeredMessageId Int?
   completedAt        DateTime?
   failureReason      String?
+  cancellationReason String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   user               TelegramUser     @relation(fields: [userId], references: [id], onDelete: Cascade)

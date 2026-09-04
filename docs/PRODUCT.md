@@ -6,7 +6,7 @@
 
 ## 1. Product Summary
 
-Zarbit is a private Telegram Mini App plus Telegram self-bot automation system for a gold-trading group.
+Zarbit is a private Telegram Mini App plus user-owned Telegram automation system for a gold-trading group.
 
 The system watches a specific Telegram group where gold quote messages ("مظنه") are published in a fixed format. Authorized users create one-shot requests in the Mini App based on a target price.
 
@@ -59,17 +59,17 @@ Responsibilities:
 
 It does not execute trades in the trading group.
 
-### 3.3 Telegram User Account / Self-bot
+### 3.3 Telegram User Account / MTProto session
 
-A single fixed Telegram user account connected via MTProto using mtcute.
+Each authorized Mini App user connects their own Telegram account via QR-only MTProto login using mtcute.
 
 Responsibilities:
 
-- stay connected to the target trading group;
+- stay connected to the fixed target trading group;
 - receive quote messages from the configured source;
-- reply to the triggering quote message when a buy/sell request matches.
+- reply to the triggering quote message from that same user's account when one of that user's buy/sell requests matches.
 
-Only one self-bot account exists in the MVP.
+The product accepts up to 20 active sessions. The application credentials are global server secrets; users never provide `TELEGRAM_API_ID` or `TELEGRAM_API_HASH`.
 
 ## 4. Main User Flow
 
@@ -98,7 +98,7 @@ Only one self-bot account exists in the MVP.
 4. A quote message arrives.
 5. If quote satisfies the condition:
    - system claims the request so it cannot execute twice;
-   - self-bot replies to that exact quote message;
+   - their connected Telegram account replies to that exact quote message;
    - trade message uses the quote that triggered the request;
    - request becomes `DONE`;
    - user receives a private notification.
@@ -196,7 +196,6 @@ No public website, SEO surface, CMS, account registration, password login, or ad
 
 Do not add these unless separately requested:
 
-- multi-account self-bot support;
 - multiple trading groups;
 - dynamic quote sources;
 - public user signup;

@@ -71,6 +71,7 @@ function RequestCard({ request, allowActions = false }: { request: ZarbitRequest
       {request.units ? <p className="text-sm text-muted">تعداد: {request.units} واحد</p> : null}
       {request.triggeredQuote ? <p className="text-sm text-muted">مظنه اجرا: {formatPrice(request.triggeredQuote)}</p> : null}
       {request.failureReason ? <p className="text-sm text-danger">{request.failureReason}</p> : null}
+      {request.cancellationReason ? <p className="text-sm text-muted">{request.cancellationReason}</p> : null}
     </Card.Content>
     {allowActions ? <Card.Footer className="grid grid-cols-2 gap-2"><Button variant="secondary" onPress={() => navigate({ to: "/requests/$id/edit", params: { id: request.id } })}>ویرایش</Button><Button isDisabled={cancel.isPending} variant="danger" onPress={() => cancel.mutate(request.id)}>لغو</Button></Card.Footer> : null}
   </Card>;

@@ -23,7 +23,7 @@
 
 ### Telegram
 
-- `mtcute` for the MTProto self-bot worker
+- `mtcute` for the per-user MTProto worker
 - `grammY` for the normal Telegram Bot API integration
 
 ### Repository / Tooling
@@ -129,8 +129,8 @@ Must not directly own the long-running MTProto group listener.
 
 Responsibilities:
 
-- connect a single Telegram user account using mtcute;
-- persist/reuse Telegram session data;
+- run up to 20 independent Telegram user accounts using mtcute;
+- persist/reuse one opaque SQLite session file per user on the shared protected volume;
 - listen to the configured group;
 - accept quote messages only from the configured source;
 - parse quote messages;
@@ -139,7 +139,7 @@ Responsibilities:
 - execute alert/buy/sell behavior;
 - update request status.
 
-This process is long-running and must have a single active replica in MVP.
+This process is long-running and must have a single active replica in MVP. A failed or reconnecting user client must not stop other user clients.
 
 ## 5. Data Flow
 
@@ -247,7 +247,7 @@ worker
 - one replica;
 - long-running;
 - restartable;
-- persistent mtcute session;
+- persistent protected per-user mtcute sessions;
 - private/no public HTTP port required unless a health endpoint is intentionally added.
 
 ## 10. Environment Configuration

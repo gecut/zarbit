@@ -6,6 +6,7 @@ export default defineConfig({
   outDir: "./dist",
   clean: true,
   deps: {
+    neverBundle: true,
     alwaysBundle: [/@zarbit\/.*/],
   },
 });

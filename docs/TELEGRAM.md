@@ -1,6 +1,6 @@
 # Zarbit — Telegram Integration
 
-> Scope: Telegram Mini App authentication, Bot API notifications, and MTProto self-bot behavior.
+> Scope: Telegram Mini App authentication, Bot API notifications, and user-owned MTProto behavior.
 
 ## 1. Telegram Identities
 
@@ -21,7 +21,7 @@ Responsibilities:
 
 It does not listen to or execute trades in the trading group unless separately required.
 
-### 1.2 Self-bot User Account
+### 1.2 User-owned MTProto session
 
 Library:
 
@@ -37,16 +37,16 @@ Node.js
 
 Responsibilities:
 
-- maintain an MTProto user session;
+- maintain each authorized user's MTProto session;
 - listen to the configured trading group;
 - receive quote messages;
 - reply to quote messages with trade instructions.
 
-Only one self-bot account is supported in MVP.
+QR is the only login method. The server validates Mini App `initData`, verifies that the QR-authorized account has the same Telegram ID, then verifies membership of the fixed trading group. Sessions are isolated per user and capped at 20 concurrent active sessions.
 
 ## 2. Worker Placement
 
-The self-bot must run in:
+The MTProto worker must run in:
 
 ```text
 apps/worker
@@ -89,7 +89,7 @@ Session persistence must survive process restarts.
 
 Do not require interactive Telegram login on every deployment.
 
-The chosen mtcute storage/session mechanism should be persisted on the production volume when necessary.
+Each mtcute SQLite session file must use an opaque generated filename on the shared server/worker production volume. Session files and QR login URLs must never be logged or returned as raw API values.
 
 ## 4. Message Intake
 
@@ -209,7 +209,7 @@ The target group disables message forwarding.
 
 No feature depends on forwarding.
 
-The self-bot:
+Each user session:
 
 - receives updates directly as a group member;
 - replies directly to the original quote message.
@@ -326,10 +326,11 @@ Logs must not expose:
 The mtcute worker:
 
 - is deployed as a separate Docker service;
-- has a single replica;
+- is managed by the worker's single replica;
 - must restart automatically on failure;
 - does not require a public domain;
-- must use persistent storage where its session implementation requires it.
+- must use persistent storage where its session implementation requires it;
+- must verify group membership immediately before executing a matching request. A missing membership revokes the session and cancels that user's active requests.
 
 The server and web applications may scale independently, but MVP does not require horizontal scaling.
 

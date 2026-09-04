@@ -5,6 +5,7 @@ import { telegramInitData } from "./telegram";
 export type RequestStatus = "ACTIVE" | "DONE" | "CANCELLED" | "FAILED";
 export type RequestAction = "ALERT" | "BUY" | "SELL";
 export type RequestCondition = "LTE" | "GTE";
+export type TelegramSessionState = "PENDING_QR" | "ACTIVE" | "NOT_IN_GROUP" | "REVOKED" | "ERROR" | "DISCONNECTED";
 
 export interface ZarbitRequest {
   id: string;
@@ -18,6 +19,16 @@ export interface ZarbitRequest {
   triggeredQuote: number | null;
   completedAt: string | null;
   failureReason: string | null;
+  cancellationReason: string | null;
+}
+
+export interface TelegramSession {
+  state: TelegramSessionState;
+  membershipCheckedAt: string | null;
+  lastError: string | null;
+  stateChangedAt: string | null;
+  qrImage: string | null;
+  qrExpiresAt: string | null;
 }
 
 export interface RequestPayload {
@@ -66,4 +77,16 @@ export function updateRequest(id: string, payload: RequestPayload) {
 
 export function cancelRequest(id: string) {
   return api<ZarbitRequest>(`/api/requests/${id}`, { method: "DELETE" });
+}
+
+export function getTelegramSession() {
+  return api<TelegramSession>("/api/telegram-session/status");
+}
+
+export function createTelegramQrChallenge() {
+  return api<TelegramSession>("/api/telegram-session/qr", { method: "POST" });
+}
+
+export function disconnectTelegramSession() {
+  return api<TelegramSession>("/api/telegram-session", { method: "DELETE" });
 }

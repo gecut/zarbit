@@ -37,6 +37,7 @@ function RootComponent() {
         <Button variant="ghost" size="sm" onPress={() => navigate({ to: "/" })}>خانه</Button>
         <Button variant="ghost" size="sm" onPress={() => navigate({ to: "/requests/active" })}>فعال</Button>
         <Button variant="ghost" size="sm" onPress={() => navigate({ to: "/requests/history" })}>سوابق</Button>
+        <Button variant="ghost" size="sm" onPress={() => navigate({ to: "/telegram" })}>تلگرام</Button>
       </nav>
     </main>
   );

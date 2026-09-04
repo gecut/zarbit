@@ -11,13 +11,19 @@ import {
 } from "@zarbit/db";
 import { compactQuoteToHumanPrice, humanPriceToCompactQuote } from "@zarbit/domain";
 import { env } from "@zarbit/env/server";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { z } from "zod";
 
 import { authenticateTelegramRequest } from "./auth.js";
 import { createTelegramBot } from "./telegram.js";
+import {
+  createTelegramQrChallenge,
+  getTelegramSessionStatus,
+  revokeTelegramSession,
+  userCanManageRequests,
+} from "./telegram-session.js";
 
 const requestInputSchema = z.object({
   condition: z.enum(["LTE", "GTE"]),
@@ -42,6 +48,7 @@ function requestDto(request: {
   triggeredQuote: number | null;
   completedAt: Date | null;
   failureReason: string | null;
+  cancellationReason: string | null;
 }) {
   return {
     id: request.id,
@@ -55,6 +62,7 @@ function requestDto(request: {
     triggeredQuote: request.triggeredQuote ? compactQuoteToHumanPrice(request.triggeredQuote) : null,
     completedAt: request.completedAt,
     failureReason: request.failureReason,
+    cancellationReason: request.cancellationReason,
   };
 }
 
@@ -62,7 +70,9 @@ function errorResponse(message: string, status = 400) {
   return { error: { message, status } };
 }
 
-export const app = new Hono<{ Variables: { user: { id: string } } }>();
+type AppEnv = { Variables: { user: { id: string; telegramUserId: string } } };
+
+export const app = new Hono<AppEnv>();
 
 app.use(logger());
 app.use("/*", cors({
@@ -73,27 +83,52 @@ app.use("/*", cors({
 app.get("/", (c) => c.text("OK"));
 
 async function currentUser(initData: string | undefined) {
-  return upsertTelegramUser(authenticateTelegramRequest(initData));
+  const identity = authenticateTelegramRequest(initData);
+  const user = await upsertTelegramUser(identity);
+  return { id: user.id, telegramUserId: user.telegramUserId };
 }
 
 app.post("/api/auth/telegram", async (c) => {
+  let initData: string | undefined;
   try {
     const body = await c.req.json<{ initData?: unknown }>();
-    const user = await currentUser(typeof body.initData === "string" ? body.initData : undefined);
-    return c.json({ data: { telegramUserId: user.telegramUserId, firstName: user.firstName } });
+    initData = typeof body.initData === "string" ? body.initData : undefined;
+    authenticateTelegramRequest(initData);
   } catch (error) {
     return c.json(errorResponse(error instanceof Error ? error.message : "ورود ناموفق بود.", 401), 401);
   }
+  try {
+    const user = await currentUser(initData);
+    return c.json({ data: { telegramUserId: user.telegramUserId } });
+  } catch {
+    return c.json(errorResponse("سرویس موقتاً در دسترس نیست.", 503), 503);
+  }
 });
 
-app.use("/api/requests/*", async (c, next) => {
+const apiAuthentication: MiddlewareHandler<AppEnv> = async (c, next) => {
+  let identity;
   try {
-    c.set("user", await currentUser(c.req.header("X-Telegram-Init-Data")));
-    await next();
+    identity = authenticateTelegramRequest(c.req.header("X-Telegram-Init-Data"));
   } catch (error) {
     return c.json(errorResponse(error instanceof Error ? error.message : "دسترسی نامعتبر است.", 401), 401);
   }
-});
+  try {
+    const user = await upsertTelegramUser(identity);
+    c.set("user", { id: user.id, telegramUserId: user.telegramUserId });
+  } catch {
+    return c.json(errorResponse("سرویس موقتاً در دسترس نیست.", 503), 503);
+  }
+  await next();
+};
+
+app.use("/api/requests/*", apiAuthentication);
+app.use("/api/telegram-session/*", apiAuthentication);
+
+async function requireActiveTelegramSession(userId: string): Promise<void> {
+  if (!await userCanManageRequests(userId)) {
+    throw new Error("برای ثبت یا ویرایش درخواست، اتصال تلگرام و عضویت گروه باید فعال باشد.");
+  }
+}
 
 app.get("/api/requests", async (c) => {
   const filter = c.req.query("status");
@@ -124,6 +159,11 @@ async function parseRequestInput(body: unknown): Promise<{ data: RequestInput } 
 app.post("/api/requests", async (c) => {
   const input = await parseRequestInput(await c.req.json());
   if ("error" in input) return c.json(errorResponse(input.error), 400);
+  try {
+    await requireActiveTelegramSession(c.get("user").id);
+  } catch (error) {
+    return c.json(errorResponse(error instanceof Error ? error.message : "اتصال تلگرام فعال نیست.", 409), 409);
+  }
   const request = await createRequest(c.get("user").id, input.data);
   return c.json({ data: requestDto(request) }, 201);
 });
@@ -131,6 +171,11 @@ app.post("/api/requests", async (c) => {
 app.patch("/api/requests/:id", async (c) => {
   const input = await parseRequestInput(await c.req.json());
   if ("error" in input) return c.json(errorResponse(input.error), 400);
+  try {
+    await requireActiveTelegramSession(c.get("user").id);
+  } catch (error) {
+    return c.json(errorResponse(error instanceof Error ? error.message : "اتصال تلگرام فعال نیست.", 409), 409);
+  }
   const request = await updateActiveRequest(c.get("user").id, c.req.param("id"), input.data);
   return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل ویرایش است.", 409), 409);
 });
@@ -138,6 +183,23 @@ app.patch("/api/requests/:id", async (c) => {
 app.delete("/api/requests/:id", async (c) => {
   const request = await cancelActiveRequest(c.get("user").id, c.req.param("id"));
   return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل لغو است.", 409), 409);
+});
+
+app.get("/api/telegram-session/status", async (c) => {
+  return c.json({ data: await getTelegramSessionStatus(c.get("user").id) });
+});
+
+app.post("/api/telegram-session/qr", async (c) => {
+  try {
+    const user = c.get("user");
+    return c.json({ data: await createTelegramQrChallenge({ userId: user.id, telegramUserId: user.telegramUserId }) }, 201);
+  } catch (error) {
+    return c.json(errorResponse(error instanceof Error ? error.message : "ایجاد QR ناموفق بود.", 409), 409);
+  }
+});
+
+app.delete("/api/telegram-session", apiAuthentication, async (c) => {
+  return c.json({ data: await revokeTelegramSession(c.get("user").id) });
 });
 
 export function startServer() {

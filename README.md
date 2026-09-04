@@ -1,6 +1,6 @@
 # Zarbit
 
-Zarbit is a private Telegram Mini App foundation for gold-price request automation. This repository currently contains the implementation foundation only; product workflows and Telegram automation are intentionally deferred.
+Zarbit is a private Telegram Mini App for one-shot gold-price alerts and trades. Each allowlisted user connects only their own Telegram account by QR; the worker sends their matching order from that same account.
 
 ## Stack
 
@@ -47,15 +47,15 @@ The complete variable reference is [.env.example](/Users/mm25zamanian/Codes/zarb
 docker compose -f docker-compose.production.yml up -d
 ```
 
-The worker currently stays alive as an idle foundation process until Telegram behavior is implemented. `zarbit-data` persists SQLite and `zarbit-worker-session` is reserved for the future mtcute session.
+The `migrate` service applies Prisma migrations before server and worker start. `zarbit-data` persists SQLite and `zarbit-telegram-sessions` is shared only by server and worker for per-user MTProto SQLite sessions. Never expose or back up these session files outside the protected deployment volume.
 
-The Dokploy compose uses the external `dokploy-network` and explicit Traefik labels. Add DNS A records for `WEB_DOMAIN` and `API_DOMAIN`. Use these labels as the routing source, or remove them and configure Dokploy's Domains UI—do not configure both for the same router. No host `ports` mapping is used, so it does not collide with other applications; Traefik routes to container ports 80 and 3000.
+For Dokploy, configure domains in its UI: route the `web` service to port `80` and the `server` service to port `3000`. The compose intentionally has no Traefik labels, host port bindings, or external network dependency. Set `CORS_ORIGIN` to the final public Mini App origin before deployment.
 
 ## Environment
 
 Server and worker configuration is parsed by `packages/env`. Development defaults allow builds without production credentials. Telegram secrets must only be supplied through deployment environment variables; never commit them.
 
-Expected future variables include `DATABASE_URL`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_GROUP_ID`, `QUOTE_SENDER_ID`, and `ALLOWED_TELEGRAM_USER_IDS`.
+`TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are global product credentials created by the product owner at my.telegram.org; they are not user credentials. Each end user authorizes a separate QR-only MTProto session. The server rejects a QR login when its Telegram user ID differs from the validated Mini App identity, and the worker verifies group membership again immediately before execution. `ALLOWED_TELEGRAM_USER_IDS` remains a restart-required allowlist.
 
 ## Project structure
 
@@ -70,4 +70,4 @@ packages/
   env/
 ```
 
-Business domain models, Mini App authentication, grammY behavior, mtcute sessions/listeners, quote processing, and trade execution belong to subsequent implementation goals.
+The bot only launches the Mini App and sends private notifications. It never receives OTPs or performs MTProto login.

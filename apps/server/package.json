@@ -11,15 +11,22 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
+    "@mtcute/node": "^0.26.0",
+    "@prisma/adapter-libsql": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "@t3-oss/env-core": "^0.13.11",
     "@zarbit/db": "workspace:*",
     "@zarbit/domain": "workspace:*",
     "@zarbit/env": "workspace:*",
+    "dotenv": "catalog:",
     "grammy": "^1.42.0",
     "hono": "^4.12.32",
+    "qrcode": "^1.5.4",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/qrcode": "^1.5.5",
     "@zarbit/config": "workspace:*",
     "tsdown": "^0.22.14",
     "tsx": "^4.23.1",

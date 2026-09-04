@@ -24,6 +24,13 @@ import { env } from "@zarbit/env/worker";
 import { Bot } from "grammy";
 
 const SESSION_SYNC_INTERVAL_MS = 10_000;
+const ZARBIT_CONNECTION_IDENTITY = {
+  deviceModel: "Zarbit",
+  systemVersion: "Zarbit Secure Trading",
+  appVersion: "1.0.0",
+  systemLangCode: "fa",
+  langCode: "fa",
+} as const;
 
 interface ActiveSessionRecord {
   id: string;
@@ -38,9 +45,10 @@ interface SessionRuntime {
   client: TelegramClient;
 }
 
-function sameConfiguredChat(actualId: number, configuredId: string): boolean {
+function sameConfiguredChat(actualId: number, configuredId: number): boolean {
   const actual = String(actualId);
-  return actual === configuredId || `-100${actual}` === configuredId;
+  const configured = String(configuredId);
+  return actual === configured || `-100${actual}` === configured;
 }
 
 function sessionStoragePath(storageKey: string): string {
@@ -141,6 +149,7 @@ async function startSessionRuntime(record: ActiveSessionRecord, notificationBot:
     apiId: env.TELEGRAM_API_ID!,
     apiHash: env.TELEGRAM_API_HASH!,
     storage: sessionStoragePath(record.storageKey),
+    initConnectionOptions: ZARBIT_CONNECTION_IDENTITY,
   });
   const runtime: SessionRuntime = { record, client };
   const dispatcher = Dispatcher.for(client);

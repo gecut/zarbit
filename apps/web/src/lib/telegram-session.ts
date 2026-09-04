@@ -13,6 +13,8 @@ export function useTelegramSession() {
     queryKey: telegramSessionKey,
     queryFn: getTelegramSession,
     refetchInterval: (query) => query.state.data?.state === "PENDING_QR" ? 1_000 : false,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: "always",
   });
 }
 

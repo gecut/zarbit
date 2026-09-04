@@ -17,6 +17,13 @@ import QRCode from "qrcode";
 import { sendPrivateNotification } from "./telegram.js";
 
 const CHALLENGE_TTL_MS = 3 * 60 * 1_000;
+const ZARBIT_CONNECTION_IDENTITY = {
+  deviceModel: "Zarbit",
+  systemVersion: "Zarbit Secure Trading",
+  appVersion: "1.0.0",
+  systemLangCode: "fa",
+  langCode: "fa",
+} as const;
 
 interface LoginChallenge {
   userId: string;
@@ -171,6 +178,7 @@ export async function createTelegramQrChallenge(input: { userId: string; telegra
     apiId: env.TELEGRAM_API_ID!,
     apiHash: env.TELEGRAM_API_HASH!,
     storage: storagePath(storageKey),
+    initConnectionOptions: ZARBIT_CONNECTION_IDENTITY,
   });
 
   challenge.userId = input.userId;
@@ -196,6 +204,7 @@ export async function createTelegramQrChallenge(input: { userId: string; telegra
         .catch(() => undefined);
     },
   }).then(async (self) => {
+    console.info("telegram.session.qr.authorized", { userId: input.userId });
     if (String(self.id) !== input.telegramUserId) {
       await markTelegramSessionState({
         userId: input.userId,
@@ -224,7 +233,11 @@ export async function createTelegramQrChallenge(input: { userId: string; telegra
       maxActiveSessions: env.MAX_TELEGRAM_SESSIONS,
     });
     await notifySessionUser(input.telegramUserId, "اتصال حساب تلگرام شما به زربیت فعال شد.");
-  }).catch(async () => {
+  }).catch(async (error: unknown) => {
+    console.error(
+      "telegram.session.qr.failed",
+      { userId: input.userId, error: error instanceof Error ? error.message : String(error) },
+    );
     if (challenges.get(input.userId) === challenge) {
       await markTelegramSessionState({
         userId: input.userId,

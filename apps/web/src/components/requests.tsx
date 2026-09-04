@@ -1,8 +1,16 @@
-import { Button, Card, Input } from "@heroui/react";
+import { AddCircleIcon } from "@solar-icons/react/linear/add-circle";
+import { BellIcon } from "@solar-icons/react/linear/bell";
+import { ChartIcon } from "@solar-icons/react/linear/chart";
+import { CheckCircleIcon } from "@solar-icons/react/linear/check-circle";
+import { ClipboardAddIcon } from "@solar-icons/react/linear/clipboard-add";
+import { DangerCircleIcon } from "@solar-icons/react/linear/danger-circle";
+import { PenIcon } from "@solar-icons/react/linear/pen";
+import { TrashBinMinimalisticIcon } from "@solar-icons/react/linear/trash-bin-minimalistic";
+import { WalletIcon } from "@solar-icons/react/linear/wallet";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
-import type { RequestAction, RequestCondition, RequestPayload, ZarbitRequest } from "../lib/api";
+import type { RequestAction, RequestCondition, RequestPayload, RequestStatus, ZarbitRequest } from "../lib/api";
 import { useCancelRequest, useCreateRequest, useRequest, useRequests, useUpdateRequest } from "../lib/requests";
 
 const statusLabels = { ACTIVE: "فعال", DONE: "انجام‌شده", CANCELLED: "لغوشده", FAILED: "ناموفق" } as const;
@@ -17,12 +25,28 @@ function digits(value: string) {
   return value.replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))).replace(/\D/g, "");
 }
 
+function ActionIcon({ action, size = 19 }: { action: RequestAction; size?: number }) {
+  if (action === "BUY") return <WalletIcon size={size} />;
+  if (action === "SELL") return <ChartIcon size={size} />;
+  return <BellIcon size={size} />;
+}
+
+function StatusBadge({ status }: { status: RequestStatus }) {
+  const tone = status === "ACTIVE" ? "active" : status === "DONE" ? "done" : status.toLowerCase();
+  return <span className={`status-badge status-badge--${tone}`}><span aria-hidden="true">{status === "ACTIVE" ? "●" : "•"}</span>{statusLabels[status]}</span>;
+}
+
 function PriceInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const update = (next: string) => {
     const raw = digits(next);
     onChange(raw ? new Intl.NumberFormat("en-US").format(Number(raw)) : "");
   };
-  return <label className="block space-y-2"><span className="text-sm font-medium">قیمت هدف</span><Input inputMode="numeric" value={value} onChange={(event) => update(event.target.value)} placeholder="95,900,000" /></label>;
+
+  return <label>
+    <span className="form-label">قیمت هدف</span>
+    <input className="form-input" dir="ltr" inputMode="numeric" value={value} onChange={(event) => update(event.target.value)} placeholder="95,900,000" aria-describedby="price-hint" />
+    <span id="price-hint" className="form-hint">قیمت را به ریال وارد کنید.</span>
+  </label>;
 }
 
 function RequestForm({ initial, onSubmit, isPending, error }: {
@@ -36,6 +60,7 @@ function RequestForm({ initial, onSubmit, isPending, error }: {
   const [targetPrice, setTargetPrice] = useState(initial ? formatPrice(initial.targetPrice) : "");
   const [units, setUnits] = useState(initial?.units?.toString() ?? "");
   const canTrade = action !== "ALERT";
+  const title = initial ? "ویرایش درخواست" : "درخواست جدید";
 
   const submit = () => {
     const price = Number(digits(targetPrice));
@@ -44,43 +69,67 @@ function RequestForm({ initial, onSubmit, isPending, error }: {
     onSubmit({ condition, action, targetPrice: price, units: canTrade ? unitCount : null });
   };
 
-  return <Card className="w-full">
-    <Card.Header><Card.Title>{initial ? "ویرایش درخواست" : "درخواست جدید"}</Card.Title><Card.Description>یک درخواست فقط یک‌بار اجرا می‌شود.</Card.Description></Card.Header>
-    <Card.Content className="space-y-5">
-      <fieldset className="space-y-2"><legend className="text-sm font-medium">شرط</legend><div className="grid grid-cols-2 gap-2">
-        {(Object.keys(conditionLabels) as RequestCondition[]).map((key) => <Button key={key} variant={condition === key ? "primary" : "secondary"} onPress={() => setCondition(key)}>{conditionLabels[key]}</Button>)}
-      </div></fieldset>
-      <PriceInput value={targetPrice} onChange={setTargetPrice} />
-      <fieldset className="space-y-2"><legend className="text-sm font-medium">عملیات</legend><div className="grid grid-cols-3 gap-2">
-        {(Object.keys(actionLabels) as RequestAction[]).map((key) => <Button key={key} variant={action === key ? "primary" : "secondary"} onPress={() => setAction(key)}>{actionLabels[key]}</Button>)}
-      </div></fieldset>
-      {canTrade ? <label className="block space-y-2"><span className="text-sm font-medium">تعداد واحد</span><Input inputMode="numeric" type="number" min="1" value={units} onChange={(event) => setUnits(event.target.value)} /></label> : null}
-      {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
-    </Card.Content>
-    <Card.Footer><Button fullWidth isDisabled={isPending || !targetPrice || (canTrade && !units)} onPress={submit}>{isPending ? "در حال ثبت…" : initial ? "ذخیره تغییرات" : "ثبت درخواست"}</Button></Card.Footer>
-  </Card>;
+  return <section className="page-stack">
+    <div className="page-heading"><div><h1>{title}</h1><p>شرط و عملیات موردنظر خود را مشخص کنید.</p></div></div>
+    <form className="surface form-card" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+      <div className="form-card__header">
+        <span className="form-card__icon" aria-hidden="true"><ClipboardAddIcon size={23} /></span>
+        <div><h1>{title}</h1><p>هر درخواست فقط یک‌بار و پس از رسیدن مظنه اجرا می‌شود.</p></div>
+      </div>
+      <div className="form-fields">
+        <fieldset>
+          <legend className="form-legend">شرط قیمت</legend>
+          <div className="segment-grid segment-grid--two">
+            {(Object.keys(conditionLabels) as RequestCondition[]).map((key) => <button key={key} className={`segment ${condition === key ? "segment--selected" : ""}`} type="button" aria-pressed={condition === key} onClick={() => setCondition(key)}>{conditionLabels[key]}</button>)}
+          </div>
+        </fieldset>
+        <PriceInput value={targetPrice} onChange={setTargetPrice} />
+        <fieldset>
+          <legend className="form-legend">عملیات پس از رسیدن قیمت</legend>
+          <div className="segment-grid segment-grid--three">
+            {(Object.keys(actionLabels) as RequestAction[]).map((key) => <button key={key} className={`segment ${action === key ? "segment--selected" : ""}`} type="button" aria-pressed={action === key} onClick={() => setAction(key)}><ActionIcon action={key} size={18} />{actionLabels[key]}</button>)}
+          </div>
+        </fieldset>
+        {canTrade ? <label>
+          <span className="form-label">تعداد واحد</span>
+          <input className="form-input" inputMode="numeric" type="number" min="1" value={units} onChange={(event) => setUnits(event.target.value)} placeholder="مثلاً ۱" />
+          <span className="form-hint">سفارش از حساب تلگرام متصل‌شده شما ارسال می‌شود.</span>
+        </label> : null}
+        {error ? <p role="alert" className="form-error"><DangerCircleIcon size={18} />{error}</p> : null}
+      </div>
+      <div className="form-footer"><button className="button button--primary button--full" type="submit" disabled={isPending || !targetPrice || (canTrade && !units)}>{isPending ? "در حال ثبت…" : <><CheckCircleIcon size={19} />{initial ? "ذخیره تغییرات" : "ثبت درخواست"}</>}</button></div>
+    </form>
+  </section>;
 }
 
 function RequestCard({ request, allowActions = false }: { request: ZarbitRequest; allowActions?: boolean }) {
   const cancel = useCancelRequest();
   const navigate = useNavigate();
-  return <Card className="w-full">
-    <Card.Content className="space-y-2">
-      <div className="flex items-center justify-between gap-3"><strong>{actionLabels[request.action]}</strong><span className="text-xs text-muted">{statusLabels[request.status]}</span></div>
-      <p className="text-sm">{conditionLabels[request.condition]} {formatPrice(request.targetPrice)}</p>
-      {request.units ? <p className="text-sm text-muted">تعداد: {request.units} واحد</p> : null}
-      {request.triggeredQuote ? <p className="text-sm text-muted">مظنه اجرا: {formatPrice(request.triggeredQuote)}</p> : null}
-      {request.failureReason ? <p className="text-sm text-danger">{request.failureReason}</p> : null}
-      {request.cancellationReason ? <p className="text-sm text-muted">{request.cancellationReason}</p> : null}
-    </Card.Content>
-    {allowActions ? <Card.Footer className="grid grid-cols-2 gap-2"><Button variant="secondary" onPress={() => navigate({ to: "/requests/$id/edit", params: { id: request.id } })}>ویرایش</Button><Button isDisabled={cancel.isPending} variant="danger" onPress={() => cancel.mutate(request.id)}>لغو</Button></Card.Footer> : null}
-  </Card>;
+
+  return <article className="surface request-card">
+    <div className="request-card__top">
+      <strong className="request-card__title"><span className="request-card__icon" aria-hidden="true"><ActionIcon action={request.action} /></span>{actionLabels[request.action]}</strong>
+      <StatusBadge status={request.status} />
+    </div>
+    <p className="request-card__price">{formatPrice(request.targetPrice)}</p>
+    <p className="request-card__condition">{conditionLabels[request.condition]}</p>
+    <div className="request-card__details">
+      {request.units ? <span>تعداد: {request.units} واحد</span> : <span>فقط هشدار</span>}
+      {request.triggeredQuote ? <span>مظنه اجرا: {formatPrice(request.triggeredQuote)}</span> : null}
+    </div>
+    {request.failureReason ? <p className="request-card__error">{request.failureReason}</p> : null}
+    {request.cancellationReason ? <p className="request-card__error">{request.cancellationReason}</p> : null}
+    {allowActions ? <div className="request-actions">
+      <button className="button button--secondary button--compact" onClick={() => navigate({ to: "/requests/$id/edit", params: { id: request.id } })}><PenIcon size={17} />ویرایش</button>
+      <button className="button button--danger button--compact" disabled={cancel.isPending} onClick={() => cancel.mutate(request.id)}><TrashBinMinimalisticIcon size={17} />لغو</button>
+    </div> : null}
+  </article>;
 }
 
-function QueryState({ isLoading, error, isEmpty, children }: { isLoading: boolean; error: Error | null; isEmpty: boolean; children: React.ReactNode }) {
-  if (isLoading) return <p className="py-8 text-center text-sm text-muted">در حال دریافت اطلاعات…</p>;
-  if (error) return <p role="alert" className="py-8 text-center text-sm text-danger">{error.message}</p>;
-  if (isEmpty) return <p className="py-8 text-center text-sm text-muted">هنوز موردی وجود ندارد.</p>;
+function QueryState({ isLoading, error, isEmpty, children }: { isLoading: boolean; error: Error | null; isEmpty: boolean; children: ReactNode }) {
+  if (isLoading) return <p className="query-state">در حال دریافت اطلاعات…</p>;
+  if (error) return <p role="alert" className="query-state query-state--error">{error.message}</p>;
+  if (isEmpty) return <p className="empty-state">هنوز موردی ثبت نشده است.</p>;
   return <>{children}</>;
 }
 
@@ -88,7 +137,16 @@ export function Dashboard() {
   const requests = useRequests();
   const navigate = useNavigate();
   const active = requests.data?.filter((item) => item.status === "ACTIVE") ?? [];
-  return <section className="space-y-5"><Card><Card.Content><p className="text-sm text-muted">درخواست‌های فعال</p><p className="text-3xl font-bold">{active.length}</p></Card.Content><Card.Footer><Button fullWidth onPress={() => navigate({ to: "/requests/new" })}>ثبت درخواست جدید</Button></Card.Footer></Card><div className="flex items-center justify-between"><h2 className="font-semibold">آخرین درخواست‌ها</h2><Link to="/requests/active" className="text-sm text-primary">مشاهده فعال‌ها</Link></div><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!requests.data?.length}>{requests.data?.slice(0, 3).map((request) => <RequestCard key={request.id} request={request} />)}</QueryState></section>;
+
+  return <section className="page-stack">
+    <article className="hero-card">
+      <p className="eyebrow">مدیریت هوشمند مظنه</p>
+      <h1>در لحظه‌ای که قیمت به هدف شما رسید، آماده باشید.</h1>
+      <div className="hero-card__meta"><div><span className="hero-card__count">{active.length}</span><span className="hero-card__label">درخواست فعال</span></div><button className="button button--light" onClick={() => navigate({ to: "/requests/new" })}><AddCircleIcon size={20} />درخواست جدید</button></div>
+    </article>
+    <div className="section-title"><h2>آخرین درخواست‌ها</h2><Link to="/requests/active" className="section-link">مشاهده همه</Link></div>
+    <div className="request-list"><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!requests.data?.length}>{requests.data?.slice(0, 4).map((request) => <RequestCard key={request.id} request={request} />)}</QueryState></div>
+  </section>;
 }
 
 export function NewRequest() {
@@ -100,20 +158,20 @@ export function NewRequest() {
 export function ActiveRequests() {
   const requests = useRequests("ACTIVE");
   const navigate = useNavigate();
-  return <section className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-lg font-bold">درخواست‌های فعال</h1><Button size="sm" onPress={() => navigate({ to: "/requests/new" })}>درخواست جدید</Button></div><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!requests.data?.length}>{requests.data?.map((request) => <RequestCard key={request.id} request={request} allowActions />)}</QueryState></section>;
+  return <section className="page-stack"><div className="page-heading"><div><h1>درخواست‌های فعال</h1><p>می‌توانید پیش از اجرا، آن‌ها را ویرایش یا لغو کنید.</p></div><button className="button button--primary button--compact" onClick={() => navigate({ to: "/requests/new" })}><AddCircleIcon size={17} />جدید</button></div><div className="request-list"><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!requests.data?.length}>{requests.data?.map((request) => <RequestCard key={request.id} request={request} allowActions />)}</QueryState></div></section>;
 }
 
 export function History() {
   const requests = useRequests();
   const terminal = requests.data?.filter((item) => item.status !== "ACTIVE") ?? [];
-  return <section className="space-y-4"><h1 className="text-lg font-bold">سوابق</h1><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!terminal.length}>{terminal.map((request) => <RequestCard key={request.id} request={request} />)}</QueryState></section>;
+  return <section className="page-stack"><div className="page-heading"><div><h1>سوابق درخواست‌ها</h1><p>نتیجه درخواست‌های اجراشده و لغوشده را اینجا می‌بینید.</p></div></div><div className="request-list"><QueryState isLoading={requests.isLoading} error={requests.error} isEmpty={!terminal.length}>{terminal.map((request) => <RequestCard key={request.id} request={request} />)}</QueryState></div></section>;
 }
 
 export function EditRequest({ id }: { id: string }) {
   const request = useRequest(id);
   const update = useUpdateRequest(id);
   const navigate = useNavigate();
-  if (request.isLoading) return <p className="py-8 text-center text-sm text-muted">در حال دریافت درخواست…</p>;
-  if (request.error || !request.data) return <p role="alert" className="py-8 text-center text-sm text-danger">{request.error?.message ?? "درخواست پیدا نشد."}</p>;
+  if (request.isLoading) return <p className="query-state">در حال دریافت درخواست…</p>;
+  if (request.error || !request.data) return <p role="alert" className="query-state query-state--error">{request.error?.message ?? "درخواست پیدا نشد."}</p>;
   return <RequestForm initial={request.data} isPending={update.isPending} error={update.error?.message} onSubmit={(input) => update.mutate(input, { onSuccess: () => navigate({ to: "/requests/active" }) })} />;
 }

@@ -39,15 +39,26 @@ export interface RequestPayload {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${env.VITE_SERVER_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": telegramInitData(),
-      ...init?.headers,
-    },
-  });
-  const body = await response.json() as { data?: T; error?: { message?: string } };
+  let response: Response;
+  try {
+    response = await fetch(`${env.VITE_SERVER_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": telegramInitData(),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new Error("ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید.");
+  }
+
+  let body: { data?: T; error?: { message?: string } };
+  try {
+    body = await response.json() as { data?: T; error?: { message?: string } };
+  } catch {
+    throw new Error("پاسخ معتبری از سرور دریافت نشد.");
+  }
   if (!response.ok || body.data === undefined) throw new Error(body.error?.message ?? "ارتباط با سرور ناموفق بود.");
   return body.data;
 }

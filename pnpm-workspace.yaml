@@ -1,8 +1,10 @@
 packages:
   - apps/*
   - packages/*
+overrides:
+  # @mtcute/node 0.26 pins an older release without Node 24 binaries.
+  better-sqlite3: 13.0.3
 allowBuilds:
-  better-sqlite3: true
   esbuild: true
   sharp: true
   "@prisma/client": true

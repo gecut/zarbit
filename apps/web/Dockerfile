@@ -7,7 +7,9 @@ ENV CI=true
 COPY . .
 RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 
-ENV VITE_SERVER_URL="https://api-zarbit.gecutweb.ir/"
+ARG VITE_SERVER_URL
+RUN test -n "$VITE_SERVER_URL"
+ENV VITE_SERVER_URL=$VITE_SERVER_URL
 ENV NODE_ENV=production
 RUN cd apps/web && pnpm run build
 

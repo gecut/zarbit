@@ -49,6 +49,8 @@ docker compose -f docker-compose.production.yml up -d
 
 The `migrate` service applies Prisma migrations before server and worker start. `zarbit-data` persists SQLite and `zarbit-telegram-sessions` is shared only by server and worker for per-user MTProto SQLite sessions. Never expose or back up these session files outside the protected deployment volume.
 
+The MTProto session driver depends on the Linux native binding of `better-sqlite3`. Do not disable package install scripts in production builds. The repository explicitly allows this one dependency and both server/worker image builds verify the binding before publishing an image.
+
 For Dokploy, configure domains in its UI: route the `web` service to port `80` and the `server` service to port `3000`. The compose intentionally has no Traefik labels, host port bindings, or external network dependency. Set `CORS_ORIGIN` to the final public Mini App origin before deployment.
 
 ## Environment

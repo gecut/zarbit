@@ -39,9 +39,9 @@ ghcr.io/<owner>/<repository>-server
 ghcr.io/<owner>/<repository>-worker
 ```
 
-Set the repository variable `VITE_SERVER_URL` before publishing so the web image points at the public API URL. The workflow uses the repository `GITHUB_TOKEN`; no registry secret is stored in the repository.
+Set the GitHub Actions repository variable `VITE_SERVER_URL` before publishing, for example `https://api.example.com`. It is embedded into the web image at build time; changing a Dokploy runtime variable cannot change it. The web Docker build now fails if this value is absent. The workflow uses the repository `GITHUB_TOKEN`; no registry secret is stored in the repository.
 
-The complete variable reference is [.env.example](/Users/mm25zamanian/Codes/zarbit/.env.example). On the deployment host, copy `deploy/compose.env.example` to `.env`, copy `deploy/server.env.example` and `deploy/worker.env.example` to the corresponding runtime env files, replace the domain and credential placeholders, then run:
+For Dokploy, add the values from [compose.env.example](/Users/mm25zamanian/Codes/zarbit/deploy/compose.env.example) in the Compose Environment UI. Dokploy writes them to `.env`, which the production compose injects into its runtime services. For a non-Dokploy host, copy that file to `.env`, replace every placeholder, then run:
 
 ```bash
 docker compose -f docker-compose.production.yml up -d

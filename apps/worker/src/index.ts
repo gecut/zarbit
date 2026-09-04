@@ -173,8 +173,14 @@ async function startSessionRuntime(record: ActiveSessionRecord, notificationBot:
 }
 
 export async function startWorker() {
-  if (!env.TELEGRAM_API_ID || !env.TELEGRAM_API_HASH || !env.TELEGRAM_GROUP_ID || !env.QUOTE_SENDER_ID) {
-    throw new Error("Worker Telegram configuration is incomplete.");
+  const missing = [
+    !env.TELEGRAM_API_ID && "TELEGRAM_API_ID",
+    !env.TELEGRAM_API_HASH && "TELEGRAM_API_HASH",
+    !env.TELEGRAM_GROUP_ID && "TELEGRAM_GROUP_ID",
+    !env.QUOTE_SENDER_ID && "QUOTE_SENDER_ID",
+  ].filter((value): value is string => Boolean(value));
+  if (missing.length > 0) {
+    throw new Error(`Worker Telegram configuration is incomplete: ${missing.join(", ")}.`);
   }
   const recovered = await failOutstandingClaims();
   if (recovered.count > 0) console.warn(`worker recovered ${recovered.count} unfinished claim(s) as FAILED`);

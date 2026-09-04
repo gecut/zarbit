@@ -10,7 +10,7 @@ RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-l
 ARG VITE_SERVER_URL
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
 ENV NODE_ENV=production
-RUN cd apps/web && pnpm run build
+RUN test -n "$VITE_SERVER_URL" && cd apps/web && pnpm run build
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html

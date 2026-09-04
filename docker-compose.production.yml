@@ -21,7 +21,7 @@ services:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
     command: ["node", "/app/packages/db/node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "/app/packages/db/prisma.config.ts"]
     env_file:
-      - path: ./deploy/server.env
+      - path: ./.env
         required: false
     environment:
       NODE_ENV: production
@@ -37,13 +37,20 @@ services:
     expose:
       - "3000"
     env_file:
-      - path: ./deploy/server.env
+      - path: ./.env
         required: false
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/data/zarbit.db
       CORS_ORIGIN: ${CORS_ORIGIN:-https://app.example.com}
       TELEGRAM_SESSIONS_DIR: /sessions
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:-}
+      WEB_APP_URL: ${WEB_APP_URL:-}
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:-}
+      MAX_TELEGRAM_SESSIONS: ${MAX_TELEGRAM_SESSIONS:-20}
     volumes:
       - zarbit-data:/data
       - zarbit-telegram-sessions:/sessions
@@ -62,12 +69,18 @@ services:
   worker:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-worker:${IMAGE_TAG:-latest}
     env_file:
-      - path: ./deploy/worker.env
+      - path: ./.env
         required: false
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/data/zarbit.db
       TELEGRAM_SESSIONS_DIR: /sessions
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:-}
+      QUOTE_SENDER_ID: ${QUOTE_SENDER_ID:-}
+      MAX_TELEGRAM_SESSIONS: ${MAX_TELEGRAM_SESSIONS:-20}
     volumes:
       - zarbit-data:/data
       - zarbit-telegram-sessions:/sessions

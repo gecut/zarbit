@@ -1,4 +1,4 @@
-import { Button, Input } from "@heroui/react";
+import { Button, Card, Chip, Input } from "@heroui/react";
 import { requestInputSchema, normalizeDigits } from "@zarbit/contracts";
 import { useTelegramSession } from "../lib/telegram-session";
 import { ConfirmAction } from "./confirm-action";
@@ -68,10 +68,10 @@ function StatusBadge({ status }: { status: RequestStatus }) {
         ? "done"
         : status.toLowerCase();
   return (
-    <span className={`status-badge status-badge--${tone}`}>
+    <Chip className={`status-badge status-badge--${tone}`} size="sm">
       <span aria-hidden="true">{status === "ACTIVE" ? "●" : "•"}</span>
       {statusLabels[status]}
-    </span>
+    </Chip>
   );
 }
 
@@ -164,12 +164,12 @@ function RequestForm({
         </div>
       </div>
       <form
-        className="zb-surface form-card"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
+        <Card className="zb-surface form-card">
         <div className="form-card__header">
           <span className="form-card__icon" aria-hidden="true">
             <ClipboardAddIcon size={23} />
@@ -263,6 +263,7 @@ function RequestForm({
             )}
           </Button>
         </div>
+        </Card>
       </form>
     </section>
   );
@@ -279,7 +280,8 @@ function RequestCard({
   const navigate = useNavigate();
 
   return (
-    <article className="zb-surface request-card">
+    <article>
+      <Card className="zb-surface request-card">
       <div className="request-card__top">
         <strong className="request-card__title">
           <span className="request-card__icon" aria-hidden="true">
@@ -288,9 +290,9 @@ function RequestCard({
           {actionLabels[request.action]}
         </strong>
         {request.isExecuting ? (
-          <span className="status-badge status-badge--warning">
+          <Chip className="status-badge status-badge--warning" size="sm">
             در حال اجرا
-          </span>
+          </Chip>
         ) : (
           <StatusBadge status={request.status} />
         )}
@@ -348,6 +350,7 @@ function RequestCard({
           </span>
         ) : null}
       </div>
+      </Card>
     </article>
   );
 }

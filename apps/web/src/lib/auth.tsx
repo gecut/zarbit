@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@heroui/react";
+import { Alert, Button } from "@heroui/react";
 import type { Identity } from "@zarbit/contracts";
 import { useApi } from "./api-provider";
 import { telegramInitData } from "./telegram";
@@ -27,9 +27,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   if (query.error || !query.data)
     return (
-      <section className="query-state query-state--error">
+      <Alert
+        className="query-state query-state--error"
+        role="alert"
+        status="danger"
+      >
         <h1>ورود به زربیت</h1>
-        <p role="alert">{query.error?.message}</p>
+        <p>{query.error?.message}</p>
         {!telegramInitData() ? (
           <p>برنامه را از بات زربیت در تلگرام باز کنید.</p>
         ) : null}
@@ -40,7 +44,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         >
           تلاش دوباره
         </Button>
-      </section>
+      </Alert>
     );
   return <IdentityContext value={query.data}>{children}</IdentityContext>;
 }

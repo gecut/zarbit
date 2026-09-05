@@ -9,6 +9,7 @@ import { createWorkerApp } from "./http";
 import { createExecutor } from "./execution";
 import { acquireWorkerOwnership } from "./ownership";
 import { workerLog } from "./logger";
+import { databaseDiagnostics } from "./database-diagnostics";
 
 export async function startWorker() {
   const missing = Object.entries({
@@ -95,6 +96,7 @@ export async function startWorker() {
       workerLog.failure("telegram.sessions.sync_failed", error, {
         durationMs: Date.now() - startedAt,
         phase: "load_sessions",
+        ...(await databaseDiagnostics(env.DATABASE_URL)),
       });
     }
   };

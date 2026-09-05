@@ -28,6 +28,7 @@ The new migration preserves ACTIVE sessions and request/history rows. Incomplete
 - Web healthcheck must pass; refresh the Mini App or accept its update prompt. Hashed assets are immutable, while index.html and sw.js revalidate.
 - Server healthcheck reads SQLite. A healthy server does not imply that every Telegram account is connected.
 - Worker healthcheck checks its private HTTP process. Per-account connection/membership is shown in the Mini App; no global readiness claim substitutes for it.
+- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Worker stacks use source maps and include the deployed `IMAGE_TAG`; inspect the preceding `telegram.login.failed` event for a safe failure category and source code before the public error is normalized.
 - Runtime server and worker use UID 1000. Only the migration maintenance job runs as root for ownership repair. The server must not mount the session volume or receive TELEGRAM_API_ID/HASH.
 - Keep a single worker replica. A second worker must fail on the session-volume lock. Use local persistent volumes with reliable SQLite locking, not NFS.
 

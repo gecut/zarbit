@@ -1,4 +1,4 @@
-import { Button, Input, Label, TextField, InputOTP } from "@heroui/react";
+import { Button, Card, Chip, Input, InputOTP, Label, TextField } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { normalizeDigits, type WorkerCommand } from "@zarbit/contracts";
 import { useSessionCommand, useTelegramSession } from "../lib/telegram-session";
@@ -73,7 +73,8 @@ export function TelegramConnection() {
   };
   return (
     <section className="page-stack">
-      <article className="zb-surface connection-card">
+      <article>
+        <Card className="zb-surface connection-card">
         <header className="connection-card__header">
           <div>
             <h1>اتصال حساب تلگرام</h1>
@@ -100,15 +101,16 @@ export function TelegramConnection() {
           <>
             <div className="connection-status">
               <span>{states[session.state]}</span>
-              <span
+              <Chip
                 className={`status-badge status-badge--${session.canManageRequests ? "active" : "warning"}`}
+                size="sm"
               >
                 {session.canManageRequests
                   ? "آماده اجرای درخواست"
                   : session.connection === "CONNECTING"
                     ? "در حال اتصال…"
                     : "اجرای درخواست غیرفعال"}
-              </span>
+              </Chip>
             </div>
             {session.connectedTelegramUserId ? (
               <p className="form-hint">
@@ -294,6 +296,7 @@ export function TelegramConnection() {
           کد ورود را در چت بات نفرستید. محل دریافت کد را تلگرام تعیین می‌کند؛
           پیامک تضمین‌شده نیست.
         </p>
+        </Card>
       </article>
       <ThemePicker />
     </section>

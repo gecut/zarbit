@@ -626,6 +626,15 @@ export class Sessions {
     });
   }
   private async loginFailure(challenge: Challenge, error: unknown) {
+    workerLog.diagnostic("telegram.login.failed", error, {
+      loginPhase:
+        challenge.public.step === "CODE"
+          ? "sign_in"
+          : challenge.public.step === "PASSWORD"
+            ? "password"
+            : "send_code_or_post_auth",
+      sessionRef: sessionRef(challenge.rt.userId),
+    });
     if (rpcCode(error) === "SESSION_PASSWORD_NEEDED") {
       challenge.public.step = "PASSWORD";
       challenge.public.error = null;

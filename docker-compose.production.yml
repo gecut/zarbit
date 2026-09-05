@@ -1,5 +1,11 @@
 name: zarbit
 
+x-log-options: &log-options
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   web:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-web:${IMAGE_TAG:-latest}
@@ -13,6 +19,7 @@ services:
       retries: 5
     restart: unless-stopped
     init: true
+    logging: *log-options
 
   migrate:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
@@ -26,6 +33,7 @@ services:
       - zarbit-telegram-sessions:/sessions
     restart: "no"
     init: true
+    logging: *log-options
     networks: [backend]
 
   server:
@@ -60,11 +68,14 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
     init: true
+    logging: *log-options
 
   worker:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:-latest}
     environment:
       NODE_ENV: production
+      RELEASE_ID: ${IMAGE_TAG:-latest}
+      NODE_OPTIONS: --enable-source-maps
       DATABASE_URL: file:/data/zarbit.db
       TELEGRAM_SESSIONS_DIR: /sessions
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN}
@@ -97,6 +108,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
     init: true
+    logging: *log-options
 
 networks:
   default: {}

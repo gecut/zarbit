@@ -1,6 +1,30 @@
 {
   "version": 1,
   "skills": {
+    "nexload-code": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload/code/SKILL.md",
+      "computedHash": "5f509e1f43f0a46d9ff574f7d70fb5cce3f83c7ca84992f0de39e29170ecff3e"
+    },
+    "nexload-cto-review": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload/cto-review/SKILL.md",
+      "computedHash": "dd261c12f988d3cf7b25a71140a8261c9db45965d3ded536adc2c9be9f02777e"
+    },
+    "nexload-design": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload/design/SKILL.md",
+      "computedHash": "54f314ea4eea530e734764fdc2f2d8c912839a3e3eac3fc310c2b0cda70fead9"
+    },
+    "nexload-react": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload/react/SKILL.md",
+      "computedHash": "9737e2ae1564bc0bf68f8a974d523a7efbeef0ed51356188079d2d1183f8697c"
+    },
     "prisma-cli": {
       "source": "prisma/skills",
       "sourceType": "github",

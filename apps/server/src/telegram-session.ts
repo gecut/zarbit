@@ -16,7 +16,9 @@ export async function workerCommand(
       "سرویس اتصال پیکربندی نشده است.",
       503,
     );
+
   let response: Response;
+
   try {
     response = await fetch(
       new URL("/internal/command", env.WORKER_INTERNAL_URL),
@@ -45,16 +47,19 @@ export async function workerCommand(
         error: "سرویس اتصال موقتاً در دسترس نیست.",
       };
     }
+
     throw new AppError(
       "WORKER_UNAVAILABLE",
       "پاسخ سرویس اتصال دریافت نشد؛ وضعیت را تازه کنید و دوباره تلاش کنید.",
       503,
     );
   }
+
   const body = (await response.json()) as {
     data?: TelegramSessionStatus;
     error?: { code: string; message: string; retryAt?: string };
   };
+
   if (!response.ok || !body.data)
     throw new AppError(
       body.error?.code ?? "WORKER_ERROR",
@@ -62,5 +67,6 @@ export async function workerCommand(
       response.status,
       body.error?.retryAt,
     );
+    
   return body.data;
 }

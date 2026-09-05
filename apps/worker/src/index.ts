@@ -1,5 +1,10 @@
 import { serve } from "@hono/node-server";
-import { store, prisma } from "@zarbit/db";
+import {
+  checkDatabaseHealth,
+  databasePoolStats,
+  store,
+  prisma,
+} from "@zarbit/db";
 import { env, allowedTelegramUserIds } from "@zarbit/env/worker";
 import { Bot } from "grammy";
 import { Sessions } from "./sessions";
@@ -9,7 +14,6 @@ import { createWorkerApp } from "./http";
 import { createExecutor } from "./execution";
 import { acquireWorkerOwnership } from "./ownership";
 import { workerLog } from "./logger";
-import { databaseDiagnostics } from "./database-diagnostics";
 
 export async function startWorker() {
   const missing = Object.entries({
@@ -69,7 +73,11 @@ export async function startWorker() {
     notify,
   });
   const server = serve({
-    fetch: createWorkerApp(sessions, env.WORKER_INTERNAL_TOKEN!).fetch,
+    fetch: createWorkerApp(
+      sessions,
+      env.WORKER_INTERNAL_TOKEN!,
+      checkDatabaseHealth,
+    ).fetch,
     port: 3002,
   });
   workerLog.info("worker.ready", { internalPort: 3002 });
@@ -96,7 +104,7 @@ export async function startWorker() {
       workerLog.failure("telegram.sessions.sync_failed", error, {
         durationMs: Date.now() - startedAt,
         phase: "load_sessions",
-        ...(await databaseDiagnostics(env.DATABASE_URL)),
+        ...databasePoolStats(),
       });
     }
   };

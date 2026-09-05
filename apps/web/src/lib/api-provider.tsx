@@ -46,14 +46,14 @@ export function ApiProvider({ children }: { children: ReactNode }) {
 
   if (error)
     return (
-      <p role="alert" className="query-state query-state--error">
+      <p role="alert" className="rounded-[var(--radius-2xl)] border border-danger-soft bg-danger-soft px-4 py-7 text-center text-sm leading-7 text-danger-soft-foreground">
         {error.message}
       </p>
     );
 
   if (!client)
     return (
-      <p className="query-state" role="status">
+      <p className="rounded-[var(--radius-2xl)] border border-dashed border-border px-4 py-7 text-center text-sm leading-7 text-muted" role="status">
         در حال آماده‌سازی داده‌های توسعه…
       </p>
     );

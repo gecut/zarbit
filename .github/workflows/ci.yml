@@ -10,12 +10,27 @@ permissions:
 
 env:
   HUSKY: "0"
-  DATABASE_URL: file:./build.db
+  DATABASE_URL: postgresql://zarbit_app:app-password@127.0.0.1:5432/zarbit?schema=public
+  MIGRATION_DATABASE_URL: postgresql://zarbit_migrator:migrator-password@127.0.0.1:5432/zarbit?schema=public
   VITE_SERVER_URL: https://api.example.com
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: zarbit
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zarbit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +48,24 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Provision CI database roles
+        run: >-
+          PGPASSWORD=postgres psql --host=127.0.0.1 --username=postgres --dbname=zarbit
+          --command="CREATE ROLE zarbit_migrator LOGIN PASSWORD 'migrator-password';
+          CREATE ROLE zarbit_app LOGIN PASSWORD 'app-password';
+          GRANT CONNECT ON DATABASE zarbit TO zarbit_migrator, zarbit_app;
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          GRANT USAGE, CREATE ON SCHEMA public TO zarbit_migrator;"
+
+      - name: Apply PostgreSQL baseline
+        run: pnpm --filter @zarbit/db exec prisma migrate deploy
+
+      - name: Verify PostgreSQL migration state
+        run: pnpm --filter @zarbit/db exec prisma migrate status
+
+      - name: Test workspace
+        run: pnpm run test
 
       - name: Typecheck workspace
         run: pnpm run check-types

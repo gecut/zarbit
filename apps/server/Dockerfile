@@ -2,7 +2,7 @@ FROM node:24-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@10.26.0
 WORKDIR /app
-ENV DATABASE_URL=file:./build.db CI=true HUSKY=0
+ENV DATABASE_URL=postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public CI=true HUSKY=0
 COPY . .
 RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 RUN cd apps/server && pnpm run build
@@ -21,10 +21,8 @@ COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
 COPY --from=builder /app/packages/db/prisma.config.ts ./packages/db/prisma.config.ts
 COPY deploy/prepare-volumes.mjs ./deploy/prepare-volumes.mjs
 COPY deploy/migrate.mjs ./deploy/migrate.mjs
-RUN mkdir -p /data && chown node:node /data
 USER node
 WORKDIR /app/apps/server
-RUN DATABASE_URL=file:/tmp/zarbit-image-smoke.db node /app/packages/db/node_modules/prisma/build/index.js migrate deploy --config /app/packages/db/prisma.config.ts \
-  && node --input-type=module -e "import { PrismaLibSql } from '@prisma/adapter-libsql'; const db = await new PrismaLibSql({ url: 'file:/tmp/zarbit-image-smoke.db' }).connect(); await db.queryRaw({ sql: 'SELECT 1', args: [], argTypes: [] }); await db.dispose();"
+RUN node --input-type=module -e "import { PrismaPg } from '@prisma/adapter-pg'; import { Pool } from 'pg'; const pool = new Pool({ connectionString: process.env.DATABASE_URL }); new PrismaPg(pool); await pool.end();"
 EXPOSE 3000
 CMD ["node", "dist/index.mjs"]

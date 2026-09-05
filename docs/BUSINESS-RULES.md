@@ -2,7 +2,7 @@
 
 ## Prices and source
 
-All UI prices are rial; database/Telegram prices are compact integers. Conversion is centralized in packages/domain: 95,900,000 ↔ 95900. Target must be positive, a multiple of 1000 rial, and fit the compact SQLite integer range. Units are positive whole integers for BUY/SELL and null for ALERT.
+All UI prices are rial; database/Telegram prices are compact integers. Conversion is centralized in packages/domain: 95,900,000 ↔ 95900. Target must be positive, a multiple of 1000 rial, and fit the compact integer range. Units are positive whole integers for BUY/SELL and null for ALERT.
 
 LTE means quote <= target; GTE means quote >= target. Equality matches. Only a new message in the fixed group from the fixed publisher may trigger a request. Accept an independent number or «مظنه: number»; reject arbitrary numeric text. No fixed five-digit assumption, NLP, forwarding or edit-trigger behavior.
 
@@ -22,7 +22,7 @@ ALERT sends a private bot notification then finishes. BUY/SELL replies from the 
 
 ## Failure and cancellation
 
-No automatic financial resend. If the send outcome cannot be determined, the request becomes FAILED and explicitly asks the user to inspect group messages before creating another order. A crash with an unfinished claim is treated the same way on recovery. Atomic SQLite claiming is not an exactly-once transaction with Telegram.
+No automatic financial resend. If the send outcome cannot be determined, the request becomes FAILED and explicitly asks the user to inspect group messages before creating another order. A crash with an unfinished claim is treated the same way on recovery. Atomic PostgreSQL claiming is not an exactly-once transaction with Telegram.
 
 A successfully sent trade remains successful when its private notification fails. Notification failure is logged separately.
 

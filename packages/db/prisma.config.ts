@@ -9,6 +9,9 @@ export default defineConfig({
     path: path.join("prisma", "migrations"),
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? "file:./local.db",
+    url:
+      process.env.MIGRATION_DATABASE_URL ??
+      process.env.DATABASE_URL ??
+      "postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public",
   },
 });

@@ -24,10 +24,12 @@ export function ThemePicker() {
   const [theme, setTheme] = useState<Theme>(preference);
   return (
     <section>
-      <Card className="zb-surface form-card">
-        <h2 className="form-label">ظاهر برنامه</h2>
+      <Card className="rounded-2xl border border-border bg-surface p-4 shadow-surface sm:p-6">
+        <h2 className="mb-2 block text-sm font-semibold text-foreground">
+          ظاهر برنامه
+        </h2>
         <div
-          className="segment-grid segment-grid--three"
+          className="flex flex-col gap-2"
           role="group"
           aria-label="تم برنامه"
         >
@@ -41,6 +43,9 @@ export function ThemePicker() {
             <Button
               key={value}
               variant={value === theme ? "primary" : "secondary"}
+              className="text-xs font-semibold"
+              fullWidth
+              size="sm"
               aria-pressed={theme === value}
               onPress={() => {
                 setTheme(value);

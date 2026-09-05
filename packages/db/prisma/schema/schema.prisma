@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 enum RequestCondition {
@@ -86,8 +86,7 @@ model Request {
   updatedAt          DateTime         @updatedAt
   user               TelegramUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, status])
-  @@index([status, claimToken])
+  @@index([userId, status, createdAt(sort: Desc), id(sort: Desc)])
 }
 
 model LoginRateLimit {

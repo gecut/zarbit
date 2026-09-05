@@ -2,7 +2,7 @@ FROM node:24-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@10.26.0
 WORKDIR /app
-ENV DATABASE_URL=file:./build.db CI=true HUSKY=0
+ENV DATABASE_URL=postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public CI=true HUSKY=0
 COPY . .
 RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
 RUN cd apps/worker && pnpm run build
@@ -14,7 +14,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/apps/worker/package.json ./apps/worker/package.json
-RUN mkdir -p /data /sessions && chown node:node /data /sessions
+RUN mkdir -p /sessions && chown node:node /sessions
 USER node
 WORKDIR /app/apps/worker
 # Verify the installed native binding without connecting to Telegram.

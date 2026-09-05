@@ -7,9 +7,20 @@ import { safeError } from "./errors";
 import { sessionRef, workerLog } from "./logger";
 import type { Sessions } from "./sessions";
 
-export function createWorkerApp(sessions: Sessions, token: string) {
+export function createWorkerApp(
+  sessions: Sessions,
+  token: string,
+  health: () => Promise<Record<string, number>>,
+) {
   const app = new Hono();
-  app.get("/health", (c) => c.json({ ok: true }));
+  app.get("/health", async (c) => {
+    try {
+      return c.json({ ok: true, ...(await health()) });
+    } catch (error) {
+      workerLog.failure("database.health.failed", error);
+      return c.json({ ok: false }, 503);
+    }
+  });
   app.use("/internal/*", bodyLimit({ maxSize: 8192 }));
   app.use("/internal/*", async (c, next) => {
     const value = c.req.header("Authorization") ?? "";

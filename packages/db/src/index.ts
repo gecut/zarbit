@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { databaseUrl } from "@zarbit/env/db";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
 import { humanPriceToCompactQuote } from "@zarbit/domain";
+import { Pool } from "pg";
 import {
   AppError,
   type Identity,
@@ -15,8 +16,18 @@ import {
   TelegramSessionState,
 } from "../prisma/generated/client";
 
+export const databasePoolOptions = {
+  max: databasePoolMax,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
+} as const;
+
 export function createPrismaClient(url = databaseUrl) {
-  return new PrismaClient({ adapter: new PrismaLibSql({ url }) });
+  return new PrismaClient({
+    adapter: new PrismaPg(
+      new Pool({ connectionString: url, ...databasePoolOptions }),
+    ),
+  });
 }
 export const READY_TTL_MS = 30_000;
 export const MEMBERSHIP_TTL_MS = 60_000;
@@ -317,6 +328,30 @@ export function createStore(prisma: PrismaClient) {
 export type Store = ReturnType<typeof createStore>;
 export type SessionRecord = NonNullable<Awaited<ReturnType<Store["session"]>>>;
 export { RequestStatus, TelegramSessionState };
-export const prisma = createPrismaClient();
+const databasePool = new Pool({
+  connectionString: databaseUrl,
+  ...databasePoolOptions,
+});
+export const prisma = new PrismaClient({
+  adapter: new PrismaPg(databasePool),
+});
+
+export function databasePoolStats() {
+  return {
+    databasePoolTotal: databasePool.totalCount,
+    databasePoolIdle: databasePool.idleCount,
+    databasePoolWaiting: databasePool.waitingCount,
+  };
+}
+
+export async function checkDatabaseHealth() {
+  const startedAt = Date.now();
+  await prisma.$queryRaw`SELECT 1`;
+  return {
+    databaseLatencyMs: Date.now() - startedAt,
+    ...databasePoolStats(),
+  };
+}
+
 export const store = createStore(prisma);
 export default prisma;

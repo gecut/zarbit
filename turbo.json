@@ -15,6 +15,11 @@
       "env": ["VITE_SERVER_URL"],
       "dependsOn": ["^check-types"]
     },
+    "test": {
+      "env": ["DATABASE_URL"],
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true
@@ -35,9 +40,5 @@
       "cache": false,
       "persistent": true
     },
-    "db:local": {
-      "cache": false,
-      "persistent": true
-    }
   }
 }

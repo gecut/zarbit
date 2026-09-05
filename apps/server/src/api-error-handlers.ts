@@ -1,4 +1,5 @@
 import { AppError } from "@zarbit/contracts";
+import { databasePoolStats } from "@zarbit/db";
 import type { Hono } from "hono";
 
 import type { AppEnv } from "./app-types";
@@ -14,8 +15,22 @@ export function registerApiErrorHandlers(app: Hono<AppEnv>) {
             503,
           );
 
-    if (!(error instanceof AppError))
-      console.error("api.operation.failed", { path: c.req.path, error: safe });
+    if (!(error instanceof AppError)) {
+      const databaseFailure =
+        error instanceof Error && error.name.startsWith("Prisma");
+      console.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          service: "server",
+          level: "error",
+          event: "api.operation.failed",
+          path: c.req.path,
+          errorCode: databaseFailure ? "DATABASE_ERROR" : "UNAVAILABLE",
+          failureCategory: databaseFailure ? "database" : "unknown",
+          ...databasePoolStats(),
+        }),
+      );
+    }
 
     return c.json(
       {

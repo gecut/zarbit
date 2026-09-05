@@ -11,26 +11,29 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "db:local": "turso dev --db-file local.db",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
+    "test": "tsx --test test/*.test.ts",
     "postinstall": "prisma generate",
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/adapter-libsql": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@zarbit/env": "workspace:*",
     "dotenv": "catalog:",
     "zod": "catalog:",
     "@zarbit/contracts": "workspace:*",
-    "@zarbit/domain": "workspace:*"
+    "@zarbit/domain": "workspace:*",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@zarbit/config": "workspace:*",
+    "@types/pg": "^8.15.5",
     "prisma": "^7.9.1",
+    "tsx": "^4.23.1",
     "typescript": "catalog:"
   }
 }

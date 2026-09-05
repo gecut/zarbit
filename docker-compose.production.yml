@@ -27,10 +27,9 @@ services:
     command: ["node", "/app/deploy/migrate.mjs"]
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:/data/zarbit.db
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set MIGRATION_DATABASE_URL}
     volumes:
-      - zarbit-data:/data
-      - zarbit-telegram-sessions:/sessions
+      - zarbit-telegram-sessions-postgres:/sessions
     restart: "no"
     init: true
     logging: *log-options
@@ -41,14 +40,14 @@ services:
     expose: ["3000"]
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:/data/zarbit.db
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN}
       WEB_APP_URL: ${WEB_APP_URL:?Set WEB_APP_URL}
       ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:?Set ALLOWED_TELEGRAM_USER_IDS}
       WORKER_INTERNAL_URL: http://worker:3002
       WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
-    volumes: [zarbit-data:/data]
     networks: [default, backend]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -76,7 +75,8 @@ services:
       NODE_ENV: production
       RELEASE_ID: ${IMAGE_TAG:-latest}
       NODE_OPTIONS: --enable-source-maps
-      DATABASE_URL: file:/data/zarbit.db
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
       TELEGRAM_SESSIONS_DIR: /sessions
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN}
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:?Set TELEGRAM_API_ID}
@@ -87,8 +87,7 @@ services:
       MAX_TELEGRAM_SESSIONS: ${MAX_TELEGRAM_SESSIONS:-20}
       WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
     volumes:
-      - zarbit-data:/data
-      - zarbit-telegram-sessions:/sessions
+      - zarbit-telegram-sessions-postgres:/sessions
     # Private to this Compose project, but not internal:true: Telegram needs egress.
     networks: [backend]
     depends_on:
@@ -115,5 +114,4 @@ networks:
   backend: {}
 
 volumes:
-  zarbit-data:
-  zarbit-telegram-sessions:
+  zarbit-telegram-sessions-postgres:

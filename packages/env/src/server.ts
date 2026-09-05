@@ -5,7 +5,8 @@ import { parseAllowlist } from "./access";
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().min(1).default("file:./local.db"),
+    DATABASE_URL: z.string().startsWith("postgresql://"),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
     CORS_ORIGIN: z.url().default("http://localhost:3001"),
     NODE_ENV: z
       .enum(["development", "production", "test"])

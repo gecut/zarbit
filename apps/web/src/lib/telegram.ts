@@ -22,9 +22,9 @@ declare global {
 export function telegramInitData() {
   return window.Telegram?.WebApp?.initData ?? "";
 }
-export function initializeTelegramWebApp() {
+export function initializeTelegramWebApp(): () => void {
   const app = window.Telegram?.WebApp;
-  if (!app) return;
+  if (!app) return () => undefined;
   app.ready();
   app.expand();
   const update = () => {
@@ -44,10 +44,13 @@ export function initializeTelegramWebApp() {
       );
   };
   update();
-  for (const event of [
+  const events = [
     "safeAreaChanged",
     "contentSafeAreaChanged",
     "viewportChanged",
-  ])
-    app.onEvent?.(event, update);
+  ] as const;
+  for (const event of events) app.onEvent?.(event, update);
+  return () => {
+    for (const event of events) app.offEvent?.(event, update);
+  };
 }

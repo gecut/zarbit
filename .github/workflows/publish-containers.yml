@@ -10,7 +10,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository }}
   HUSKY: "0"
-  DATABASE_URL: file:./build.db
+  DATABASE_URL: postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public
+  MIGRATION_DATABASE_URL: postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public
   VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
 
 permissions:

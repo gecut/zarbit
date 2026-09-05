@@ -21,14 +21,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   });
   if (query.isPending)
     return (
-      <p className="query-state" role="status">
+      <p className="rounded-[var(--radius-2xl)] border border-dashed border-border px-4 py-7 text-center text-sm leading-7 text-muted" role="status">
         در حال بررسی دسترسی…
       </p>
     );
   if (query.error || !query.data)
     return (
       <Alert
-        className="query-state query-state--error"
+        className="rounded-[var(--radius-2xl)] border border-danger-soft bg-danger-soft px-4 py-7 text-center text-sm leading-7 text-danger-soft-foreground"
         role="alert"
         status="danger"
       >

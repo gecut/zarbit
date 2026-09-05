@@ -2,51 +2,54 @@
 
 ## Before publication
 
-1. Set the GitHub repository Actions variable `VITE_SERVER_URL` to the final API HTTPS origin. The published web bundle cannot read Dokploy runtime variables.
-2. Publish all three images from the same revision and choose the same immutable `IMAGE_TAG` for web/server/worker. Do not mix old QR and new OTP services.
-3. In Dokploy, use `docker-compose.production.yml`. Copy the keys from `deploy/compose.env.example` into Environment and replace placeholders. Preserve the current project and volume names.
-4. Generate `WORKER_INTERNAL_TOKEN` with `openssl rand -hex 32`. The Compose file injects the same secret into server and worker. Keep it stable; it also keys anonymized login throttling. Never paste the value into logs or issue reports.
-5. Set domains in Dokploy: Mini App → web:80, API → server:3000. Worker gets no public domain/port. Its backend network needs Telegram egress. Set CORS_ORIGIN and WEB_APP_URL to the Mini App HTTPS origin.
+1. Provision managed PostgreSQL in the Dokploy region as described in [POSTGRES.md](POSTGRES.md): TLS, PITR/backups, monitoring, and a Dokploy-only network allowlist.
+2. Create `zarbit_migrator` and `zarbit_app`, then store their distinct direct URLs as `MIGRATION_DATABASE_URL` and `DATABASE_URL`. Runtime services must never receive migration credentials.
+3. Set the GitHub Actions repository variable `VITE_SERVER_URL` to the final API HTTPS origin. The published web bundle cannot read Dokploy runtime variables.
+4. Publish all three images from the same revision and choose the same immutable `IMAGE_TAG` for web/server/worker.
+5. In Dokploy, use `docker-compose.production.yml`. Copy keys from `deploy/compose.env.example` into Environment and replace placeholders. Generate `WORKER_INTERNAL_TOKEN` with `openssl rand -hex 32`; keep it stable and secret.
+6. Set domains in Dokploy: Mini App → web:80, API → server:3000. Worker gets no public domain/port. Set `CORS_ORIGIN` and `WEB_APP_URL` to the Mini App HTTPS origin.
 
-Required runtime values: bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin and launcher URL. DATABASE_URL, WORKER_INTERNAL_URL and session paths are already wired by Compose. Remove old WORKER_KEEP_ALIVE, QR variables, WEB_DOMAIN, API_DOMAIN and TRAEFIK_CERT_RESOLVER; Dokploy owns domain routing.
+Required runtime values include the bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin, launcher URL, and `DATABASE_URL`. `MIGRATION_DATABASE_URL` is for the migration job only. Remove legacy SQLite `DATABASE_URL=file:...` values and do not attach the old data volume.
 
-## Upgrade from the QR version
+## SQLite to PostgreSQL cutover
 
-This is a maintenance-window upgrade, not rolling deployment.
+This is a maintenance-window clean baseline, not a data migration.
 
-1. Stop web, server and worker of the old version. Ensure no second worker is using the volumes. Never run `down -v` or delete volumes.
-2. With writers stopped, back up **both** named volumes together: application SQLite and MTProto sessions, including existing journal/WAL sidecars. Use Dokploy's volume backup or a protected host backup. Determine actual mounted volume names from the existing services; do not guess a project prefix. Encrypt backups and restrict access: session files grant Telegram account access.
-3. Keep the previous image tag and record the applied Prisma migration list. Existing installs must already have the first two migrations marked as applied. If they contain tables without that history, stop and resolve migration baselining; do not run the old reset migration blindly.
-4. Pull the new images. Run the explicit migrate service before serving traffic. On a standalone host: `docker compose -f docker-compose.production.yml run --rm migrate`. In Dokploy the service dependency is also configured to run it before server/worker start.
-5. The job adjusts only recognized database/session files to UID/GID 1000, prepares 0700 directories and applies pending migrations. It refuses a lock held by a current-version worker. The pre-OTP worker has no such lock, so step 1 is mandatory.
-6. Start the new server, worker and web. A successful migrate job exits 0; do not remove it from Compose. Future releases still need it. Running it again after success applies no already-recorded migration.
+1. Stop web, server, and worker for the old release. Confirm no old worker still owns the Telegram sessions. Never use `down -v`.
+2. Snapshot the legacy SQLite **and** legacy Telegram-session volumes. Label them with the old image tag and cutover time, detach them from services, and retain them for at least seven days. Do not delete them automatically.
+3. Provision the managed database and roles. Confirm the provider accepts direct TLS connections from Dokploy and has at least 15 available connections.
+4. Add `DATABASE_URL`, `MIGRATION_DATABASE_URL`, and `DATABASE_POOL_MAX=5` in Dokploy. Deploy the immutable PostgreSQL release with the new `zarbit-telegram-sessions-postgres` volume.
+5. Run the `migrate` job once. It receives only `MIGRATION_DATABASE_URL`, creates the reviewed PostgreSQL baseline, grants runtime CRUD/default privileges, prepares the new session-volume ownership, and exits. Confirm `prisma migrate status` is clean using the migrator URL.
+6. Start web, server, and worker. Server and worker healthchecks must be successful only after their `SELECT 1` query succeeds. Keep one server and one worker.
+7. Users must log in to Telegram again. The prior session files are intentionally detached; do not copy them into the new volume.
 
-The new migration preserves ACTIVE sessions and request/history rows. Incomplete QR enrollment becomes ERROR. On worker recovery, incomplete OTP is expired, recognized orphan session files are cleaned only under exclusive ownership, and unfinished request claims become FAILED with an unknown-result warning. Cancelled requests never reactivate.
+The migration job is mandatory on future releases too. It never reads legacy SQLite data and does not delete legacy volumes.
 
 ## Basic readiness
 
-- Web healthcheck must pass; refresh the Mini App or accept its update prompt. Hashed assets are immutable, while index.html and sw.js revalidate.
-- Server healthcheck reads SQLite. A healthy server does not imply that every Telegram account is connected.
-- Worker healthcheck checks its private HTTP process. Per-account connection/membership is shown in the Mini App; no global readiness claim substitutes for it.
-- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Worker stacks use source maps and include the deployed `IMAGE_TAG`; inspect the preceding `telegram.login.failed` event for a safe failure category and source code before the public error is normalized.
-- Runtime server and worker use UID 1000. Only the migration maintenance job runs as root for ownership repair. The server must not mount the session volume or receive TELEGRAM_API_ID/HASH.
-- Keep a single worker replica. A second worker must fail on the session-volume lock. Use local persistent volumes with reliable SQLite locking, not NFS.
+- Web healthcheck passes; refresh the Mini App or accept its update prompt.
+- Server root healthcheck and worker private `/health` both query PostgreSQL. A successful process healthcheck does not prove every Telegram account is connected.
+- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Database failures include safe pool total/idle/waiting counters, a failure category, and source code where available; credentials and Telegram secrets are redacted.
+- Runtime server and worker use UID 1000. Only the migration maintenance job runs as root to initialize the **new session volume**. The server must not mount that volume or receive Telegram API ID/hash.
+- Provider monitoring shows connections below the configured caps, healthy backups/PITR, normal latency, and no sustained lock contention.
 
-Automated test suites are intentionally absent. Typecheck/build and final-image native checks remain in the publication path. Local Docker/image execution and real Telegram behavior must be confirmed in the deployment environment.
+GitHub Actions runs the PostgreSQL baseline, migration status, integration tests, typecheck, and build. Local Docker/image execution and real Telegram behavior still require deployment-environment acceptance.
 
-## Owner's real Telegram check
+## Owner's Telegram check
 
-Begin with a controlled group and no financially consequential requests. Open from the allowlisted account, enter its own number, verify code and optional 2FA, then check membership. Verify actual quote reply account/message/price, loss of membership, revoked session and disconnect. Confirm a second account cannot see or execute the first account's requests.
+Begin with a controlled group and no financially consequential requests. Open from the allowlisted account, enter its own number, verify code and optional 2FA, then check membership. Verify actual quote reply account/message/price, loss of membership, revoked session and disconnect. Confirm a second account cannot see or execute the first account's requests. Restart the worker and confirm recovery of ready state and unfinished claim safety.
 
 Telegram decides code delivery; an unsupported delivery flow produces an error instead of QR fallback. Start the bot once so notifications can be delivered. Never send OTP or 2FA to the bot or in a bug report.
 
 ## Troubleshooting and rollback
 
-- Missing config: worker logs missing **key names**. Check explicit Compose values and recreate/restart; changing `.env` does not update a running container.
-- Worker unavailable: history and unclaimed cancellation still work; create/edit is blocked. Check private token/URL, network and worker logs.
-- NOT_IN_GROUP: join the configured group manually in Telegram, then press membership recheck. Old cancelled orders stay cancelled.
+- Missing config: worker logs missing **key names**. Check explicit Dokploy values and recreate/restart; changing `.env` does not update a running container.
+- Database health fails: verify the managed database TLS URL, provider allowlist, role password, provider status, and connection limit. Inspect sanitized pool counters and provider metrics; do not increase the pool cap blindly.
+- Migration fails: stop runtime services, correct the migrator role/permissions or database state, then rerun `migrate`. Do not grant schema ownership to `zarbit_app` and do not use `db push` to bypass migration history.
+- Worker unavailable: history and unclaimed cancellation still work; create/edit is blocked. Check private token/URL, database health, network, and worker logs.
+- NOT_IN_GROUP: join the configured group manually, then press membership recheck. Old cancelled orders stay cancelled.
 - REVOKING: do not delete an open file. Wait for worker logout; if Telegram is unreachable, check network and session status. The user can also revoke Zarbit from Telegram Devices.
 - Unknown send result: inspect the triggering group message before creating another request. Never clear claim tokens or bulk-reactivate FAILED requests.
-- Rollback: stop all new services; restore the matching pre-upgrade backup of **both** volumes and the previous images. Do not run the old code against the new schema. Reconcile any orders sent since backup before enabling execution; blindly restoring old ACTIVE requests could repeat trades. After real Telegram logout/revocation, an old local file cannot restore remote authorization—login again.
+- Rollback before new PostgreSQL activity: stop the new services, restore the old image tag, reattach the two matching legacy volumes, and restore the old Compose environment. Do not run old code against PostgreSQL. After new PostgreSQL activity, rollback requires an explicit data decision; do not discard new activity or overwrite it with SQLite snapshots by default.
 
-For a bug report include the deployed image tag, endpoint/status, time, displayed session state and sanitized error event. Exclude initData, phone number, code, password, API hash, bot/internal token and session files.
+For a bug report include the deployed image tag, endpoint/status, time, displayed session state and sanitized error event. Exclude initData, phone number, code, password, API hash, bot/internal token, database URLs, and session files.

@@ -5,7 +5,8 @@ import { parseAllowlist } from "./access";
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().min(1).default("file:./local.db"),
+    DATABASE_URL: z.string().startsWith("postgresql://"),
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
     TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
     TELEGRAM_API_HASH: z.string().min(1).optional(),
     TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),

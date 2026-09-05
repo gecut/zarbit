@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "@prisma/adapter-libsql": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@t3-oss/env-core": "^0.13.11",
     "@zarbit/db": "workspace:*",
@@ -21,7 +21,8 @@
     "grammy": "^1.42.0",
     "hono": "^4.12.32",
     "zod": "catalog:",
-    "@zarbit/contracts": "workspace:*"
+    "@zarbit/contracts": "workspace:*",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",

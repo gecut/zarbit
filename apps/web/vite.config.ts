@@ -6,9 +6,14 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(({ command, mode }) => {
   if (command === "build") {
+    const configuredEnv = loadEnv(mode, process.cwd(), "VITE_");
     const configured =
-      process.env.VITE_SERVER_URL ??
-      loadEnv(mode, process.cwd(), "VITE_").VITE_SERVER_URL;
+      process.env.VITE_SERVER_URL ?? configuredEnv.VITE_SERVER_URL;
+    const apiMode =
+      process.env.VITE_API_MODE ?? configuredEnv.VITE_API_MODE ?? "server";
+    if (apiMode !== "server") {
+      throw new Error("VITE_API_MODE must be server when building the web app.");
+    }
     const url = configured ? new URL(configured) : null;
     if (
       !url ||

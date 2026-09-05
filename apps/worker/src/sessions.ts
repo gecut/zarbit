@@ -8,6 +8,7 @@ import {
 import { type Store, type SessionRecord } from "@zarbit/db";
 import { safeError, rpcCode, isRevoked } from "./errors";
 import { SessionFiles } from "./session-files";
+import { sessionRef, workerLog } from "./logger";
 import type {
   TelegramTransport,
   TransportFactory,
@@ -47,6 +48,13 @@ export interface SessionOptions {
   timeoutMs?: number;
   now?: () => number;
   notify?: (userId: string, text: string) => Promise<void>;
+}
+
+export interface SynchronizeResult {
+  failures: number;
+  recoveryAttempts: number;
+  revocations: number;
+  scanned: number;
 }
 
 export class Sessions {
@@ -167,8 +175,10 @@ export class Sessions {
   private async announce(userId: string, text: string) {
     try {
       await this.options.notify?.(userId, text);
-    } catch {
-      console.warn("telegram.notification.failed", { userId });
+    } catch (error) {
+      workerLog.failure("telegram.notification.failed", error, {
+        sessionRef: sessionRef(userId),
+      });
     }
   }
   async initialize() {
@@ -342,9 +352,9 @@ export class Sessions {
         void this.serial(rt.userId, async () => {
           if (rt.online && !this.stopped)
             await this.onQuote?.(rt.userId, rt.revision, event);
-        }).catch(() =>
-          console.error("telegram.quote.processing_failed", {
-            userId: rt.userId,
+        }).catch((error) =>
+          workerLog.failure("telegram.quote.processing_failed", error, {
+            sessionRef: sessionRef(rt.userId),
           }),
         );
       });
@@ -383,6 +393,9 @@ export class Sessions {
       await this.store.updateSession(rt.userId, rt.revision, {
         storageKey: null,
       });
+      workerLog.failure("telegram.session.revoked", error, {
+        sessionRef: sessionRef(rt.userId),
+      });
       void this.announce(
         rt.userId,
         "اتصال تلگرام باطل شد؛ درخواست‌های اجرا‌نشده لغو شدند.",
@@ -397,6 +410,11 @@ export class Sessions {
       this.retry.set(rt.userId, {
         count,
         at: this.now() + Math.min(300_000, 5000 * 2 ** Math.min(count, 6)),
+      });
+      workerLog.failure("telegram.session.runtime_failed", error, {
+        retryCount: count,
+        retryInMs: Math.max(0, (this.retry.get(rt.userId)?.at ?? 0) - this.now()),
+        sessionRef: sessionRef(rt.userId),
       });
     }
   }
@@ -681,23 +699,28 @@ export class Sessions {
       lastError: null,
     });
   }
-  async synchronize() {
-    if (this.syncing || this.stopped) return;
+  async synchronize(): Promise<SynchronizeResult> {
+    if (this.syncing || this.stopped)
+      return { failures: 0, recoveryAttempts: 0, revocations: 0, scanned: 0 };
     this.syncing = true;
     try {
       const records = await this.store.sessions();
-      await Promise.allSettled(
+      let recoveryAttempts = 0;
+      let revocations = 0;
+      const results = await Promise.allSettled(
         records.map((record) =>
           this.serial(record.userId, async () => {
             if (
               !this.options.allowlist.has(record.user.telegramUserId) &&
               !["REVOKED", "ERROR"].includes(record.state)
-            )
+            ) {
               await this.store.disableSession(
                 record.userId,
                 "REVOKING",
                 "دسترسی این حساب لغو شده است.",
               );
+              revocations++;
+            }
             const current = await this.store.session(record.userId);
             if (!current) return;
             if (current.state === "REVOKING") {
@@ -720,9 +743,10 @@ export class Sessions {
               !rt ||
               !current.membershipCheckedAt ||
               this.now() - current.membershipCheckedAt.getTime() > 30_000
-            )
+            ) {
+              recoveryAttempts++;
               await this.recoverRuntime(current);
-            else
+            } else
               await this.store.updateSession(record.userId, current.revision, {
                 runtimeCheckedAt: new Date(this.now()),
                 runtimeReady: rt.online,
@@ -730,6 +754,20 @@ export class Sessions {
           }),
         ),
       );
+      const failures = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      for (const [index, result] of results.entries())
+        if (result.status === "rejected")
+          workerLog.failure("telegram.session.sync_failed", result.reason, {
+            sessionRef: sessionRef(records[index]!.userId),
+          });
+      return {
+        failures: failures.length,
+        recoveryAttempts,
+        revocations,
+        scanned: records.length,
+      };
     } finally {
       this.syncing = false;
     }

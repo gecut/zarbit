@@ -75,33 +75,37 @@ export interface RequestPage {
   pageSize: number;
   activeCount: number;
 }
-export type TelegramSessionState =
-  | "DISCONNECTED"
-  | "PENDING_OTP"
-  | "ACTIVE"
-  | "NOT_IN_GROUP"
-  | "REVOKING"
-  | "REVOKED"
-  | "ERROR";
-export interface LoginStatus {
-  id: string;
-  step: "CODE" | "PASSWORD" | "VERIFYING";
-  expiresAt: string;
-  resendAvailableAt: string | null;
-  delivery: string;
-  codeLength: number | null;
-  maskedPhone: string;
-  error: string | null;
-}
-export interface TelegramSessionStatus {
-  state: TelegramSessionState;
-  connection: "CONNECTED" | "CONNECTING" | "OFFLINE";
-  connectedTelegramUserId: string | null;
-  membershipCheckedAt: string | null;
-  canManageRequests: boolean;
-  error: string | null;
-  login: LoginStatus | null;
-}
+export const telegramSessionStateSchema = z.enum([
+  "DISCONNECTED",
+  "PENDING_OTP",
+  "ACTIVE",
+  "NOT_IN_GROUP",
+  "REVOKING",
+  "REVOKED",
+  "ERROR",
+]);
+export type TelegramSessionState = z.infer<typeof telegramSessionStateSchema>;
+export const loginStatusSchema = z.object({
+  id: z.string().uuid(),
+  step: z.enum(["CODE", "PASSWORD", "VERIFYING"]),
+  expiresAt: z.string(),
+  resendAvailableAt: z.string().nullable(),
+  delivery: z.string(),
+  codeLength: z.number().int().nullable(),
+  maskedPhone: z.string(),
+  error: z.string().nullable(),
+});
+export type LoginStatus = z.infer<typeof loginStatusSchema>;
+export const telegramSessionStatusSchema = z.object({
+  state: telegramSessionStateSchema,
+  connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE"]),
+  connectedTelegramUserId: z.string().nullable(),
+  membershipCheckedAt: z.string().nullable(),
+  canManageRequests: z.boolean(),
+  error: z.string().nullable(),
+  login: loginStatusSchema.nullable(),
+});
+export type TelegramSessionStatus = z.infer<typeof telegramSessionStatusSchema>;
 export interface Identity {
   telegramUserId: string;
   firstName?: string;

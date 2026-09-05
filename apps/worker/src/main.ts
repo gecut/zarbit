@@ -1,8 +1,7 @@
 import { startWorker } from "./index";
+import { workerLog } from "./logger";
+
 startWorker().catch((error: unknown) => {
-  console.error(
-    "worker failed to start",
-    error instanceof Error ? error.message : "Initialization failed",
-  );
+  workerLog.failure("worker.start_failed", error);
   process.exitCode = 1;
 });

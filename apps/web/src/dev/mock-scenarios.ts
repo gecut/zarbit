@@ -1,0 +1,86 @@
+import type { ZarbitRequest } from "@zarbit/contracts";
+
+function timestamp(minutesAgo: number): string {
+  return new Date(Date.now() - minutesAgo * 60_000).toISOString();
+}
+
+/** Edit this fixture to exercise visual states that are difficult to create locally. */
+export function createMockRequests(): ZarbitRequest[] {
+  return [
+    {
+      id: "1d3b33c9-3a62-4c43-9ee5-b28b5e76ae4a",
+      condition: "LTE",
+      action: "ALERT",
+      targetPrice: 95_900_000,
+      units: null,
+      status: "ACTIVE",
+      createdAt: timestamp(18),
+      updatedAt: timestamp(18),
+      triggeredQuote: null,
+      completedAt: null,
+      failureReason: null,
+      cancellationReason: null,
+      isExecuting: false,
+    },
+    {
+      id: "c9fa5882-f05d-4341-9d02-695f6fb64174",
+      condition: "GTE",
+      action: "SELL",
+      targetPrice: 101_500_000,
+      units: 3,
+      status: "ACTIVE",
+      createdAt: timestamp(86),
+      updatedAt: timestamp(4),
+      triggeredQuote: null,
+      completedAt: null,
+      failureReason: null,
+      cancellationReason: null,
+      isExecuting: true,
+    },
+    {
+      id: "ed5a31dc-0f91-4222-bcad-5846d820d006",
+      condition: "GTE",
+      action: "BUY",
+      targetPrice: 98_000_000,
+      units: 2,
+      status: "DONE",
+      createdAt: timestamp(420),
+      updatedAt: timestamp(352),
+      triggeredQuote: 98_100_000,
+      completedAt: timestamp(352),
+      failureReason: null,
+      cancellationReason: null,
+      isExecuting: false,
+    },
+    {
+      id: "0ff398b7-6ca8-4f36-a0e4-0cdb878a17d1",
+      condition: "LTE",
+      action: "SELL",
+      targetPrice: 94_200_000,
+      units: 1,
+      status: "FAILED",
+      createdAt: timestamp(1_020),
+      updatedAt: timestamp(940),
+      triggeredQuote: 94_100_000,
+      completedAt: timestamp(940),
+      failureReason: "ارسال سفارش از تلگرام تأیید نشد.",
+      cancellationReason: null,
+      isExecuting: false,
+    },
+    {
+      id: "7d9c6e07-7005-4b50-b94f-3d13b06d7847",
+      condition: "LTE",
+      action: "ALERT",
+      targetPrice: 93_000_000,
+      units: null,
+      status: "CANCELLED",
+      createdAt: timestamp(1_850),
+      updatedAt: timestamp(1_760),
+      triggeredQuote: null,
+      completedAt: timestamp(1_760),
+      failureReason: null,
+      cancellationReason: "کاربر درخواست را لغو کرد.",
+      isExecuting: false,
+    },
+  ];
+}

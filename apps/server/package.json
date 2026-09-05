@@ -6,7 +6,8 @@
     "build": "tsdown",
     "check-types": "tsc -b",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/index.mjs"
+    "start": "node dist/index.mjs",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",

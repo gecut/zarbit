@@ -5,6 +5,7 @@ import ReactDOM from "react-dom/client";
 import { routeTree } from "./routeTree.gen";
 import { initializeTelegramWebApp } from "./lib/telegram";
 import { applyTheme } from "./lib/theme";
+import { ApiProvider } from "./lib/api-provider";
 
 const queryClient = new QueryClient();
 
@@ -37,7 +38,9 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ApiProvider>
+        <RouterProvider router={router} />
+      </ApiProvider>
     </QueryClientProvider>,
   );
 }

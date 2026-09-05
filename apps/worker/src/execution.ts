@@ -8,6 +8,7 @@ import {
   parseQuoteMessage,
 } from "@zarbit/domain";
 import type { QuoteEvent } from "./transport";
+import { sessionRef, workerLog } from "./logger";
 
 export interface ExecutionConnection {
   checkForExecution(userId: string, revision: number): Promise<boolean>;
@@ -55,7 +56,12 @@ export function createExecutor(
               quote,
             }),
           );
-      } catch {
+      } catch (error) {
+        workerLog.failure("telegram.request.delivery_failed", error, {
+          action: request.action,
+          requestId: request.id,
+          sessionRef: sessionRef(userId),
+        });
         await store.finish(
           request.id,
           request.claimToken,
@@ -71,9 +77,10 @@ export function createExecutor(
         if (request.action !== "ALERT")
           await config
             .notify(request.user.telegramUserId, buildTradeFailureMessage())
-            .catch(() =>
-              console.warn("telegram.notification.failed", {
+            .catch((error) =>
+              workerLog.failure("telegram.notification.failed", error, {
                 requestId: request.id,
+                sessionRef: sessionRef(userId),
               }),
             );
         continue;
@@ -96,9 +103,10 @@ export function createExecutor(
               quote,
             }),
           )
-          .catch(() =>
-            console.warn("telegram.notification.failed", {
+          .catch((error) =>
+            workerLog.failure("telegram.notification.failed", error, {
               requestId: request.id,
+              sessionRef: sessionRef(userId),
             }),
           );
     }

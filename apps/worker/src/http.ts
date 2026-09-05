@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { workerCommandSchema } from "@zarbit/contracts";
 import { safeError } from "./errors";
+import { sessionRef, workerLog } from "./logger";
 import type { Sessions } from "./sessions";
 
 export function createWorkerApp(sessions: Sessions, token: string) {
@@ -40,6 +41,10 @@ export function createWorkerApp(sessions: Sessions, token: string) {
       });
     } catch (error) {
       const safe = safeError(error);
+      workerLog.failure("worker.command.failed", error, {
+        command: input.data.command.type,
+        sessionRef: sessionRef(input.data.userId),
+      });
       return c.json(
         {
           error: {

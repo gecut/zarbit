@@ -7,10 +7,8 @@ import type { AppEnv } from "./app-types";
 import { createTelegramBot } from "./telegram";
 
 export function startApplicationServer(app: Hono<AppEnv>) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.WORKER_INTERNAL_TOKEN)
-    throw new Error(
-      "TELEGRAM_BOT_TOKEN and WORKER_INTERNAL_TOKEN are required.",
-    );
+  if (!env.TELEGRAM_BOT_TOKEN)
+    throw new Error("TELEGRAM_BOT_TOKEN is required.");
 
   const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
 

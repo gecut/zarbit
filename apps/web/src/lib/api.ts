@@ -1,28 +1,55 @@
 import { env } from "@zarbit/env/web";
-import { telegramInitData } from "./telegram";
 import {
   AppError,
   type Identity,
   type RequestPayload,
   type RequestPage,
   type RequestStatus,
-  type ZarbitRequest,
   type TelegramSessionStatus,
   type WorkerCommand,
+  type ZarbitRequest,
 } from "@zarbit/contracts";
+
+import { telegramInitData } from "./telegram";
+
 export type {
-  RequestStatus,
   RequestAction,
   RequestCondition,
   RequestPayload,
-  ZarbitRequest,
+  RequestStatus,
   TelegramSessionState,
+  ZarbitRequest,
 } from "@zarbit/contracts";
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export interface ApiClient {
+  authenticate(): Promise<Identity>;
+  getRequests(
+    status?: RequestStatus | "HISTORY",
+    page?: number,
+  ): Promise<RequestPage>;
+  getRequest(id: string): Promise<ZarbitRequest>;
+  createRequest(payload: RequestPayload): Promise<ZarbitRequest>;
+  updateRequest(id: string, payload: RequestPayload): Promise<ZarbitRequest>;
+  cancelRequest(id: string): Promise<{ cancelled: boolean }>;
+  getTelegramSession(): Promise<TelegramSessionStatus>;
+  sessionCommand(
+    command: Exclude<WorkerCommand, { type: "status" }>,
+  ): Promise<TelegramSessionStatus>;
+}
+
+function serverUrl(): string {
+  if (env.VITE_SERVER_URL) return env.VITE_SERVER_URL;
+  throw new AppError(
+    "API_CONFIGURATION",
+    "نشانی سرویس برای این محیط تنظیم نشده است.",
+    503,
+  );
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(new URL(path, env.VITE_SERVER_URL), {
+    response = await fetch(new URL(path, serverUrl()), {
       ...init,
       signal: init?.signal ?? AbortSignal.timeout(30_000),
       cache: "no-store",
@@ -39,6 +66,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       503,
     );
   }
+
   const body = (await response.json().catch(() => null)) as {
     data?: T;
     error?: { code?: string; message?: string; retryAt?: string };
@@ -52,66 +80,72 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     );
   return body.data;
 }
-export const authenticate = () =>
-  api<Identity>("/api/auth/telegram", {
-    method: "POST",
-    body: JSON.stringify({ initData: telegramInitData() }),
-  });
-export const getRequests = (status?: RequestStatus | "HISTORY", page = 1) =>
-  api<RequestPage>(
-    `/api/requests?page=${page}${status ? `&status=${status}` : ""}`,
-  );
-export const getRequest = (id: string) =>
-  api<ZarbitRequest>(`/api/requests/${id}`);
-export const createRequest = (payload: RequestPayload) =>
-  api<ZarbitRequest>("/api/requests", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-export const updateRequest = (id: string, payload: RequestPayload) =>
-  api<ZarbitRequest>(`/api/requests/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-export const cancelRequest = (id: string) =>
-  api<{ cancelled: boolean }>(`/api/requests/${id}`, { method: "DELETE" });
-export const getTelegramSession = () =>
-  api<TelegramSessionStatus>("/api/telegram-session/status");
-export function sessionCommand(
-  command: Exclude<WorkerCommand, { type: "status" }>,
-) {
-  let path = "/api/telegram-session";
-  let method = "POST";
-  let body: object | undefined;
-  switch (command.type) {
-    case "login":
-      path += "/login";
-      body = { phone: command.phone };
-      break;
-    case "code":
-      path += `/login/${command.id}/code`;
-      body = { code: command.code };
-      break;
-    case "password":
-      path += `/login/${command.id}/password`;
-      body = { password: command.password };
-      break;
-    case "resend":
-      path += `/login/${command.id}/resend`;
-      break;
-    case "cancel":
-      path += `/login/${command.id}`;
-      method = "DELETE";
-      break;
-    case "membership":
-      path += "/membership-check";
-      break;
-    case "revoke":
-      method = "DELETE";
-      break;
-  }
-  return api<TelegramSessionStatus>(path, {
-    method,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+
+export function createServerApi(): ApiClient {
+  return {
+    authenticate: () =>
+      request<Identity>("/api/auth/telegram", {
+        method: "POST",
+        body: JSON.stringify({ initData: telegramInitData() }),
+      }),
+    getRequests: (status, page = 1) =>
+      request<RequestPage>(
+        `/api/requests?page=${page}${status ? `&status=${status}` : ""}`,
+      ),
+    getRequest: (id) => request<ZarbitRequest>(`/api/requests/${id}`),
+    createRequest: (payload) =>
+      request<ZarbitRequest>("/api/requests", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    updateRequest: (id, payload) =>
+      request<ZarbitRequest>(`/api/requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    cancelRequest: (id) =>
+      request<{ cancelled: boolean }>(`/api/requests/${id}`, {
+        method: "DELETE",
+      }),
+    getTelegramSession: () =>
+      request<TelegramSessionStatus>("/api/telegram-session/status"),
+    sessionCommand: (command) => {
+      let path = "/api/telegram-session";
+      let method = "POST";
+      let body: object | undefined;
+
+      switch (command.type) {
+        case "login":
+          path += "/login";
+          body = { phone: command.phone };
+          break;
+        case "code":
+          path += `/login/${command.id}/code`;
+          body = { code: command.code };
+          break;
+        case "password":
+          path += `/login/${command.id}/password`;
+          body = { password: command.password };
+          break;
+        case "resend":
+          path += `/login/${command.id}/resend`;
+          break;
+        case "cancel":
+          path += `/login/${command.id}`;
+          method = "DELETE";
+          break;
+        case "membership":
+          path += "/membership-check";
+          break;
+        case "revoke":
+          method = "DELETE";
+          break;
+      }
+
+      return request<TelegramSessionStatus>(path, {
+        method,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    },
+  };
 }

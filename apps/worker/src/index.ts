@@ -8,6 +8,7 @@ import { mtcuteFactory } from "./mtcute";
 import { createWorkerApp } from "./http";
 import { createExecutor } from "./execution";
 import { acquireWorkerOwnership } from "./ownership";
+import { workerLog } from "./logger";
 
 export async function startWorker() {
   const missing = Object.entries({
@@ -24,6 +25,10 @@ export async function startWorker() {
     throw new Error(
       `Worker configuration is incomplete: ${missing.join(", ")}`,
     );
+  workerLog.info("worker.starting", {
+    allowlistSize: allowedTelegramUserIds.size,
+    maxTelegramSessions: env.MAX_TELEGRAM_SESSIONS,
+  });
   process.umask(0o077);
   const files = new SessionFiles(env.TELEGRAM_SESSIONS_DIR);
   await files.prepare();
@@ -66,10 +71,33 @@ export async function startWorker() {
     fetch: createWorkerApp(sessions, env.WORKER_INTERNAL_TOKEN!).fetch,
     port: 3002,
   });
-  const sync = () =>
-    sessions
-      .synchronize()
-      .catch(() => console.error("telegram.sessions.sync_failed"));
+  workerLog.info("worker.ready", { internalPort: 3002 });
+  const sync = async () => {
+    const startedAt = Date.now();
+    try {
+      const result = await sessions.synchronize();
+      if (result.failures)
+        workerLog.warn("telegram.sessions.sync_completed", {
+          durationMs: Date.now() - startedAt,
+          failures: result.failures,
+          recoveryAttempts: result.recoveryAttempts,
+          revocations: result.revocations,
+          scanned: result.scanned,
+        });
+      else if (result.recoveryAttempts || result.revocations)
+        workerLog.info("telegram.sessions.sync_completed", {
+          durationMs: Date.now() - startedAt,
+          recoveryAttempts: result.recoveryAttempts,
+          revocations: result.revocations,
+          scanned: result.scanned,
+        });
+    } catch (error) {
+      workerLog.failure("telegram.sessions.sync_failed", error, {
+        durationMs: Date.now() - startedAt,
+        phase: "load_sessions",
+      });
+    }
+  };
   const timer = setInterval(() => {
     void sync();
   }, 5000);
@@ -78,11 +106,13 @@ export async function startWorker() {
   const stop = async () => {
     if (stopping) return;
     stopping = true;
+    workerLog.info("worker.stopping");
     clearInterval(timer);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await sessions.stop();
     await prisma.$disconnect();
     releaseOwnership();
+    workerLog.info("worker.stopped");
   };
   process.once("SIGTERM", () => {
     void stop();

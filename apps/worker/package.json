@@ -8,7 +8,8 @@
     "build": "tsdown",
     "check-types": "tsc --noEmit",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/index.mjs"
+    "start": "node dist/index.mjs",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@mtcute/dispatcher": "^0.26.0",

@@ -2,7 +2,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@heroui/react";
 import type { Identity } from "@zarbit/contracts";
-import { authenticate } from "./api";
+import { useApi } from "./api-provider";
 import { telegramInitData } from "./telegram";
 const IdentityContext = createContext<Identity | null>(null);
 export function useIdentity() {
@@ -11,9 +11,10 @@ export function useIdentity() {
   return user;
 }
 export function AuthGate({ children }: { children: ReactNode }) {
+  const api = useApi();
   const query = useQuery({
     queryKey: ["identity"],
-    queryFn: authenticate,
+    queryFn: api.authenticate,
     retry: false,
     staleTime: 60000,
     refetchOnWindowFocus: "always",

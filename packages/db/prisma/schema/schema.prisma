@@ -28,10 +28,11 @@ enum RequestStatus {
 }
 
 enum TelegramSessionState {
-  PENDING_QR
+  PENDING_OTP
   ACTIVE
   NOT_IN_GROUP
   REVOKED
+  REVOKING
   ERROR
 }
 
@@ -51,7 +52,10 @@ model TelegramSession {
   userId                  String               @unique
   storageKey              String?              @unique
   connectedTelegramUserId String?              @unique
-  state                   TelegramSessionState @default(PENDING_QR)
+  state                   TelegramSessionState @default(PENDING_OTP)
+  revision                Int                  @default(0)
+  runtimeReady            Boolean              @default(false)
+  runtimeCheckedAt        DateTime?
   membershipCheckedAt     DateTime?
   lastError               String?
   stateChangedAt          DateTime             @default(now())
@@ -74,6 +78,7 @@ model Request {
   claimedAt          DateTime?
   triggeredQuote     Int?
   triggeredMessageId Int?
+  outgoingMessageId  Int?
   completedAt        DateTime?
   failureReason      String?
   cancellationReason String?
@@ -83,4 +88,11 @@ model Request {
 
   @@index([userId, status])
   @@index([status, claimToken])
+}
+
+model LoginRateLimit {
+  key             String   @id
+  windowStartedAt DateTime
+  count           Int      @default(0)
+  blockedUntil    DateTime?
 }

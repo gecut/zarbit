@@ -1,215 +1,313 @@
 import { serve } from "@hono/node-server";
+import { store, prisma, type Store } from "@zarbit/db";
 import {
-  RequestStatus,
-  cancelActiveRequest,
-  createRequest,
-  getRequestForUser,
-  listRequestsForUser,
-  updateActiveRequest,
-  upsertTelegramUser,
-  type RequestInput,
-} from "@zarbit/db";
-import { compactQuoteToHumanPrice, humanPriceToCompactQuote } from "@zarbit/domain";
+  AppError,
+  requestInputSchema,
+  workerCommandSchema,
+  type WorkerCommand,
+  type TelegramSessionStatus,
+  type Identity,
+  type ZarbitRequest,
+} from "@zarbit/contracts";
+import { compactQuoteToHumanPrice } from "@zarbit/domain";
 import { env } from "@zarbit/env/server";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { authenticateTelegramRequest } from "./auth";
+import { createTelegramBot } from "./telegram";
+import { workerCommand } from "./telegram-session";
 
-import { authenticateTelegramRequest } from "./auth.js";
-import { createTelegramBot } from "./telegram.js";
-import {
-  createTelegramQrChallenge,
-  getTelegramSessionStatus,
-  revokeTelegramSession,
-  userCanManageRequests,
-} from "./telegram-session.js";
-
-const requestInputSchema = z.object({
-  condition: z.enum(["LTE", "GTE"]),
-  targetPrice: z.number().int().positive(),
-  action: z.enum(["ALERT", "BUY", "SELL"]),
-  units: z.number().int().positive().nullable().optional(),
-}).superRefine((value, context) => {
-  if (value.action !== "ALERT" && !value.units) {
-    context.addIssue({ code: "custom", message: "تعداد واحد برای خرید و فروش الزامی است.", path: ["units"] });
-  }
-});
-
-function requestDto(request: {
-  id: string;
-  condition: "LTE" | "GTE";
-  targetPrice: number;
-  action: "ALERT" | "BUY" | "SELL";
-  units: number | null;
-  status: RequestStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  triggeredQuote: number | null;
-  completedAt: Date | null;
-  failureReason: string | null;
-  cancellationReason: string | null;
-}) {
+type AppEnv = {
+  Variables: {
+    user: {
+      id: string;
+      telegramUserId: string;
+      firstName?: string;
+      username?: string;
+    };
+  };
+};
+export function requestDto(
+  r: NonNullable<Awaited<ReturnType<Store["request"]>>>,
+): ZarbitRequest {
   return {
-    id: request.id,
-    condition: request.condition,
-    targetPrice: compactQuoteToHumanPrice(request.targetPrice),
-    action: request.action,
-    units: request.units,
-    status: request.status,
-    createdAt: request.createdAt,
-    updatedAt: request.updatedAt,
-    triggeredQuote: request.triggeredQuote ? compactQuoteToHumanPrice(request.triggeredQuote) : null,
-    completedAt: request.completedAt,
-    failureReason: request.failureReason,
-    cancellationReason: request.cancellationReason,
+    id: r.id,
+    condition: r.condition,
+    action: r.action,
+    units: r.units,
+    targetPrice: compactQuoteToHumanPrice(r.targetPrice),
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+    completedAt: r.completedAt?.toISOString() ?? null,
+    triggeredQuote: r.triggeredQuote
+      ? compactQuoteToHumanPrice(r.triggeredQuote)
+      : null,
+    failureReason: r.failureReason,
+    cancellationReason: r.cancellationReason,
+    isExecuting: r.status === "ACTIVE" && Boolean(r.claimToken),
   };
 }
-
-function errorResponse(message: string, status = 400) {
-  return { error: { message, status } };
-}
-
-type AppEnv = { Variables: { user: { id: string; telegramUserId: string } } };
-
-export const app = new Hono<AppEnv>();
-
-app.use(logger());
-app.use("/*", cors({
-  origin: env.CORS_ORIGIN,
-  allowHeaders: ["Content-Type", "X-Telegram-Init-Data"],
-  allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-}));
-app.get("/", (c) => c.text("OK"));
-
-async function currentUser(initData: string | undefined) {
-  const identity = authenticateTelegramRequest(initData);
-  const user = await upsertTelegramUser(identity);
-  return { id: user.id, telegramUserId: user.telegramUserId };
-}
-
-app.post("/api/auth/telegram", async (c) => {
-  let initData: string | undefined;
-  try {
-    const body = await c.req.json<{ initData?: unknown }>();
-    initData = typeof body.initData === "string" ? body.initData : undefined;
-    authenticateTelegramRequest(initData);
-  } catch (error) {
-    return c.json(errorResponse(error instanceof Error ? error.message : "ورود ناموفق بود.", 401), 401);
-  }
-  try {
-    const user = await currentUser(initData);
-    return c.json({ data: { telegramUserId: user.telegramUserId } });
-  } catch {
-    return c.json(errorResponse("سرویس موقتاً در دسترس نیست.", 503), 503);
-  }
-});
-
-const apiAuthentication: MiddlewareHandler<AppEnv> = async (c, next) => {
-  let identity;
-  try {
-    identity = authenticateTelegramRequest(c.req.header("X-Telegram-Init-Data"));
-  } catch (error) {
-    return c.json(errorResponse(error instanceof Error ? error.message : "دسترسی نامعتبر است.", 401), 401);
-  }
-  try {
-    const user = await upsertTelegramUser(identity);
-    c.set("user", { id: user.id, telegramUserId: user.telegramUserId });
-  } catch {
-    return c.json(errorResponse("سرویس موقتاً در دسترس نیست.", 503), 503);
-  }
-  await next();
-};
-
-app.use("/api/requests/*", apiAuthentication);
-app.use("/api/telegram-session/*", apiAuthentication);
-
-async function requireActiveTelegramSession(userId: string): Promise<void> {
-  if (!await userCanManageRequests(userId)) {
-    throw new Error("برای ثبت یا ویرایش درخواست، اتصال تلگرام و عضویت گروه باید فعال باشد.");
-  }
-}
-
-app.get("/api/requests", async (c) => {
-  const filter = c.req.query("status");
-  const status = filter && Object.values(RequestStatus).includes(filter as RequestStatus) ? filter as RequestStatus : undefined;
-  const requests = await listRequestsForUser(c.get("user").id, status);
-  return c.json({ data: requests.map(requestDto) });
-});
-
-app.get("/api/requests/:id", async (c) => {
-  const request = await getRequestForUser(c.get("user").id, c.req.param("id"));
-  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("درخواست پیدا نشد.", 404), 404);
-});
-
-async function parseRequestInput(body: unknown): Promise<{ data: RequestInput } | { error: string }> {
-  const parsed = requestInputSchema.safeParse(body);
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "اطلاعات درخواست نامعتبر است." };
-  try {
-    return { data: {
-      ...parsed.data,
-      units: parsed.data.action === "ALERT" ? null : parsed.data.units ?? null,
-      targetPrice: humanPriceToCompactQuote(parsed.data.targetPrice),
-    } };
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "قیمت نامعتبر است." };
-  }
-}
-
-app.post("/api/requests", async (c) => {
-  const input = await parseRequestInput(await c.req.json());
-  if ("error" in input) return c.json(errorResponse(input.error), 400);
-  try {
-    await requireActiveTelegramSession(c.get("user").id);
-  } catch (error) {
-    return c.json(errorResponse(error instanceof Error ? error.message : "اتصال تلگرام فعال نیست.", 409), 409);
-  }
-  const request = await createRequest(c.get("user").id, input.data);
-  return c.json({ data: requestDto(request) }, 201);
-});
-
-app.patch("/api/requests/:id", async (c) => {
-  const input = await parseRequestInput(await c.req.json());
-  if ("error" in input) return c.json(errorResponse(input.error), 400);
-  try {
-    await requireActiveTelegramSession(c.get("user").id);
-  } catch (error) {
-    return c.json(errorResponse(error instanceof Error ? error.message : "اتصال تلگرام فعال نیست.", 409), 409);
-  }
-  const request = await updateActiveRequest(c.get("user").id, c.req.param("id"), input.data);
-  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل ویرایش است.", 409), 409);
-});
-
-app.delete("/api/requests/:id", async (c) => {
-  const request = await cancelActiveRequest(c.get("user").id, c.req.param("id"));
-  return request ? c.json({ data: requestDto(request) }) : c.json(errorResponse("فقط درخواست فعال و اجرا نشده قابل لغو است.", 409), 409);
-});
-
-app.get("/api/telegram-session/status", async (c) => {
-  return c.json({ data: await getTelegramSessionStatus(c.get("user").id) });
-});
-
-app.post("/api/telegram-session/qr", async (c) => {
-  try {
-    const user = c.get("user");
-    return c.json({ data: await createTelegramQrChallenge({ userId: user.id, telegramUserId: user.telegramUserId }) }, 201);
-  } catch (error) {
-    return c.json(errorResponse(error instanceof Error ? error.message : "ایجاد QR ناموفق بود.", 409), 409);
-  }
-});
-
-app.delete("/api/telegram-session", apiAuthentication, async (c) => {
-  return c.json({ data: await revokeTelegramSession(c.get("user").id) });
-});
-
-export function startServer() {
-  if (env.TELEGRAM_BOT_TOKEN) {
-    const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
-    bot.start({ drop_pending_updates: false }).catch((error: unknown) => {
-      console.error("Telegram bot failed to start", error instanceof Error ? error.message : error);
+export function createApp(deps: {
+  store: Store;
+  authenticate: (initData: string | undefined) => Identity;
+  command: (
+    id: string,
+    command: WorkerCommand,
+  ) => Promise<TelegramSessionStatus>;
+}) {
+  const app = new Hono<AppEnv>();
+  app.use(
+    "*",
+    cors({
+      origin: env.CORS_ORIGIN,
+      allowHeaders: ["Content-Type", "X-Telegram-Init-Data"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    }),
+  );
+  app.use("/api/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    await next();
+  });
+  app.use(
+    "/api/*",
+    bodyLimit({
+      maxSize: 16_384,
+      onError: (c) =>
+        c.json(
+          {
+            error: {
+              code: "TOO_LARGE",
+              message: "اطلاعات ارسالی بیش از حد بزرگ است.",
+            },
+          },
+          413,
+        ),
+    }),
+  );
+  app.get("/", async (c) => {
+    await deps.store.db.$queryRaw`SELECT 1`;
+    return c.text("OK");
+  });
+  app.use("/api/*", async (c, next) => {
+    let identity: Identity;
+    try {
+      let initData = c.req.header("X-Telegram-Init-Data");
+      if (c.req.path === "/api/auth/telegram") {
+        const body = (await c.req.json().catch(() => null)) as {
+          initData?: unknown;
+        } | null;
+        if (typeof body?.initData === "string") initData = body.initData;
+      }
+      identity = deps.authenticate(initData);
+    } catch (error) {
+      return c.json(
+        {
+          error: {
+            code: "UNAUTHORIZED",
+            message:
+              error instanceof Error ? error.message : "ورود نامعتبر است.",
+          },
+        },
+        401,
+      );
+    }
+    const user = await deps.store.user(identity);
+    c.set("user", { id: user.id, ...identity });
+    await next();
+  });
+  app.post("/api/auth/telegram", (c) => {
+    const { id: _, ...identity } = c.get("user");
+    return c.json({ data: identity });
+  });
+  app.get("/api/requests", async (c) => {
+    const parsed = z
+      .object({
+        status: z
+          .enum(["ACTIVE", "DONE", "FAILED", "CANCELLED", "HISTORY"])
+          .optional(),
+        page: z.coerce.number().int().min(1).max(100000).default(1),
+      })
+      .safeParse(c.req.query());
+    if (!parsed.success)
+      throw new AppError("INVALID_QUERY", "فیلتر درخواست نامعتبر است.", 400);
+    const result = await deps.store.list(
+      c.get("user").id,
+      parsed.data.status,
+      parsed.data.page,
+    );
+    return c.json({ data: { ...result, items: result.items.map(requestDto) } });
+  });
+  app.get("/api/requests/:id", async (c) => {
+    const r = await deps.store.request(c.get("user").id, c.req.param("id"));
+    if (!r) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+    return c.json({ data: requestDto(r) });
+  });
+  for (const method of ["post", "patch"] as const)
+    app[method](
+      method === "post" ? "/api/requests" : "/api/requests/:id",
+      async (c) => {
+        const parsed = requestInputSchema.safeParse(
+          await c.req.json().catch(() => null),
+        );
+        if (!parsed.success)
+          throw new AppError(
+            "INVALID_REQUEST",
+            parsed.error.issues.find((i) => /[\u0600-\u06ff]/.test(i.message))
+              ?.message ?? "قیمت، تعداد و اطلاعات درخواست را بررسی کنید.",
+            400,
+          );
+        const user = c.get("user");
+        const state = await deps.command(user.id, { type: "membership" });
+        if (!state.canManageRequests)
+          throw new AppError(
+            "SESSION_NOT_READY",
+            state.error ?? "اتصال تلگرام هنوز آماده نیست.",
+          );
+        const r =
+          method === "post"
+            ? await deps.store.create(user.id, parsed.data)
+            : await deps.store.edit(user.id, c.req.param("id")!, parsed.data);
+        if (!r)
+          throw new AppError(
+            "REQUEST_LOCKED",
+            "درخواست اجرا شده یا در حال اجراست؛ قابل ویرایش نیست.",
+          );
+        return c.json({ data: requestDto(r) }, method === "post" ? 201 : 200);
+      },
+    );
+  app.delete("/api/requests/:id", async (c) => {
+    if (!(await deps.store.cancel(c.get("user").id, c.req.param("id"))))
+      throw new AppError(
+        "REQUEST_LOCKED",
+        "فقط درخواست اجرا‌نشده قابل لغو است.",
+      );
+    return c.json({ data: { cancelled: true } });
+  });
+  app.get("/api/telegram-session/status", async (c) =>
+    c.json({ data: await deps.command(c.get("user").id, { type: "status" }) }),
+  );
+  app.post("/api/telegram-session/login", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = workerCommandSchema.safeParse({
+      ...(body && typeof body === "object" ? body : {}),
+      type: "login",
     });
-  }
-  return serve({ fetch: app.fetch, port: 3000 }, (info) => console.info(`Server is running on http://localhost:${info.port}`));
+    if (!parsed.success)
+      throw new AppError(
+        "INVALID_PHONE",
+        "شماره را با کد کشور، مثل ‎+989121234567 وارد کنید.",
+        400,
+      );
+    return c.json(
+      { data: await deps.command(c.get("user").id, parsed.data) },
+      201,
+    );
+  });
+  for (const type of ["code", "password", "resend"] as const)
+    app.post(`/api/telegram-session/login/:id/${type}`, async (c) => {
+      const body =
+        type === "resend" ? {} : await c.req.json().catch(() => null);
+      const command = workerCommandSchema.safeParse({
+        ...(body && typeof body === "object" ? body : {}),
+        type,
+        id: c.req.param("id"),
+      });
+      if (!command.success)
+        throw new AppError("INVALID_LOGIN", "اطلاعات ورود را بررسی کنید.", 400);
+      return c.json({
+        data: await deps.command(c.get("user").id, command.data),
+      });
+    });
+  app.delete("/api/telegram-session/login/:id", async (c) => {
+    const id = z.string().uuid().safeParse(c.req.param("id"));
+    if (!id.success)
+      throw new AppError("INVALID_LOGIN", "ورود معتبر نیست.", 400);
+    return c.json({
+      data: await deps.command(c.get("user").id, {
+        type: "cancel",
+        id: id.data,
+      }),
+    });
+  });
+  app.post("/api/telegram-session/membership-check", async (c) =>
+    c.json({
+      data: await deps.command(c.get("user").id, { type: "membership" }),
+    }),
+  );
+  app.delete("/api/telegram-session", async (c) => {
+    const userId = c.get("user").id;
+    // Persist revocation even when the worker is currently offline.
+    await deps.store.disableSession(
+      userId,
+      "REVOKING",
+      "قطع اتصال درخواست شده؛ درخواست‌های اجرا‌نشده لغو شدند.",
+    );
+    return c.json({ data: await deps.command(userId, { type: "revoke" }) });
+  });
+  app.onError((error, c) => {
+    const safe =
+      error instanceof AppError
+        ? error
+        : new AppError(
+            "UNAVAILABLE",
+            "سرویس موقتاً در دسترس نیست؛ دوباره تلاش کنید.",
+            503,
+          );
+    if (!(error instanceof AppError))
+      console.error("api.operation.failed", { path: c.req.routePath });
+    return c.json(
+      {
+        error: {
+          code: safe.code,
+          message: safe.message,
+          retryAt: safe.retryAt,
+        },
+      },
+      safe.status as 400 | 404 | 409 | 429 | 503,
+    );
+  });
+  app.notFound((c) =>
+    c.json(
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: "مسیر پیدا نشد؛ برنامه را به‌روز کنید.",
+        },
+      },
+      404,
+    ),
+  );
+  return app;
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) startServer();
+export const app = createApp({
+  store,
+  authenticate: authenticateTelegramRequest,
+  command: workerCommand,
+});
+export function startServer() {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.WORKER_INTERNAL_TOKEN)
+    throw new Error(
+      "TELEGRAM_BOT_TOKEN and WORKER_INTERNAL_TOKEN are required.",
+    );
+  const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
+  void bot.start().catch(() => console.error("telegram.bot.failed"));
+  const server = serve({ fetch: app.fetch, port: 3000 });
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    if (bot.isRunning()) await bot.stop();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await prisma.$disconnect();
+  };
+  process.once("SIGTERM", () => {
+    void stop();
+  });
+  process.once("SIGINT", () => {
+    void stop();
+  });
+  return server;
+}

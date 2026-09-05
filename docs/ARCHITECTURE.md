@@ -1,326 +1,47 @@
 # Zarbit — Architecture
 
-> Status: Target architecture.
-> Primary goal: keep the system small, explicit, and easy for Codex/LLM agents to maintain.
+## Boundaries
 
-## 1. Target Stack
+| Component          | Responsibility                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI                                   |
+| apps/server        | Hono API, Mini App identity/allowlist, request CRUD, bot launcher, worker proxy             |
+| apps/worker        | All MTProto clients, OTP, membership, session files, quote execution, Bot API notifications |
+| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                       |
+| packages/domain    | Integer price conversion, quote parser and Telegram message builders                        |
+| packages/db        | Prisma/libSQL SQLite, atomic request/session operations                                     |
+| packages/env       | Service-specific environment contracts and independent database configuration               |
 
-### Frontend
+There is no MTProto client or session volume on the server. Server and worker share only the application database volume. The worker owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership/locking maintenance.
 
-- React
-- Vite
-- TanStack Router
-- TanStack Query
-- HeroUI
-- TypeScript
+## Internal protocol
 
-### Backend
+Authenticated browser → Hono server → bearer-authenticated worker HTTP on private port 3002. WORKER_INTERNAL_URL belongs only to the server. WORKER_INTERNAL_TOKEN is shared. The worker rechecks the database owner and allowlist. Neither public nor internal commands accept browser-selected ownership.
 
-- Node.js
-- Hono
-- Prisma
-- SQLite
+Worker has no public port/domain or Dokploy proxy route. Its private Compose network retains outbound Internet access for Telegram. One server, one worker and one SQLite volume remain the supported topology.
 
-### Telegram
+## Session ownership
 
-- `mtcute` for the per-user MTProto worker
-- `grammY` for the normal Telegram Bot API integration
+One runtime client and one serialized operation stream per user. Runtime reservations include pending login/recovery and are capped at 20. Synchronization cannot overlap, and work for different users runs independently. I/O has a 20-second deadline; failed reconnects back off from 10 seconds to a five-minute ceiling.
 
-### Repository / Tooling
+A SQLite OS lock on .worker-owner.sqlite prevents another current-version worker opening the volume. It is released on shutdown/crash; this assumes local volumes with reliable SQLite locking, not network filesystems. Stop the older pre-lock worker manually during first upgrade.
 
-- pnpm workspace
-- Turborepo
-- TypeScript strict mode
-- Docker
-- Dokploy
+State revision and conditional activation prevent a late operation reactivating a revoked/replaced session. File names are random 64-hex values, directory mode 0700, files 0600, runtime UID 1000. Clients close before files are removed. Network failures keep authorization; revoked authorization is removed.
 
-## 2. Current Repository Baseline
+## Requests and SQLite
 
-The existing Better-T-Stack scaffold already contains:
+Only short database transactions; no Telegram calls inside them. Atomic claim checks owner, ACTIVE/unclaimed state, current price condition, quote date and ready session revision. Concurrent edits/cancellations cannot modify a claimed request.
 
-```text
-apps/
-  server/
-  web/
+SQLite and Telegram cannot jointly guarantee exactly-once delivery. After a crash, unfinished claims become FAILED with an explicit unknown-outcome message and are never retried automatically. A successful trade followed by bot failure remains successful.
 
-packages/
-  config/
-  db/
-  env/
-  ui/
-```
+## Web state
 
-A new application must be added:
+Private queries are gated by Mini App authentication and scoped by Telegram user ID. Session polling is one second during enrollment/disconnect, otherwise ten seconds while visible; request polling is ten seconds while visible. Focus refreshes state. Mutations do not retry automatically. OTP mutation data is cleared after each response, never persisted.
 
-```text
-apps/
-  worker/
-```
+API/login responses use no-store. VITE_SERVER_URL is a required build-time URL; production rejects HTTP and loopback. Nginx serves hashed assets immutably, but revalidates index.html and sw.js. PWA updates require explicit user action.
 
-Target logical structure:
+## Deployment
 
-```text
-apps/
-  web/       # React + Vite + TanStack Router Mini App
-  server/    # Hono HTTP API + grammY integration
-  worker/    # long-running mtcute MTProto connection
+Dokploy Compose has no labels, host ports or required external network. Domains target web:80 and server:3000 only. An explicit migrate job prepares volume ownership and applies new migrations before services start. No distributed worker, PostgreSQL, Redis or queue is introduced.
 
-packages/
-  config/    # shared TypeScript/tooling configuration
-  db/        # Prisma schema/client + SQLite access
-  env/       # typed environment contracts
-```
-
-Only create additional shared packages when a real cross-application need appears.
-
-## 3. Important Scaffold Cleanup
-
-The current scaffold contains a `packages/ui` package populated with shadcn-style components.
-
-The product decision is HeroUI.
-
-Therefore the implementation agent must choose one clean end state:
-
-1. remove the generated shadcn UI package if unused; or
-2. replace it with a deliberately designed shared HeroUI layer only if sharing UI primitives across apps becomes useful.
-
-Do not keep two UI systems by default.
-
-The preferred MVP is to use HeroUI directly inside `apps/web` unless a shared UI package becomes justified.
-
-## 4. Application Responsibilities
-
-### 4.1 `apps/web`
-
-Responsibilities:
-
-- Telegram Mini App UI;
-- Mini App bootstrap;
-- authenticated API calls;
-- request creation/edit/cancellation;
-- displaying request status/history;
-- client-side routing;
-- client-side query/cache state.
-
-Must not contain:
-
-- mtcute;
-- Telegram trading group logic;
-- database access;
-- trusted authorization decisions;
-- trade execution logic.
-
-### 4.2 `apps/server`
-
-Responsibilities:
-
-- Hono API;
-- validate Telegram Mini App `initData`;
-- allowlist authorization;
-- request CRUD;
-- grammY bot integration;
-- user notifications;
-- application-level validation;
-- database access through `packages/db`.
-
-Must not directly own the long-running MTProto group listener.
-
-### 4.3 `apps/worker`
-
-Responsibilities:
-
-- run up to 20 independent Telegram user accounts using mtcute;
-- persist/reuse one opaque SQLite session file per user on the shared protected volume;
-- listen to the configured group;
-- accept quote messages only from the configured source;
-- parse quote messages;
-- find matching active requests;
-- atomically claim each request;
-- execute alert/buy/sell behavior;
-- update request status.
-
-This process is long-running and must have a single active replica in MVP. A failed or reconnecting user client must not stop other user clients.
-
-## 5. Data Flow
-
-```text
-                  Telegram
-        +------------+-------------+
-        |                          |
-        | Bot API                  | MTProto
-        v                          v
-   grammY / Server            mtcute / Worker
-        |                          |
-        |                          | quote
-        |                          v
-        |                     Quote Parser
-        |                          |
-        |                          v
-        |                    Request Matcher
-        |                          |
-        +------------+-------------+
-                     |
-                     v
-                  SQLite
-                     ^
-                     |
-                 Prisma
-                     ^
-                     |
-                  Hono API
-                     ^
-                     |
-               Mini App / Web
-```
-
-## 6. Domain Boundary
-
-Telegram libraries are adapters, not the business domain.
-
-Prefer:
-
-```text
-mtcute update
-  -> normalize/parse
-  -> domain quote
-  -> request matching
-  -> execution decision
-  -> Telegram adapter
-```
-
-Business rules should be testable/readable without understanding mtcute internals.
-
-Likewise, web UI should communicate through API/domain contracts rather than importing server/database implementation.
-
-## 7. Database Choice
-
-SQLite is intentional.
-
-Reasons:
-
-- small user count;
-- small data volume;
-- low write throughput;
-- one deployment environment;
-- operational simplicity;
-- Prisma support.
-
-A PostgreSQL migration is not part of MVP.
-
-SQLite database files must live on persistent storage in production.
-
-## 8. Concurrency Rule
-
-The system does not need a queue.
-
-It does need one protection:
-
-> one request must never execute twice.
-
-Before an action is executed, the worker must atomically claim an `ACTIVE` request.
-
-Conceptually:
-
-```text
-ACTIVE
-  -> claimed by one worker execution
-  -> action
-  -> DONE / FAILED
-```
-
-Implementation may use an atomic conditional update or transaction.
-
-Do not introduce Redis/BullMQ solely for this.
-
-## 9. Process Model
-
-Recommended deployment processes:
-
-```text
-web
-server
-worker
-```
-
-`worker` requirements:
-
-- one replica;
-- long-running;
-- restartable;
-- persistent protected per-user mtcute sessions;
-- private/no public HTTP port required unless a health endpoint is intentionally added.
-
-## 10. Environment Configuration
-
-Expected configuration includes:
-
-```env
-DATABASE_URL=
-TELEGRAM_API_ID=
-TELEGRAM_API_HASH=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_GROUP_ID=
-QUOTE_SENDER_ID=
-ALLOWED_TELEGRAM_USER_IDS=
-```
-
-Names may be adjusted to match repository conventions, but configuration must remain centralized and typed.
-
-Secrets and IDs that can change by environment must not be duplicated throughout the codebase.
-
-## 11. Code Organization Principles
-
-Prefer feature/domain modules over excessive layers.
-
-Good:
-
-```text
-worker/src/
-  telegram/
-    client.ts
-    listener.ts
-    messages/
-      trade.ts
-      alert.ts
-      notification.ts
-  quote/
-    parse-quote.ts
-  requests/
-    match-requests.ts
-    execute-request.ts
-```
-
-Avoid architecture such as:
-
-```text
-controllers/
-services/
-repositories/
-managers/
-handlers/
-processors/
-factories/
-adapters/
-ports/
-```
-
-for every simple operation.
-
-Use an abstraction only when it removes real duplication or isolates an external boundary.
-
-## 12. LLM / Codex Implementation Rules
-
-When implementing from this document:
-
-1. preserve the existing Better-T-Stack repository conventions where reasonable;
-2. do not rewrite the scaffold without a concrete need;
-3. add `apps/worker` as a first-class workspace app;
-4. keep TypeScript strict;
-5. prefer existing workspace config packages;
-6. keep dependencies minimal;
-7. do not introduce an alternate backend framework;
-8. do not replace TanStack Router with Next.js/TanStack Start;
-9. do not replace SQLite with PostgreSQL;
-10. do not replace mtcute with another MTProto client;
-11. do not add a second authentication system;
-12. do not add infrastructure that is outside MVP scope.
+See OPERATIONS.md for first upgrade, backup and rollback. Basic CI performs typecheck/build; final runtime image stages verify native storage without Telegram login.

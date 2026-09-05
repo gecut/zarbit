@@ -3,6 +3,7 @@
   "ui": "tui",
   "tasks": {
     "build": {
+      "env": ["VITE_SERVER_URL"],
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
@@ -11,6 +12,7 @@
       "dependsOn": ["^lint"]
     },
     "check-types": {
+      "env": ["VITE_SERVER_URL"],
       "dependsOn": ["^check-types"]
     },
     "dev": {

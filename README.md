@@ -1,75 +1,34 @@
 # Zarbit
 
-Zarbit is a private Telegram Mini App for one-shot gold-price alerts and trades. Each allowlisted user connects only their own Telegram account by QR; the worker sends their matching order from that same account.
+Private Persian/RTL Telegram Mini App for one-shot price alerts and buy/sell replies. Each allowlisted user connects their own Telegram account with phone → code → optional two-step password. QR is removed. The worker alone owns all MTProto sessions.
 
-## Stack
+## Development
 
-- `apps/web`: React, Vite, TanStack Router, TanStack Query, HeroUI
-- `apps/server`: Node.js and Hono HTTP API foundation
-- `apps/worker`: Node.js worker foundation prepared for mtcute
-- `packages/db`: Prisma with SQLite
-- `packages/env`: typed, centralized environment contracts
-- pnpm workspaces and Turborepo
+Use Node.js 24 and pnpm 10.26.0. Configure apps/server/.env and apps/worker/.env from their examples with the **same absolute DATABASE_URL** and WORKER_INTERNAL_TOKEN; configure apps/web/.env with VITE_SERVER_URL. The root .env is only for Docker Compose, not shared application configuration.
 
-## Getting started
+Install with pnpm install. Generate Prisma with pnpm run db:generate. Apply migrations with DATABASE_URL explicitly set, using pnpm --filter @zarbit/db exec prisma migrate deploy. Then pnpm run dev starts the apps. The web development port is 3001, server 3000, worker's private command port 3002.
 
-```bash
-pnpm install
-pnpm run dev
-```
+## Build and deploy
 
-The web app is served at `http://localhost:3001` and the Hono foundation at `http://localhost:3000`.
+Set the GitHub Actions repository variable VITE_SERVER_URL to the actual public HTTPS API URL before publishing. CI typechecks and builds; the publish workflow creates web/server/worker images for amd64 and arm64. Final server/worker image stages verify native SQLite dependencies without real Telegram credentials.
+
+Use docker-compose.production.yml in Dokploy and the values from deploy/compose.env.example in its Environment UI. No Traefik labels are required. Configure domains for web port 80 and server port 3000. Do not expose worker port 3002.
+
+**For an existing deployment, stop the old server and worker and back up both volumes before migration.** The migrate service remains mandatory and prepares UID 1000 file ownership. Existing ACTIVE sessions, requests and history are preserved by the new OTP migration. Never change the existing Compose project/volume names during upgrade.
+
+VITE_SERVER_URL is embedded into the web image; changing a runtime Dokploy variable cannot update an already-built frontend. Choose one immutable IMAGE_TAG across all services.
+
+Detailed steps and recovery: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Checks
 
-```bash
-pnpm run build
-pnpm run check-types
-```
+Run pnpm run check-types and pnpm run build with a public HTTPS VITE_SERVER_URL. No automated unit/integration/E2E suite is included, per the owner's decision. Builds are not proof of Telegram behavior; the owner performs live-account acceptance.
 
-SQLite/Prisma helpers are available through `db:push`, `db:generate`, `db:migrate`, and `db:studio` scripts in the root package.
+## Architecture references
 
-## Container deployment
+- [Product](docs/PRODUCT.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Business rules](docs/BUSINESS-RULES.md)
+- [Telegram integration](docs/TELEGRAM.md)
 
-`.github/workflows/publish-containers.yml` verifies the workspace and publishes three multi-architecture images to GHCR on pushes to `main` and version tags:
-
-```text
-ghcr.io/<owner>/<repository>-web
-ghcr.io/<owner>/<repository>-server
-ghcr.io/<owner>/<repository>-worker
-```
-
-Set the GitHub Actions repository variable `VITE_SERVER_URL` before publishing, for example `https://api.example.com`. It is embedded into the web image at build time; changing a Dokploy runtime variable cannot change it. The web Docker build now fails if this value is absent. The workflow uses the repository `GITHUB_TOKEN`; no registry secret is stored in the repository.
-
-For Dokploy, add the values from [compose.env.example](/Users/mm25zamanian/Codes/zarbit/deploy/compose.env.example) in the Compose Environment UI. Dokploy writes them to `.env`, which the production compose injects into its runtime services. For a non-Dokploy host, copy that file to `.env`, replace every placeholder, then run:
-
-```bash
-docker compose -f docker-compose.production.yml up -d
-```
-
-The `migrate` service applies Prisma migrations before server and worker start. `zarbit-data` persists SQLite and `zarbit-telegram-sessions` is shared only by server and worker for per-user MTProto SQLite sessions. Never expose or back up these session files outside the protected deployment volume.
-
-The MTProto session driver depends on the Linux native binding of `better-sqlite3`. `pnpm-workspace.yaml` pins it to `13.0.3` across the workspace because the version transitively pinned by `@mtcute/node` has no Node 24 prebuilt binary. Version 13 provides the compatible Node-API prebuild without an install-time compiler; both server and worker image builds verify the binding before publishing an image.
-
-For Dokploy, configure domains in its UI: route the `web` service to port `80` and the `server` service to port `3000`. The compose intentionally has no Traefik labels, host port bindings, or external network dependency. Set `CORS_ORIGIN` to the final public Mini App origin before deployment.
-
-## Environment
-
-Server and worker configuration is parsed by `packages/env`. Development defaults allow builds without production credentials. Telegram secrets must only be supplied through deployment environment variables; never commit them.
-
-`TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are global product credentials created by the product owner at my.telegram.org; they are not user credentials. Each end user authorizes a separate QR-only MTProto session. The server rejects a QR login when its Telegram user ID differs from the validated Mini App identity, and the worker verifies group membership again immediately before execution. `ALLOWED_TELEGRAM_USER_IDS` remains a restart-required allowlist.
-
-## Project structure
-
-```text
-apps/
-  web/
-  server/
-  worker/
-packages/
-  config/
-  db/
-  env/
-```
-
-The bot only launches the Mini App and sends private notifications. It never receives OTPs or performs MTProto login.
+Shared packages: contracts (Zod/DTOs), domain (prices/parser/message builders), db (Prisma/libSQL), env (service configuration), config (TypeScript). Bot launches the Mini App and sends notifications only. Codes/passwords must never be sent to the bot or shared in bug reports.

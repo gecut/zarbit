@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsdown",
     "check-types": "tsc --noEmit",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/main.ts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {
@@ -21,7 +21,10 @@
     "@zarbit/env": "workspace:*",
     "dotenv": "catalog:",
     "grammy": "^1.42.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@zarbit/contracts": "workspace:*",
+    "hono": "^4.12.32",
+    "@hono/node-server": "^2.0.12"
   },
   "devDependencies": {
     "@zarbit/config": "workspace:*",

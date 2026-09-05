@@ -1,306 +1,37 @@
 # Zarbit — Business Rules
 
-> This file is the authoritative source for MVP business behavior.
-> If implementation behavior conflicts with this document, this document wins unless explicitly updated.
+## Prices and source
 
-## 1. Terminology
+All UI prices are rial; database/Telegram prices are compact integers. Conversion is centralized in packages/domain: 95,900,000 ↔ 95900. Target must be positive, a multiple of 1000 rial, and fit the compact SQLite integer range. Units are positive whole integers for BUY/SELL and null for ALERT.
 
-### Quote
+LTE means quote <= target; GTE means quote >= target. Equality matches. Only a new message in the fixed group from the fixed publisher may trigger a request. Accept an independent number or «مظنه: number»; reject arbitrary numeric text. No fixed five-digit assumption, NLP, forwarding or edit-trigger behavior.
 
-A gold price message ("مظنه") published in the configured Telegram group.
+## Ownership and readiness
 
-### Target Price
+Mini App signature and allowlist authorize API access. Every request belongs to that verified identity. MTProto login must connect the same account.
 
-The price defined by a Mini App user for a request.
+Create/edit requires a live ready session and recently verified group membership. Reading history and cancelling unclaimed requests remain available without a worker connection. Each quote listener considers only its owner's requests.
 
-### Request
+## Request lifecycle
 
-A one-shot instruction waiting for a price condition.
+ACTIVE (unclaimed) → atomic claim → DONE / FAILED. Only unclaimed ACTIVE requests can be edited or cancelled. Claimed ACTIVE requests appear as «در حال اجرا». DONE, FAILED and CANCELLED are terminal.
 
-### Alert Request
+A claim atomically checks owner, session revision/readiness, current condition/price and creation time relative to the quote. The action reads the latest claimed fields, not a stale candidate snapshot. Several requests may independently match a quote.
 
-Notifies the user when the condition matches.
+ALERT sends a private bot notification then finishes. BUY/SELL replies from the owner's Telegram account to the exact triggering message. Payload is units + side + actual quote, without spaces; BUY=خ, SELL=ف. Example: a target of 96000 matched by 95900 sends 1خ95900, never 1خ96000.
 
-### Trade Request
+## Failure and cancellation
 
-Automatically replies in the trading group with a buy or sell instruction when the condition matches.
+No automatic financial resend. If the send outcome cannot be determined, the request becomes FAILED and explicitly asks the user to inspect group messages before creating another order. A crash with an unfinished claim is treated the same way on recovery. Atomic SQLite claiming is not an exactly-once transaction with Telegram.
 
-## 2. Request Conditions
+A successfully sent trade remains successful when its private notification fails. Notification failure is logged separately.
 
-The system supports two conditions:
+Membership loss, allowlist removal and disconnect cancel only unclaimed ACTIVE requests in a short transaction with the session state change. Claimed requests are not falsely reported as cancelled. Rechecking membership may reactivate the connection, never cancelled orders. Temporary network failure alone must not delete valid sessions.
 
-```text
-LTE = current quote <= target price
-GTE = current quote >= target price
-```
+## Product limits
 
-Equality counts as a match.
+Up to 20 simultaneous Telegram clients including OTP and recovery; one worker, group and publisher. Fixed environment allowlist requires restart. No automatic group joining, recurring orders, accounting, reconciliation, exchange settlement, public signup or distributed infrastructure.
 
-No strict-only `<` or `>` mode is required.
+## Validation policy
 
-## 3. Request Actions
-
-```text
-ALERT
-BUY
-SELL
-```
-
-For `BUY` and `SELL`, a unit count is required.
-
-## 4. Request Lifecycle
-
-MVP statuses:
-
-```text
-ACTIVE
-DONE
-CANCELLED
-FAILED
-```
-
-### ACTIVE
-
-Waiting for a matching quote.
-
-### DONE
-
-The matching one-shot action was successfully handled.
-
-### CANCELLED
-
-User cancelled the request before execution.
-
-### FAILED
-
-The request matched but its required execution could not be completed.
-
-## 5. One-Shot Rule
-
-Every request finishes after its first match.
-
-A `DONE`, `CANCELLED`, or `FAILED` request must never be considered for later quote matches.
-
-## 6. Multiple Requests
-
-- a user may have multiple `ACTIVE` requests;
-- several users may have active requests;
-- multiple requests may match the same quote;
-- every matching request should be handled independently.
-
-## 7. Quote Trigger Rule
-
-When a valid quote arrives:
-
-1. find eligible `ACTIVE` requests;
-2. evaluate each request against the quote;
-3. atomically claim a matching request before executing it;
-4. perform its configured action;
-5. finish the request.
-
-The implementation must prevent two close quote messages from executing the same request twice.
-
-## 8. Alert Behavior
-
-For an `ALERT` request:
-
-```text
-matching quote
-  -> send private Telegram notification
-  -> mark request DONE
-```
-
-Notification text must be generated by a centralized Telegram message builder.
-
-## 9. Buy/Sell Behavior
-
-For a `BUY` or `SELL` request:
-
-```text
-matching quote
-  -> reply to that exact Telegram quote message
-  -> use configured unit count
-  -> use the actual triggering quote
-  -> mark request DONE
-  -> notify user privately
-```
-
-The target price is a trigger threshold only.
-
-The trade message must use the quote that actually triggered the request.
-
-Example:
-
-```text
-Target:
-96,000,000
-
-Incoming quote:
-95,900,000
-```
-
-If a buy request matches, the Telegram trade payload must use:
-
-```text
-95900
-```
-
-not:
-
-```text
-96000
-```
-
-## 10. Trade Message Format
-
-Current format:
-
-```text
-[units][side][quote]
-```
-
-Where:
-
-```text
-خ = buy
-ف = sell
-```
-
-Examples:
-
-```text
-1خ95900
-2ف96155
-```
-
-No spaces are inserted in the current format.
-
-This format is not allowed to be manually assembled in business logic.
-
-All Telegram outgoing text must be produced through dedicated builder functions so the group format can be changed later in one place.
-
-## 11. Quote Format
-
-The group publishes quote messages using a fixed textual pattern containing a compact numeric quote.
-
-Observed values include:
-
-```text
-95900
-96155
-95100
-```
-
-The numeric quote length is not fixed.
-
-A 6-digit quote must be valid when market values naturally reach that range:
-
-```text
-100000
-101250
-```
-
-The parser must validate the known message format, not a hardcoded five-digit length.
-
-## 12. Quote Source Restriction
-
-Only messages satisfying both constraints may become quote events:
-
-1. message belongs to the configured trading group;
-2. message is from the configured quote sender/source.
-
-Other chats, users, messages, and numeric content must be ignored.
-
-## 13. Forward Restriction
-
-The Telegram group does not allow message forwarding.
-
-This does not change the system architecture.
-
-Each connected user account is a group member and directly receives updates through MTProto. Trade execution is a reply to the original message, not a forward.
-
-## 14. Edited Messages
-
-MVP default:
-
-- only new quote messages are considered;
-- edited messages are not treated as a new quote trigger.
-
-Do not add edit-trigger behavior unless explicitly requested later.
-
-## 15. Price Input
-
-The Mini App uses the human-facing full price representation, e.g.:
-
-```text
-95,900,000
-```
-
-The application converts this value to/from the compact quote representation through one centralized domain utility.
-
-The conversion rule must not be scattered through UI components or API handlers.
-
-## 16. User Authorization
-
-The system is private.
-
-A user may access application functionality only when:
-
-1. Telegram Mini App `initData` is valid;
-2. the authenticated Telegram user ID is in the configured allowlist.
-
-No public registration exists.
-
-All allowed users may create alerts and buy/sell requests.
-
-## 17. Request Ownership
-
-A user may only:
-
-- view their own requests;
-- edit their own requests;
-- cancel their own requests.
-
-The server determines ownership from the validated Telegram identity.
-
-Never authorize using a `userId` sent by the client.
-
-## 18. Editing
-
-An active request may be edited before it triggers.
-
-Editable business fields may include:
-
-- condition;
-- target price;
-- action;
-- units.
-
-Validation must keep the request internally consistent, e.g. `units` is required for trade actions.
-
-## 19. Failure Behavior
-
-If a matched trade cannot be sent:
-
-```text
-request -> FAILED
-```
-
-The user should receive a private failure notification when possible.
-
-Do not automatically return a failed trade request to `ACTIVE` in MVP.
-
-## 20. Rules Against Overengineering
-
-The following are intentionally not business requirements:
-
-- complex order confirmation states;
-- settlement tracking;
-- exchange reconciliation;
-- automatic retries of financial actions;
-- partial fills;
-- trade ledger/accounting;
-- recurring triggers;
-- chained conditional strategies.
-
-If any of these become required, update this document before implementing them.
+Automated suites were removed at the owner's request. TypeScript, production builds and native dependency checks remain; real Telegram and UI acceptance is performed manually by the owner.

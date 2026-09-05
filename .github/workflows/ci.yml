@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+env:
+  HUSKY: "0"
+  DATABASE_URL: file:./build.db
+  VITE_SERVER_URL: https://api.example.com
+
 jobs:
   verify:
     runs-on: ubuntu-latest

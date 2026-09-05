@@ -1,8 +1,10 @@
 FROM node:24-slim AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@10.26.0
 WORKDIR /app
 ENV DATABASE_URL=file:./build.db
 ENV CI=true
+ENV HUSKY=0
 
 COPY . .
 RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store

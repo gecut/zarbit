@@ -2,93 +2,104 @@ name: zarbit
 
 services:
   web:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-web:${IMAGE_TAG:-latest}
-    expose:
-      - "80"
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-web:${IMAGE_TAG:-latest}
+    expose: ["80"]
     depends_on:
-      server:
-        condition: service_healthy
+      server: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 5s
     restart: unless-stopped
     init: true
 
   migrate:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
-    command: ["node", "/app/packages/db/node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "/app/packages/db/prisma.config.ts"]
-    env_file:
-      - path: ./.env
-        required: false
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
+    user: "0:0"
+    command: ["node", "/app/deploy/migrate.mjs"]
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/data/zarbit.db
-      RUST_LOG: info
-    volumes:
-      - zarbit-data:/data
-    restart: "no"
-    init: true
-
-  server:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-server:${IMAGE_TAG:-latest}
-    expose:
-      - "3000"
-    env_file:
-      - path: ./.env
-        required: false
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: file:/data/zarbit.db
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://app.example.com}
-      TELEGRAM_SESSIONS_DIR: /sessions
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
-      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:-}
-      WEB_APP_URL: ${WEB_APP_URL:-}
-      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:-}
-      MAX_TELEGRAM_SESSIONS: ${MAX_TELEGRAM_SESSIONS:-20}
     volumes:
       - zarbit-data:/data
       - zarbit-telegram-sessions:/sessions
+    restart: "no"
+    init: true
+    networks: [backend]
+
+  server:
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
+    expose: ["3000"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/zarbit.db
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN}
+      WEB_APP_URL: ${WEB_APP_URL:?Set WEB_APP_URL}
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:?Set ALLOWED_TELEGRAM_USER_IDS}
+      WORKER_INTERNAL_URL: http://worker:3002
+      WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
+    volumes: [zarbit-data:/data]
+    networks: [default, backend]
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      migrate: { condition: service_completed_successfully }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 60s
     init: true
 
   worker:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/example/zarbit}-worker:${IMAGE_TAG:-latest}
-    env_file:
-      - path: ./.env
-        required: false
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:-latest}
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/data/zarbit.db
       TELEGRAM_SESSIONS_DIR: /sessions
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
-      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
-      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:-}
-      QUOTE_SENDER_ID: ${QUOTE_SENDER_ID:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?Set TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?Set TELEGRAM_API_HASH}
+      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:?Set TELEGRAM_GROUP_ID}
+      QUOTE_SENDER_ID: ${QUOTE_SENDER_ID:?Set QUOTE_SENDER_ID}
+      ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:?Set ALLOWED_TELEGRAM_USER_IDS}
       MAX_TELEGRAM_SESSIONS: ${MAX_TELEGRAM_SESSIONS:-20}
+      WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
     volumes:
       - zarbit-data:/data
       - zarbit-telegram-sessions:/sessions
+    # Private to this Compose project, but not internal:true: Telegram needs egress.
+    networks: [backend]
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
+    stop_grace_period: 60s
     init: true
+
+networks:
+  default: {}
+  backend: {}
 
 volumes:
   zarbit-data:

@@ -9,6 +9,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+  HUSKY: "0"
+  DATABASE_URL: file:./build.db
+  VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
 
 permissions:
   contents: read
@@ -37,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Require the production API URL
+        run: node --input-type=module -e "const url = new URL(process.env.VITE_SERVER_URL); if (url.protocol !== 'https:' || url.hostname === 'localhost' || url.hostname === '127.0.0.1') throw new Error('Set the public HTTPS VITE_SERVER_URL repository variable');"
+
       - name: Typecheck workspace
         run: pnpm run check-types
 
@@ -59,6 +65,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up multi-architecture emulation
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -1,5 +1,10 @@
 # Dependencies
 node_modules
+.pnpm-store/
+output/playwright/
+test-results/
+playwright-report/
+telegram-sessions/
 .pnp
 .pnp.js
 

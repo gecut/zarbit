@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 
 import { routeTree } from "./routeTree.gen";
 import { initializeTelegramWebApp } from "./lib/telegram";
+import { applyTheme } from "./lib/theme";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,11 @@ if (!rootElement) {
 
 if (!rootElement.innerHTML) {
   initializeTelegramWebApp();
+  applyTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () =>
+    applyTheme(),
+  );
+  window.Telegram?.WebApp?.onEvent?.("themeChanged", () => applyTheme());
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <QueryClientProvider client={queryClient}>

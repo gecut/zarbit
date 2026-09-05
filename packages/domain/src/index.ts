@@ -4,7 +4,11 @@ export type RequestAction = "ALERT" | "BUY" | "SELL";
 export type RequestCondition = "LTE" | "GTE";
 
 export function humanPriceToCompactQuote(humanPrice: number): number {
-  if (!Number.isSafeInteger(humanPrice) || humanPrice <= 0 || humanPrice % compactQuoteMultiplier !== 0) {
+  if (
+    !Number.isSafeInteger(humanPrice) ||
+    humanPrice <= 0 ||
+    humanPrice % compactQuoteMultiplier !== 0
+  ) {
     throw new Error("قیمت باید مضربی از ۱٬۰۰۰ باشد.");
   }
 
@@ -25,7 +29,9 @@ export function compactQuoteToHumanPrice(compactQuote: number): number {
 }
 
 export function formatHumanPrice(compactQuote: number): string {
-  return new Intl.NumberFormat("fa-IR").format(compactQuoteToHumanPrice(compactQuote));
+  return new Intl.NumberFormat("fa-IR").format(
+    compactQuoteToHumanPrice(compactQuote),
+  );
 }
 
 /** Accepts only a standalone compact quote, optionally with the known Persian label. */
@@ -33,15 +39,20 @@ export function parseQuoteMessage(text: string): number | null {
   const normalized = text
     .trim()
     .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
-    .replace(/[٬,\s]/g, "");
-  const match = /^(?:مظنه\s*[:：-]?\s*)?(\d{4,})$/u.exec(normalized);
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+  const match =
+    /^(?:مظنه[ \t]*[:：-]?[ \t]*)?(\d{4,}|\d{1,3}(?:[,٬]\d{3})+)$/u.exec(
+      normalized,
+    );
 
   if (!match?.[1]) {
     return null;
   }
 
-  const quote = Number(match[1]);
-  return Number.isSafeInteger(quote) && quote > 0 ? quote : null;
+  const quote = Number(match[1].replace(/[,٬]/g, ""));
+  return Number.isSafeInteger(quote) && quote > 0 && quote <= 2_147_483_647
+    ? quote
+    : null;
 }
 
 export function requestMatchesQuote(
@@ -61,7 +72,10 @@ export function buildTradeMessage(input: {
   return `${input.units}${side}${input.quote}`;
 }
 
-export function buildAlertMessage(input: { quote: number; targetPrice: number }): string {
+export function buildAlertMessage(input: {
+  quote: number;
+  targetPrice: number;
+}): string {
   return `هشدار قیمت: مظنه به ${formatHumanPrice(input.quote)} رسید. هدف شما ${formatHumanPrice(input.targetPrice)} بود.`;
 }
 
@@ -75,5 +89,5 @@ export function buildTradeSuccessMessage(input: {
 }
 
 export function buildTradeFailureMessage(): string {
-  return "ارسال سفارش انجام نشد و درخواست شما ناموفق شد.";
+  return "درخواست ناموفق شد؛ نتیجه ارسال ممکن است نامشخص باشد. پیش از ثبت دوباره، پیام‌های گروه را بررسی کنید.";
 }

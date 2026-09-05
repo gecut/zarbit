@@ -22,7 +22,10 @@
     "@zarbit/env": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "workbox-window": "^7.4.0",
+    "@zarbit/contracts": "workspace:*",
+    "@zarbit/domain": "workspace:*"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "^1.168.23",

@@ -21,7 +21,7 @@ Dockerfile
 **/Dockerfile
 docker-compose.yml
 
-# Secrets stay out of image layers; runtime env comes from compose env_file,
+# Secrets stay out of image layers; runtime env is explicitly scoped in Compose,
 # build-time public values come from compose build args
 **/.env
 **/.env.*
@@ -30,3 +30,13 @@ docker-compose.yml
 local.db
 local.db-*
 .data
+.session
+**/telegram-sessions
+.pnpm-store
+output
+**/test-results
+**/playwright-report
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+**/*.db-*

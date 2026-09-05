@@ -1,230 +1,40 @@
 # Zarbit — Product Specification
 
-> Status: Baseline specification for implementation by Codex/LLM agents.
-> Scope: MVP.
-> Language: English for machine-readability; product UI may be Persian/RTL.
+## Scope
 
-## 1. Product Summary
+Private Persian/RTL Telegram Mini App for one-shot gold-price alerts and buy/sell replies. Up to 20 simultaneous Telegram clients, including login and recovery. One fixed trading group, one fixed quote publisher, and an environment allowlist. No public signup, billing, admin, portfolio, recurring orders or horizontal scaling.
 
-Zarbit is a private Telegram Mini App plus user-owned Telegram automation system for a gold-trading group.
+## Access and login
 
-The system watches a specific Telegram group where gold quote messages ("مظنه") are published in a fixed format. Authorized users create one-shot requests in the Mini App based on a target price.
+The API verifies Telegram Mini App initData and ALLOWED_TELEGRAM_USER_IDS before any private access. OTP does not replace this identity check. Each authorized user connects only their own Telegram account through phone number → Telegram login code → two-step password if required. QR login has been removed.
 
-A request may:
+The product owner supplies global TELEGRAM_API_ID/HASH on the worker. End users never provide application credentials. Telegram determines code delivery and length; SMS is not guaranteed. Codes/passwords are never accepted in the bot.
 
-- only notify the user when the price condition is reached;
-- automatically send a buy order to the group;
-- automatically send a sell order to the group.
+An authenticated account must have exactly the same Telegram ID as the Mini App opener. Mismatches are rejected and the newly authorized session is logged out.
 
-Once a request reaches its target and its action is handled, that request is finished.
+## Session lifecycle
 
-## 2. Core User Problem
+Stored states: PENDING_OTP, ACTIVE, NOT_IN_GROUP, REVOKING, REVOKED, ERROR. DISCONNECTED is the API representation when no record exists. Live connectivity and stored authorization are separate.
 
-Users currently need to manually watch new gold quote messages and react when a price reaches a desired level.
+- Create/edit requires a ready connection and verified membership.
+- History and cancellation of unclaimed requests remain available during worker outages.
+- Nonmembers retain an inactive authorized session and may recheck membership without another OTP.
+- Loss of membership or disconnect cancels unclaimed requests. Cancelled requests never reactivate automatically.
+- A claimed request is shown as «در حال اجرا», not as cancelled.
+- An unknown send outcome is terminal and requires checking the actual group before a new order.
 
-Zarbit reduces this manual monitoring by letting an authorized user define:
+## Screens
 
-1. whether the trigger is above or below a price;
-2. the target price;
-3. whether the system should only alert or place a trade;
-4. for trades, whether the action is buy or sell;
-5. for trades, how many units should be used.
+Dashboard with active count/recent requests; new/edit request; active requests; paginated, filterable history; Telegram connection with phone/code/password, expiry, resend, cancellation, membership recheck and confirmed disconnect.
 
-## 3. Product Actors
+The existing compact mobile layout, RTL and Vazirmatn font remain. HeroUI semantic tokens define colors, surfaces, states, focus, shadows and radii. Theme can follow Telegram/system or be set manually to light/dark. The update prompt never forces a reload.
 
-### 3.1 Authorized Mini App User
+## Prices and actions
 
-A Telegram user whose Telegram user ID is explicitly allowed by server configuration.
+Prices displayed/entered are in rial. The shared domain conversion is 95,900,000 ↔ 95900 (integer factor 1000). LTE and GTE include equality. ALERT has no units; BUY/SELL require positive whole units.
 
-Authorized users can:
+A valid quote only executes requests belonging to the receiving account. Buy/sell uses that account and replies to the exact triggering quote with the actual quote, not the target threshold: 1خ95900 or 2ف96155.
 
-- open the Telegram Mini App;
-- create requests;
-- view requests;
-- edit active requests;
-- cancel active requests;
-- receive notifications;
-- create alert, buy, and sell requests.
+## Release validation
 
-There is no public registration flow.
-
-### 3.2 Telegram Bot
-
-A standard Telegram Bot API bot.
-
-Responsibilities:
-
-- launch/open the Mini App;
-- send private notifications to authorized users.
-
-It does not execute trades in the trading group.
-
-### 3.3 Telegram User Account / MTProto session
-
-Each authorized Mini App user connects their own Telegram account via QR-only MTProto login using mtcute.
-
-Responsibilities:
-
-- stay connected to the fixed target trading group;
-- receive quote messages from the configured source;
-- reply to the triggering quote message from that same user's account when one of that user's buy/sell requests matches.
-
-The product accepts up to 20 active sessions. The application credentials are global server secrets; users never provide `TELEGRAM_API_ID` or `TELEGRAM_API_HASH`.
-
-## 4. Main User Flow
-
-### 4.1 Create Alert
-
-1. User opens Mini App.
-2. User selects:
-   - price condition: greater/equal or less/equal;
-   - target price;
-   - action: alert.
-3. Request becomes `ACTIVE`.
-4. A quote message arrives.
-5. If quote satisfies the condition:
-   - bot sends a private notification;
-   - request becomes `DONE`.
-
-### 4.2 Create Buy/Sell Request
-
-1. User opens Mini App.
-2. User selects:
-   - price condition;
-   - target price;
-   - action: buy or sell;
-   - unit count.
-3. Request becomes `ACTIVE`.
-4. A quote message arrives.
-5. If quote satisfies the condition:
-   - system claims the request so it cannot execute twice;
-   - their connected Telegram account replies to that exact quote message;
-   - trade message uses the quote that triggered the request;
-   - request becomes `DONE`;
-   - user receives a private notification.
-
-If sending the trade message fails, the request becomes `FAILED` and the user is informed.
-
-## 5. Price Representation
-
-The Telegram group publishes compact quote values such as:
-
-```text
-95900
-96155
-95100
-```
-
-The format may naturally grow from 5 digits to 6 digits when the market price crosses that range. The parser must never assume a fixed digit count.
-
-The Mini App displays/accepts the human-facing full price format, for example:
-
-```text
-95,900,000
-```
-
-Price conversion between UI representation and Telegram quote representation must be centralized in one domain utility and must not be duplicated across components.
-
-## 6. Request Model
-
-Conceptually:
-
-```ts
-type RequestCondition = "LTE" | "GTE";
-type RequestAction = "ALERT" | "BUY" | "SELL";
-type RequestStatus = "ACTIVE" | "DONE" | "CANCELLED" | "FAILED";
-
-type Request = {
-  id: string;
-  userId: string;
-  condition: RequestCondition;
-  targetPrice: number;
-  action: RequestAction;
-  units: number | null;
-  status: RequestStatus;
-  createdAt: Date;
-  updatedAt: Date;
-};
-```
-
-Rules:
-
-- `units` is required for `BUY` and `SELL`;
-- `units` is not used for `ALERT`;
-- every request is one-shot;
-- multiple active requests per user are allowed;
-- multiple requests may match the same quote;
-- only `ACTIVE` requests may be triggered;
-- users may view, edit, and cancel active requests.
-
-## 7. Access Control
-
-The Mini App is private.
-
-Authorized Telegram user IDs are configured server-side, preferably through environment configuration:
-
-```env
-ALLOWED_TELEGRAM_USER_IDS=123456789,987654321
-```
-
-The server must never trust a Telegram user ID supplied directly by the frontend.
-
-Authorization flow:
-
-```text
-Telegram Mini App
-  -> initData
-  -> server validation
-  -> authenticated Telegram user
-  -> allowlist check
-  -> application access
-```
-
-## 8. MVP Screens
-
-Recommended minimal screens:
-
-- Dashboard
-- New Request
-- Active Requests
-- Completed / Historical Requests
-- Edit Request
-
-No public website, SEO surface, CMS, account registration, password login, or administration panel is required for MVP.
-
-## 9. Explicit Non-Goals
-
-Do not add these unless separately requested:
-
-- multiple trading groups;
-- dynamic quote sources;
-- public user signup;
-- subscription/billing;
-- complex RBAC;
-- Redis;
-- BullMQ;
-- Kafka;
-- event sourcing;
-- microservices;
-- advanced trading strategies;
-- stop-loss/take-profit chains;
-- recurring orders;
-- portfolio accounting;
-- automatic reconciliation with external exchanges;
-- analytics platform;
-- SSR/SEO requirements.
-
-## 10. Product Simplicity Rule
-
-Zarbit is intentionally small.
-
-Implementation should prefer:
-
-- direct and readable code;
-- explicit domain functions;
-- small modules;
-- minimal dependencies;
-- few abstractions;
-- deterministic business rules.
-
-Do not introduce infrastructure or patterns merely because they are common in larger trading systems.
+At the user's request, automated unit/integration/browser suites are not maintained. Typecheck, production builds and native dependency checks remain. Functional Telegram validation is performed by the owner with real accounts; a successful build is not proof of trade safety.

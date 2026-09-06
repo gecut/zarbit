@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { tl } from "@mtcute/node";
 import { AppError } from "@zarbit/contracts";
 import {
   formatWorkerDiagnostic,
@@ -18,6 +19,31 @@ test("creates a stable non-sensitive challenge reference", () => {
   assert.equal(challengeRef("challenge-1"), challengeRef("challenge-1"));
   assert.notEqual(challengeRef("challenge-1"), "challenge-1");
   assert.equal(challengeRef("challenge-1").length, 12);
+});
+
+test("does not redact opaque correlation references", () => {
+  const reference = "ad1234567bb";
+  const line = formatWorkerFailure(
+    "telegram.login.failed",
+    new Error("failed"),
+    {
+      challengeRef: reference,
+      sessionRef: reference,
+    },
+  );
+
+  assert.match(line, new RegExp(`"challengeRef":"${reference}"`));
+  assert.match(line, new RegExp(`"sessionRef":"${reference}"`));
+});
+
+test("keeps retry timestamps usable in rate-limit logs", () => {
+  const retryAt = "2026-09-06T00:01:00.000Z";
+  const line = formatWorkerFailure(
+    "telegram.login.failed",
+    new AppError("RATE_LIMITED", "too many attempts", 429, retryAt),
+  );
+
+  assert.match(line, new RegExp(`"retryAt":"${retryAt}"`));
 });
 
 test("redacts secrets and phone numbers from error logs", () => {
@@ -77,4 +103,15 @@ test("classifies native DNS failures without leaking an OTP", () => {
   assert.match(line, /"errno":"EAI_AGAIN"/);
   assert.match(line, /"syscall":"getaddrinfo"/);
   assert.doesNotMatch(line, /12345/);
+});
+
+test("keeps the MTcute RPC code that drives a two-step login", () => {
+  const line = formatWorkerFailure(
+    "telegram.login.failed",
+    tl.RpcError.create(401, "SESSION_PASSWORD_NEEDED"),
+  );
+
+  assert.match(line, /"failureCategory":"telegram_rpc"/);
+  assert.match(line, /"sourceCode":"SESSION_PASSWORD_NEEDED"/);
+  assert.doesNotMatch(line, /"errorCode":"NETWORK_ERROR"/);
 });

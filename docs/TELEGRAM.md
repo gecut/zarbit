@@ -27,6 +27,8 @@ One random challenge per owner, ten-minute lifetime, at most five invalid code/p
 
 Telegram app codes, SMS, calls, SMS word/phrase are supported. Other delivery methods terminate with a Persian explanation; no QR fallback. Delivery/length come from Telegram, not fixed UI assumptions. See [Telegram authorization](https://core.telegram.org/api/auth).
 
+When Telegram returns `SESSION_PASSWORD_NEEDED`, the same live challenge moves from `CODE` to `PASSWORD`; it does not recreate the session, resend a code, or report Telegram as unavailable. Invalid code/password attempts remain in their current step, while expired code hashes, session revocation, cancellation, timeout, and unsupported delivery discard the incomplete challenge safely.
+
 Phone and phoneCodeHash remain only in short-lived worker memory. UI receives only a masked number. OTP/password/hash never enter app database, logs, URLs, localStorage, bot or persistent query cache. Refresh resumes a current challenge; worker restart expires incomplete login and restores authorized sessions.
 
 ## Group access and execution

@@ -5,7 +5,6 @@ import {
   type TelegramSessionStatus,
   type WorkerCommand,
 } from "@zarbit/contracts";
-import { type Store, type SessionRecord } from "@zarbit/db";
 import { safeError, rpcCode, isRevoked } from "./errors";
 import { SessionFiles } from "./session-files";
 import { challengeRef, sessionRef, workerLog } from "./logger";
@@ -19,6 +18,46 @@ import type {
 } from "./transport";
 
 const LOGIN_TTL = 600_000;
+const supportedDeliveries = new Set([
+  "app",
+  "sms",
+  "call",
+  "sms_word",
+  "sms_phrase",
+]);
+const expiredLoginCodes = new Set([
+  "PHONE_CODE_EXPIRED",
+  "PHONE_CODE_HASH_EMPTY",
+  "PHONE_CODE_HASH_INVALID",
+  "LOGIN_EXPIRED",
+]);
+type SessionState = Exclude<TelegramSessionStatus["state"], "DISCONNECTED">;
+interface SessionOwner {
+  telegramUserId: string;
+}
+interface SessionRecord {
+  userId: string;
+  storageKey: string | null;
+  connectedTelegramUserId: string | null;
+  state: SessionState;
+  revision: number;
+  runtimeReady: boolean;
+  runtimeCheckedAt: Date | null;
+  membershipCheckedAt: Date | null;
+  lastError: string | null;
+}
+interface StoredSession extends SessionRecord {
+  user: SessionOwner;
+}
+interface SessionUpdate {
+  connectedTelegramUserId?: string | null;
+  lastError?: string | null;
+  membershipCheckedAt?: Date | null;
+  runtimeCheckedAt?: Date | null;
+  runtimeReady?: boolean;
+  state?: SessionState;
+  storageKey?: string | null;
+}
 interface Runtime {
   userId: string;
   key: string;
@@ -41,6 +80,8 @@ interface Challenge {
   rateKeys: string[];
   blockedUntil?: number;
 }
+type LoginPhase =
+  "password" | "post_auth" | "resend_code" | "send_code" | "sign_in";
 export interface SessionOptions {
   max: number;
   secret: string;
@@ -59,6 +100,32 @@ export interface SynchronizeResult {
   scanned: number;
 }
 
+export interface SessionStore {
+  activateSession(
+    userId: string,
+    revision: number,
+    data: SessionUpdate,
+  ): Promise<{ count: number }>;
+  beginSession(userId: string, storageKey: string): Promise<SessionRecord>;
+  blockLogin(keys: string[], until: Date): Promise<unknown>;
+  consumeSend(keys: string[], now: Date): Promise<unknown>;
+  disableSession(
+    userId: string,
+    state: "NOT_IN_GROUP" | "REVOKING" | "REVOKED" | "ERROR",
+    error: string,
+    revision?: number,
+  ): Promise<boolean>;
+  owner(userId: string): Promise<SessionOwner | null>;
+  recover(): Promise<void>;
+  session(userId: string): Promise<SessionRecord | null>;
+  sessions(): Promise<StoredSession[]>;
+  updateSession(
+    userId: string,
+    revision: number,
+    data: SessionUpdate,
+  ): Promise<{ count: number }>;
+}
+
 export class Sessions {
   private readonly runtimes = new Map<string, Runtime>();
   private readonly challenges = new Map<string, Challenge>();
@@ -72,7 +139,7 @@ export class Sessions {
     event: QuoteEvent,
   ) => Promise<void>;
   constructor(
-    readonly store: Store,
+    readonly store: SessionStore,
     private readonly options: SessionOptions,
   ) {}
   private now() {
@@ -341,7 +408,7 @@ export class Sessions {
     });
   }
   private async applyCode(challenge: Challenge, code: CodeDelivery) {
-    if (!["app", "sms", "call", "sms_word", "sms_phrase"].includes(code.type))
+    if (!supportedDeliveries.has(code.type))
       throw new AppError(
         "UNSUPPORTED_DELIVERY",
         "این روش ورود تلگرام در زربیت پشتیبانی نمی‌شود؛ تنظیمات ورود را در برنامه رسمی تلگرام بررسی کنید.",
@@ -685,7 +752,7 @@ export class Sessions {
             await this.accepted(challenge, result.account);
           else await this.applyCode(challenge, result.code);
         } catch (error) {
-          await this.loginFailure(challenge, error);
+          await this.loginFailure(challenge, error, "send_code");
         }
       } else if (command.type === "membership") {
         const record = await this.store.session(userId);
@@ -770,27 +837,40 @@ export class Sessions {
               await this.accepted(challenge, account);
             }
           } catch (error) {
-            await this.loginFailure(challenge, error);
+            await this.loginFailure(
+              challenge,
+              error,
+              command.type === "resend"
+                ? "resend_code"
+                : challenge.public.step === "PASSWORD"
+                  ? "password"
+                  : challenge.public.step === "VERIFYING"
+                    ? "post_auth"
+                    : "sign_in",
+            );
           }
       }
       return this.status(userId);
     });
   }
-  private async loginFailure(challenge: Challenge, error: unknown) {
+  private async loginFailure(
+    challenge: Challenge,
+    error: unknown,
+    loginPhase: LoginPhase,
+  ) {
     workerLog.failure("telegram.login.failed", error, {
       attempts: challenge.attempts,
       challengeRef: challengeRef(challenge.id),
-      loginPhase:
-        challenge.public.step === "CODE"
-          ? "sign_in"
-          : challenge.public.step === "PASSWORD"
-            ? "password"
-            : "send_code_or_post_auth",
+      loginPhase,
       sessionRef: sessionRef(challenge.rt.userId),
     });
     if (rpcCode(error) === "SESSION_PASSWORD_NEEDED") {
       challenge.public.step = "PASSWORD";
       challenge.public.error = null;
+      workerLog.info("telegram.login.password_required", {
+        challengeRef: challengeRef(challenge.id),
+        sessionRef: sessionRef(challenge.rt.userId),
+      });
       return;
     }
     const safe = safeError(error);
@@ -799,7 +879,9 @@ export class Sessions {
       await this.store.blockLogin(challenge.rateKeys, new Date(safe.retryAt));
     }
     if (
-      ["PHONE_CODE_INVALID", "PASSWORD_HASH_INVALID"].includes(rpcCode(error))
+      ["PHONE_CODE_INVALID", "PASSWORD_HASH_INVALID"].includes(
+        rpcCode(error) ?? "",
+      )
     )
       challenge.attempts++;
     const record = await this.store.session(challenge.rt.userId);
@@ -812,12 +894,9 @@ export class Sessions {
       await this.runtimeFailure(challenge.rt, error);
     } else if (
       challenge.attempts >= 5 ||
-      [
-        "TIMEOUT",
-        "CANCELLED",
-        "PHONE_CODE_EXPIRED",
-        "UNSUPPORTED_DELIVERY",
-      ].includes(safe.code) ||
+      ["TIMEOUT", "CANCELLED", "UNSUPPORTED_DELIVERY"].includes(safe.code) ||
+      expiredLoginCodes.has(rpcCode(error) ?? safe.code) ||
+      isRevoked(error) ||
       challenge.public.step === "VERIFYING"
     )
       await this.discard(

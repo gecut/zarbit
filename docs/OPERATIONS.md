@@ -47,6 +47,7 @@ Telegram decides code delivery; an unsupported delivery flow produces an error i
 - Database health fails: verify database URL, network, password, provider status, and connection limit. Inspect sanitized pool counters and provider metrics; do not increase the pool cap blindly.
 - Migration fails: stop runtime services, correct database state, then rerun `migrate`. Do not use `db push` to bypass migration history.
 - Worker unavailable: history and unclaimed cancellation still work; create/edit is blocked. Check private token/URL, database health, network, and worker logs.
+- OTP/2FA diagnosis: `telegram.login.failed` with `failureCategory: telegram_rpc` and `sourceCode: SESSION_PASSWORD_NEEDED` is expected for accounts with two-step verification. The matching `telegram.login.password_required` event must follow, and the client receives `login.step: PASSWORD` with HTTP 200. It is not a network outage. `ECONN*`, `ETIMEDOUT`, and `EAI_AGAIN` are `network`; Prisma errors are `database`; `telegram.connection.dc_selected` is normal MTProto DC selection, not a failure.
 - NOT_IN_GROUP: join the configured group manually, then press membership recheck. Old cancelled orders stay cancelled.
 - REVOKING: do not delete an open file. Wait for worker logout; if Telegram is unreachable, check network and session status. The user can also revoke Zarbit from Telegram Devices.
 - Unknown send result: inspect the triggering group message before creating another request. Never clear claim tokens or bulk-reactivate FAILED requests.

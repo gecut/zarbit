@@ -150,7 +150,9 @@ export function mtcuteFactory(config: {
           );
         } catch (error) {
           if (
-            ["USER_NOT_PARTICIPANT", "CHANNEL_PRIVATE"].includes(rpcCode(error))
+            ["USER_NOT_PARTICIPANT", "CHANNEL_PRIVATE"].includes(
+              rpcCode(error) ?? "",
+            )
           ) {
             peerLoaded = false;
             return false;

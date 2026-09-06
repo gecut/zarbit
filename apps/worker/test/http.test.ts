@@ -76,3 +76,48 @@ test("worker preserves safe command failures", async () => {
     error: { code: "PHONE_CODE_INVALID", message: "کد واردشده درست نیست." },
   });
 });
+
+test("worker returns the PASSWORD login state as a successful code command", async () => {
+  const twoFactorSessions = {
+    command: async () => ({
+      state: "PENDING_OTP",
+      connection: "CONNECTED",
+      connectedTelegramUserId: null,
+      membershipCheckedAt: null,
+      canManageRequests: false,
+      error: null,
+      login: {
+        id: "6d94e5f1-3b0e-4c3c-a793-7182504684f2",
+        step: "PASSWORD",
+        expiresAt: "2026-09-06T00:10:00.000Z",
+        resendAvailableAt: null,
+        delivery: "app",
+        codeLength: 5,
+        maskedPhone: "+98••••3456",
+        error: null,
+      },
+    }),
+  } as Sessions;
+  const app = createWorkerApp(twoFactorSessions, token, async () => ({}));
+
+  const response = await app.request("http://worker/internal/command", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId: "user-1",
+      command: {
+        type: "code",
+        id: "6d94e5f1-3b0e-4c3c-a793-7182504684f2",
+        code: "12345",
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.login.step, "PASSWORD");
+  assert.equal(body.data.login.error, null);
+});

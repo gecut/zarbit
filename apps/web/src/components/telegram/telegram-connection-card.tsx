@@ -38,37 +38,95 @@ export function TelegramConnectionCard({
 }: TelegramConnectionCardProps) {
   return (
     <article>
-      <Card className="overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-surface p-[1.15rem] shadow-surface sm:p-[1.45rem]">
+      <Card className="border-border bg-surface shadow-surface overflow-hidden rounded-[var(--radius-2xl)] border p-[1.15rem] sm:p-[1.45rem]">
         <header className="flex items-start gap-3">
           <div>
-            <h1 className="m-0 text-lg font-semibold text-foreground">اتصال حساب تلگرام</h1>
-            <p className="mt-[0.2rem] text-xs leading-7 text-muted">سفارش‌ها از حساب خودتان ارسال می‌شوند. کد و رمز دوم فقط برای ورود استفاده می‌شوند و ذخیره نمی‌شوند.</p>
+            <h1 className="text-foreground m-0 text-lg font-semibold">
+              اتصال حساب تلگرام
+            </h1>
+            <p className="text-muted mt-[0.2rem] text-xs leading-7">
+              سفارش‌ها از حساب خودتان ارسال می‌شوند. کد و رمز دوم فقط برای ورود
+              استفاده می‌شوند و ذخیره نمی‌شوند.
+            </p>
           </div>
         </header>
         {isLoading ? <p role="status">در حال دریافت وضعیت…</p> : null}
-        {loadError ? <><p role="alert">{loadError}</p><Button onPress={onRetry}>تلاش دوباره</Button></> : null}
+        {loadError ? (
+          <>
+            <p role="alert">{loadError}</p>
+            <Button onPress={onRetry}>تلاش دوباره</Button>
+          </>
+        ) : null}
         {session ? (
           <>
-            <div className="mt-5 flex items-center justify-between gap-4 rounded-[var(--radius-2xl)] bg-default px-[0.9rem] py-[0.8rem]">
+            <div className="bg-default mt-5 flex items-center justify-between gap-4 rounded-[var(--radius-2xl)] px-[0.9rem] py-[0.8rem]">
               <span>{states[session.state]}</span>
-              <Chip color={session.canManageRequests ? "success" : "warning"} size="sm" variant="soft">
-                {session.canManageRequests ? "آماده اجرای درخواست" : session.connection === "CONNECTING" ? "در حال اتصال…" : "اجرای درخواست غیرفعال"}
+              <Chip
+                color={session.canManageRequests ? "success" : "warning"}
+                size="sm"
+                variant="soft"
+              >
+                {session.canManageRequests
+                  ? "آماده اجرای درخواست"
+                  : session.connection === "CONNECTING"
+                    ? "در حال اتصال…"
+                    : "اجرای درخواست غیرفعال"}
               </Chip>
             </div>
-            {session.connectedTelegramUserId ? <p className="mt-1 text-xs leading-6 text-muted">شناسه حساب: <bdi>{session.connectedTelegramUserId}</bdi></p> : null}
-            {session.membershipCheckedAt ? <p className="mt-1 text-xs leading-6 text-muted">آخرین بررسی عضویت: {new Date(session.membershipCheckedAt).toLocaleString("fa-IR")}</p> : null}
-            {session.error ? <p className="mt-[0.9rem] flex items-start gap-2 text-xs leading-7 text-danger-soft-foreground" role="status">{session.error}</p> : null}
+            {session.connectedTelegramUserId ? (
+              <p className="text-muted mt-1 text-xs leading-6">
+                شناسه حساب: <bdi>{session.connectedTelegramUserId}</bdi>
+              </p>
+            ) : null}
+            {session.membershipCheckedAt ? (
+              <p className="text-muted mt-1 text-xs leading-6">
+                آخرین بررسی عضویت:{" "}
+                {new Date(session.membershipCheckedAt).toLocaleString("fa-IR")}
+              </p>
+            ) : null}
+            {session.error ? (
+              <p
+                className="text-danger-soft-foreground mt-[0.9rem] flex items-start gap-2 text-xs leading-7"
+                role="status"
+              >
+                {session.error}
+              </p>
+            ) : null}
             {children}
             {["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(session.state) ? (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-[0.55rem]">
-                <Button isDisabled={isPending || session.state === "REVOKING"} onPress={() => void onRun({ type: "membership" }).catch(() => undefined)} variant="secondary">بررسی دوباره عضویت</Button>
-                <ConfirmAction description="درخواست‌های اجرا‌نشده لغو می‌شوند. سفارش در حال ارسال ممکن است قبلاً به گروه رسیده باشد." label="قطع اتصال" onConfirm={() => onRun({ type: "revoke" })} pending={isPending} title="اتصال تلگرام قطع شود؟" />
+                <Button
+                  isDisabled={isPending || session.state === "REVOKING"}
+                  onPress={() =>
+                    void onRun({ type: "membership" }).catch(() => undefined)
+                  }
+                  variant="secondary"
+                >
+                  بررسی دوباره عضویت
+                </Button>
+                <ConfirmAction
+                  description="درخواست‌های اجرا‌نشده لغو می‌شوند. سفارش در حال ارسال ممکن است قبلاً به گروه رسیده باشد."
+                  label="قطع اتصال"
+                  onConfirm={() => onRun({ type: "revoke" })}
+                  pending={isPending}
+                  title="اتصال تلگرام قطع شود؟"
+                />
               </div>
             ) : null}
           </>
         ) : null}
-        {error ? <p className="-mt-1 flex items-start gap-2 text-xs leading-7 text-danger-soft-foreground" role="alert">{error}</p> : null}
-        <p className="mt-1 text-xs leading-6 text-muted">کد ورود را در چت بات نفرستید. محل دریافت کد را تلگرام تعیین می‌کند؛ پیامک تضمین‌شده نیست.</p>
+        {error ? (
+          <p
+            className="text-danger-soft-foreground -mt-1 flex items-start gap-2 text-xs leading-7"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+        <p className="text-muted mt-1 text-xs leading-6">
+          کد ورود را در چت بات نفرستید. محل دریافت کد را تلگرام تعیین می‌کند؛
+          پیامک تضمین‌شده نیست.
+        </p>
       </Card>
     </article>
   );

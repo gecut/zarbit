@@ -24,8 +24,8 @@ export function ThemePicker() {
   const [theme, setTheme] = useState<Theme>(preference);
   return (
     <section>
-      <Card className="rounded-2xl border border-border bg-surface p-4 shadow-surface sm:p-6">
-        <h2 className="mb-2 block text-sm font-semibold text-foreground">
+      <Card className="border-border bg-surface shadow-surface rounded-2xl border p-4 sm:p-6">
+        <h2 className="text-foreground mb-2 block text-sm font-semibold">
           ظاهر برنامه
         </h2>
         <div

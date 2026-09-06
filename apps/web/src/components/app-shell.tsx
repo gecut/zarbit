@@ -19,38 +19,38 @@ const navigationItemClass =
 
 export function AppShell() {
   return (
-    <main className="min-h-(--tg-viewport-height,100svh) px-4 pt-[max(1rem,env(safe-area-inset-top),var(--tg-safe-top,0px))] pb-[calc(6.65rem+max(env(safe-area-inset-bottom),var(--tg-safe-bottom,0px)))] sm:px-6">
-      <header className="w-full fixed inset-x-0 top-0 p-6 bg-background/50 z-50 backdrop-blur-3xl">
-        <nav className="flex w-full max-w-124 mx-auto items-center justify-between gap-4">
+    <main className="min-h-(--tg-viewport-height,100svh) px-4 pb-[calc(6.65rem+max(env(safe-area-inset-bottom),var(--tg-safe-bottom,0px)))] pt-[max(1rem,env(safe-area-inset-top),var(--tg-safe-top,0px))] sm:px-6">
+      <header className="bg-background/50 fixed inset-x-0 top-0 z-50 w-full p-6 backdrop-blur-3xl">
+        <nav className="max-w-124 mx-auto flex w-full items-center justify-between gap-4">
           <Link
-          to="/"
-          aria-label="صفحه اصلی زربیت"
-          className="inline-flex min-w-0 items-center gap-3"
-        >
-          <span className="grid size-[2.7rem] shrink-0 place-items-center rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-hover))] text-xl font-extrabold text-accent-foreground shadow-surface">
-            ز
-          </span>
-          <span>
-            <span className="block text-base leading-[1.35] font-semibold text-foreground">
-              زربیت
+            to="/"
+            aria-label="صفحه اصلی زربیت"
+            className="inline-flex min-w-0 items-center gap-3"
+          >
+            <span className="text-accent-foreground shadow-surface grid size-[2.7rem] shrink-0 place-items-center rounded-2xl bg-[linear-gradient(135deg,var(--accent),var(--accent-hover))] text-xl font-extrabold">
+              ز
             </span>
-            <span className="mt-px block text-xs text-muted">
-              دستیار معامله شما
+            <span>
+              <span className="text-foreground block text-base font-semibold leading-[1.35]">
+                زربیت
+              </span>
+              <span className="text-muted mt-px block text-xs">
+                دستیار معامله شما
+              </span>
             </span>
-          </span>
-        </Link>
+          </Link>
 
-        <Link
-          to="/telegram"
-          aria-label="تنظیمات اتصال تلگرام"
-          className="inline-flex size-[2.65rem] items-center justify-center rounded-2xl border border-border bg-surface text-muted shadow-surface focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-3"
-        >
-          <SettingsMinimalisticIcon size={21} />
-        </Link>
+          <Link
+            to="/telegram"
+            aria-label="تنظیمات اتصال تلگرام"
+            className="border-border bg-surface text-muted shadow-surface focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-3 inline-flex size-[2.65rem] items-center justify-center rounded-2xl border"
+          >
+            <SettingsMinimalisticIcon size={21} />
+          </Link>
         </nav>
       </header>
 
-      <div className="mx-auto w-full max-w-124 min-w-0 pt-24">
+      <div className="max-w-124 mx-auto w-full min-w-0 pt-24">
         <AuthGate>
           <Outlet />
         </AuthGate>
@@ -58,7 +58,7 @@ export function AppShell() {
       </div>
 
       <nav
-        className="fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid max-w-124 grid-cols-4 rounded-2xl border border-border bg-surface p-1 shadow-surface backdrop-blur-[15px]"
+        className="max-w-124 border-border bg-surface shadow-surface fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-4 rounded-2xl border p-1 backdrop-blur-[15px]"
         aria-label="ناوبری اصلی"
       >
         {navigationItems.map(({ label, to, Icon }) => (

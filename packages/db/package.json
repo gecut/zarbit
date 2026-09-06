@@ -10,6 +10,9 @@
     }
   },
   "scripts": {
+    "lint": "eslint src test prisma.config.ts",
+    "format": "prettier --ignore-path ../../.prettierignore --write .",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "check-types": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

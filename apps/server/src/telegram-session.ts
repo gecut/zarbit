@@ -28,11 +28,14 @@ type WorkerResponse =
 
 export interface WorkerCommandDependencies {
   fetch: typeof globalThis.fetch;
-  log: (event: "worker.command.failed", details: {
-    command: WorkerCommand["type"];
-    failure: WorkerFailure;
-    upstreamStatus?: number;
-  }) => void;
+  log: (
+    event: "worker.command.failed",
+    details: {
+      command: WorkerCommand["type"];
+      failure: WorkerFailure;
+      upstreamStatus?: number;
+    },
+  ) => void;
   store: SessionReader;
   workerInternalToken?: string;
   workerInternalUrl: string;

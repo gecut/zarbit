@@ -32,9 +32,7 @@ export const env = createEnv({
         return (
           import.meta.env.MODE !== "production" ||
           (url.protocol === "https:" &&
-            !["localhost", "127.0.0.1", "::1", "[::1]"].includes(
-              url.hostname,
-            ))
+            !["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname))
         );
       }, "Production VITE_SERVER_URL must be a public HTTPS API URL."),
   },

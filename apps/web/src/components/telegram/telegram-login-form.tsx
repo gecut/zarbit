@@ -48,22 +48,22 @@ function LoginCredentialField({
     return (
       <div>
         <Label id="otp-label">کد ورود</Label>
-        <div dir="ltr" className="w-min mx-auto">
+        <div dir="ltr" className="mx-auto w-min">
           <InputOTP
-          aria-labelledby="otp-label"
-          variant="secondary"
-          textAlign="center"
-          isDisabled={isDisabled}
-          maxLength={otpLength}
-          onChange={(value) => onSecretChange(normalizeDigits(value))}
-          value={secret}
-        >
-          <InputOTP.Group>
-            {Array.from({ length: otpLength }, (_, index) => (
-              <InputOTP.Slot index={index} key={index} />
-            ))}
-          </InputOTP.Group>
-        </InputOTP>
+            aria-labelledby="otp-label"
+            variant="secondary"
+            textAlign="center"
+            isDisabled={isDisabled}
+            maxLength={otpLength}
+            onChange={(value) => onSecretChange(normalizeDigits(value))}
+            value={secret}
+          >
+            <InputOTP.Group>
+              {Array.from({ length: otpLength }, (_, index) => (
+                <InputOTP.Slot index={index} key={index} />
+              ))}
+            </InputOTP.Group>
+          </InputOTP>
         </div>
       </div>
     );
@@ -143,7 +143,7 @@ export function TelegramLoginForm({
               ? "رمز دوم تلگرام لازم است."
               : `کد از طریق ${deliveryLabels[login.delivery] ?? "تلگرام"} ارسال شده است.`}
           </p>
-          <p className="mt-1 text-xs leading-6 text-muted">
+          <p className="text-muted mt-1 text-xs leading-6">
             زمان باقی‌مانده: {remaining} ثانیه
           </p>
           {isVerifying ? (

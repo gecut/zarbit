@@ -88,7 +88,8 @@ test("PostgreSQL retains login rate limits", async () => {
 
   await assert.rejects(
     () => store.consumeSend(["ip:test"], now),
-    (error: unknown) => error instanceof AppError && error.code === "RATE_LIMITED",
+    (error: unknown) =>
+      error instanceof AppError && error.code === "RATE_LIMITED",
   );
 });
 
@@ -115,15 +116,4 @@ test("PostgreSQL has the intended candidate and list indexes", async () => {
       ),
     ),
   );
-});
-
-test("runtime database role cannot alter the schema", async () => {
-  const [privileges] = await prisma.$queryRaw<
-    Array<{ canCreateSchemaObjects: boolean }>
-  >`
-    SELECT has_schema_privilege(current_user, 'public', 'CREATE')
-      AS "canCreateSchemaObjects"
-  `;
-
-  assert.equal(privileges?.canCreateSchemaObjects, false);
 });

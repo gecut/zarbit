@@ -46,11 +46,7 @@ export function registerTelegramSessionRoutes(
       });
 
       if (!command.success)
-        throw new AppError(
-          "INVALID_LOGIN",
-          "اطلاعات ورود را بررسی کنید.",
-          400,
-        );
+        throw new AppError("INVALID_LOGIN", "اطلاعات ورود را بررسی کنید.", 400);
 
       return c.json({
         data: await deps.command(c.get("user").id, command.data),

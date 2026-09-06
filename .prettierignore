@@ -1,0 +1,12 @@
+node_modules/
+.pnpm-store/
+.turbo/
+**/dist/**
+**/build/**
+**/coverage/**
+.agents/
+.codex/
+**/graphify-out/**
+**/routeTree.gen.ts
+**/prisma/generated/**
+pnpm-lock.yaml

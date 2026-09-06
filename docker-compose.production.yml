@@ -20,6 +20,7 @@ services:
     restart: unless-stopped
     init: true
     logging: *log-options
+    networks: [dokploy-network]
 
   migrate:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
@@ -33,7 +34,7 @@ services:
     restart: "no"
     init: true
     logging: *log-options
-    networks: [backend]
+    networks: [dokploy-network]
 
   server:
     image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
@@ -48,7 +49,7 @@ services:
       ALLOWED_TELEGRAM_USER_IDS: ${ALLOWED_TELEGRAM_USER_IDS:?Set ALLOWED_TELEGRAM_USER_IDS}
       WORKER_INTERNAL_URL: http://worker:3002
       WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
-    networks: [default, backend]
+    networks: [backend, dokploy-network]
     depends_on:
       migrate: { condition: service_completed_successfully }
       worker: { condition: service_healthy }
@@ -88,8 +89,8 @@ services:
       WORKER_INTERNAL_TOKEN: ${WORKER_INTERNAL_TOKEN:?Set a random token of at least 32 characters}
     volumes:
       - zarbit-telegram-sessions-postgres:/sessions
-    # Private to this Compose project, but not internal:true: Telegram needs egress.
-    networks: [backend]
+    # `backend` protects worker RPC; Dokploy network provides DB and Telegram egress.
+    networks: [backend, dokploy-network]
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -110,8 +111,10 @@ services:
     logging: *log-options
 
 networks:
-  default: {}
-  backend: {}
+  backend:
+    internal: true
+  dokploy-network:
+    external: true
 
 volumes:
   zarbit-telegram-sessions-postgres:

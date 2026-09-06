@@ -65,8 +65,7 @@ async function editRequest(
 ) {
   const requestId = c.req.param("id");
 
-  if (!requestId)
-    throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+  if (!requestId) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
 
   return deps.store.edit(userId, requestId, input);
 }
@@ -98,8 +97,7 @@ export function registerRequestRoutes(
       c.req.param("id"),
     );
 
-    if (!request)
-      throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+    if (!request) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
 
     return c.json({ data: requestDto(request) });
   });

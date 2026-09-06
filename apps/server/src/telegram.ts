@@ -13,7 +13,11 @@ export function createTelegramBot(token: string, webAppUrl?: string) {
   return bot;
 }
 
-export async function sendPrivateNotification(token: string, telegramUserId: string, text: string) {
+export async function sendPrivateNotification(
+  token: string,
+  telegramUserId: string,
+  text: string,
+) {
   const bot = new Bot(token);
 
   await bot.api.sendMessage(telegramUserId, text);

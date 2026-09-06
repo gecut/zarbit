@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "lint": "eslint src vite.config.ts pwa-assets.config.ts",
+    "format": "prettier --ignore-path ../../.prettierignore --write .",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "serve": "vite preview",
     "start": "vite",
     "check-types": "vite build && tsc --noEmit",

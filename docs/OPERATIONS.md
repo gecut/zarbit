@@ -3,7 +3,7 @@
 ## Before publication
 
 1. Provision managed PostgreSQL in the Dokploy region as described in [POSTGRES.md](POSTGRES.md): TLS, PITR/backups, monitoring, and a Dokploy-only network allowlist.
-2. Create `zarbit_migrator` and `zarbit_app`, then store their distinct direct URLs as `MIGRATION_DATABASE_URL` and `DATABASE_URL`. Runtime services must never receive migration credentials.
+2. Store same PostgreSQL URL in `MIGRATION_DATABASE_URL` and `DATABASE_URL`. Compose still gives each service only its required variable.
 3. Set the GitHub Actions repository variable `VITE_SERVER_URL` to the final API HTTPS origin. The published web bundle cannot read Dokploy runtime variables.
 4. Publish all three images from the same revision and choose the same immutable `IMAGE_TAG` for web/server/worker.
 5. In Dokploy, use `docker-compose.production.yml`. Copy keys from `deploy/compose.env.example` into Environment and replace placeholders. Generate `WORKER_INTERNAL_TOKEN` with `openssl rand -hex 32`; keep it stable and secret.
@@ -17,9 +17,9 @@ This is a maintenance-window clean baseline, not a data migration.
 
 1. Stop web, server, and worker for the old release. Confirm no old worker still owns the Telegram sessions. Never use `down -v`.
 2. Snapshot the legacy SQLite **and** legacy Telegram-session volumes. Label them with the old image tag and cutover time, detach them from services, and retain them for at least seven days. Do not delete them automatically.
-3. Provision the managed database and roles. Confirm the provider accepts direct TLS connections from Dokploy and has at least 15 available connections.
-4. Add `DATABASE_URL`, `MIGRATION_DATABASE_URL`, and `DATABASE_POOL_MAX=5` in Dokploy. Deploy the immutable PostgreSQL release with the new `zarbit-telegram-sessions-postgres` volume.
-5. Run the `migrate` job once. It receives only `MIGRATION_DATABASE_URL`, creates the reviewed PostgreSQL baseline, grants runtime CRUD/default privileges, prepares the new session-volume ownership, and exits. Confirm `prisma migrate status` is clean using the migrator URL.
+3. Provision the database. Confirm it is attached to Dokploy's external `dokploy-network` and has at least 15 available connections.
+4. Add matching `DATABASE_URL` and `MIGRATION_DATABASE_URL`, plus `DATABASE_POOL_MAX=5`, in Dokploy. Deploy the immutable PostgreSQL release with the new `zarbit-telegram-sessions-postgres` volume.
+5. Run the `migrate` job once. It receives only `MIGRATION_DATABASE_URL`, creates the reviewed PostgreSQL baseline, prepares the new session-volume ownership, and exits. Confirm `prisma migrate status` is clean.
 6. Start web, server, and worker. Server and worker healthchecks must be successful only after their `SELECT 1` query succeeds. Keep one server and one worker.
 7. Users must log in to Telegram again. The prior session files are intentionally detached; do not copy them into the new volume.
 
@@ -44,8 +44,8 @@ Telegram decides code delivery; an unsupported delivery flow produces an error i
 ## Troubleshooting and rollback
 
 - Missing config: worker logs missing **key names**. Check explicit Dokploy values and recreate/restart; changing `.env` does not update a running container.
-- Database health fails: verify the managed database TLS URL, provider allowlist, role password, provider status, and connection limit. Inspect sanitized pool counters and provider metrics; do not increase the pool cap blindly.
-- Migration fails: stop runtime services, correct the migrator role/permissions or database state, then rerun `migrate`. Do not grant schema ownership to `zarbit_app` and do not use `db push` to bypass migration history.
+- Database health fails: verify database URL, network, password, provider status, and connection limit. Inspect sanitized pool counters and provider metrics; do not increase the pool cap blindly.
+- Migration fails: stop runtime services, correct database state, then rerun `migrate`. Do not use `db push` to bypass migration history.
 - Worker unavailable: history and unclaimed cancellation still work; create/edit is blocked. Check private token/URL, database health, network, and worker logs.
 - NOT_IN_GROUP: join the configured group manually, then press membership recheck. Old cancelled orders stay cancelled.
 - REVOKING: do not delete an open file. Wait for worker logout; if Telegram is unreachable, check network and session status. The user can also revoke Zarbit from Telegram Devices.

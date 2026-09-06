@@ -6,11 +6,7 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 type LogValue = boolean | number | string | null | undefined;
 type LogContext = Record<string, LogValue>;
 type FailureCategory =
-  | "application"
-  | "database"
-  | "network"
-  | "telegram_rpc"
-  | "unknown";
+  "application" | "database" | "network" | "telegram_rpc" | "unknown";
 
 const sensitiveValue =
   /(bearer\s+)[^\s]+|((?:api[_-]?hash|authorization|hash|init[_-]?data|password|phone|secret|session|token)\s*[=:]\s*)[^\s,&]+/gi;
@@ -43,11 +39,17 @@ function safeSourceCode(code: string | undefined) {
   return code && /^[A-Z][A-Z0-9_]{1,99}$/.test(code) ? code : undefined;
 }
 
-function failureCategory(error: unknown, code: string | undefined): FailureCategory {
+function failureCategory(
+  error: unknown,
+  code: string | undefined,
+): FailureCategory {
   if (error instanceof AppError) return "application";
   if (error instanceof Error && error.name.startsWith("Prisma"))
     return "database";
-  if (code && /^(EAI_AGAIN|ECONN|ENET|EHOST|ETIMEDOUT|NETWORK_ERROR)$/.test(code))
+  if (
+    code &&
+    /^(EAI_AGAIN|ECONN|ENET|EHOST|ETIMEDOUT|NETWORK_ERROR)$/.test(code)
+  )
     return "network";
   if (code && /^[A-Z][A-Z0-9_]{1,99}$/.test(code)) return "telegram_rpc";
   return "unknown";
@@ -108,7 +110,10 @@ export function formatWorkerFailure(
   error: unknown,
   context?: LogContext,
 ) {
-  return formatWorkerLog("error", event, { ...context, ...errorContext(error) });
+  return formatWorkerLog("error", event, {
+    ...context,
+    ...errorContext(error),
+  });
 }
 
 export function formatWorkerDiagnostic(
@@ -127,10 +132,12 @@ function write(level: LogLevel, event: string, context?: LogContext) {
 }
 
 export const workerLog = {
-  debug: (event: string, context?: LogContext) => write("debug", event, context),
+  debug: (event: string, context?: LogContext) =>
+    write("debug", event, context),
   info: (event: string, context?: LogContext) => write("info", event, context),
   warn: (event: string, context?: LogContext) => write("warn", event, context),
-  error: (event: string, context?: LogContext) => write("error", event, context),
+  error: (event: string, context?: LogContext) =>
+    write("error", event, context),
   failure: (event: string, error: unknown, context?: LogContext) =>
     console.error(formatWorkerFailure(event, error, context)),
   diagnostic: (event: string, error: unknown, context?: LogContext) =>

@@ -1,4 +1,3 @@
-import { Button } from "@heroui/react";
 import { normalizeDigits } from "@zarbit/contracts";
 import { useEffect, useState } from "react";
 

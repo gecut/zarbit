@@ -132,7 +132,11 @@ export function createMockApi(): ApiClient {
           "درخواست اجرا شده یا در حال اجراست؛ قابل ویرایش نیست.",
         );
       const input = requestInput(payload);
-      const updated = { ...request, ...input, updatedAt: new Date().toISOString() };
+      const updated = {
+        ...request,
+        ...input,
+        updatedAt: new Date().toISOString(),
+      };
       requests = requests.map((item) => (item.id === id ? updated : item));
       return copyRequest(updated);
     },

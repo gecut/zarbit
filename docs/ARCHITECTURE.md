@@ -2,21 +2,21 @@
 
 ## Boundaries
 
-| Component | Responsibility |
-| --- | --- |
-| apps/web | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI |
-| apps/server | Hono API, Mini App identity/allowlist, request CRUD, bot launcher, worker proxy |
-| apps/worker | All MTProto clients, OTP, membership, session files, quote execution, Bot API notifications |
-| packages/contracts | Shared strict Zod commands and public TypeScript DTOs |
-| packages/domain | Integer price conversion, quote parser and Telegram message builders |
-| packages/db | Prisma/PostgreSQL, atomic request/session operations |
-| packages/env | Service-specific environment contracts and independent database configuration |
+| Component          | Responsibility                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI                                   |
+| apps/server        | Hono API, Mini App identity/allowlist, request CRUD, bot launcher, worker proxy             |
+| apps/worker        | All MTProto clients, OTP, membership, session files, quote execution, Bot API notifications |
+| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                       |
+| packages/domain    | Integer price conversion, quote parser and Telegram message builders                        |
+| packages/db        | Prisma/PostgreSQL, atomic request/session operations                                        |
+| packages/env       | Service-specific environment contracts and independent database configuration               |
 
-There is no MTProto client or session volume on the server. Server and worker use the `zarbit_app` role against managed PostgreSQL. The worker alone owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership and locking maintenance.
+There is no MTProto client or session volume on the server. Server, worker, and migration job use one PostgreSQL user. The worker alone owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership and locking maintenance.
 
 ## Database access
 
-The migration job receives only `MIGRATION_DATABASE_URL` for `zarbit_migrator`; it owns the schema and runs `prisma migrate deploy` before runtime services start. Server and worker receive only `DATABASE_URL` for `zarbit_app`, which has CRUD rights but cannot alter the schema. Each runtime process owns one Prisma client backed by one direct `pg` pool, capped at five connections with five-second checkout and 30-second idle timeouts. PostgreSQL handles concurrency; no PgBouncer or shared application pool is used.
+The migration job receives only `MIGRATION_DATABASE_URL` and runs `prisma migrate deploy` before runtime services start. Server and worker receive only `DATABASE_URL`; both values use the same PostgreSQL user. Each runtime process owns one Prisma client backed by one direct `pg` pool, capped at five connections with five-second checkout and 30-second idle timeouts. PostgreSQL handles concurrency; no PgBouncer or shared application pool is used.
 
 Worker logs include safe pool totals/idle/waiting counts with database failures. The server root health endpoint and worker private health endpoint both execute `SELECT 1`, so a healthy process without a usable database is not reported ready.
 
@@ -46,6 +46,6 @@ API/login responses use no-store. `VITE_SERVER_URL` is a required build-time URL
 
 ## Deployment
 
-Dokploy Compose has no labels, host ports, or required external network. Domains target web:80 and server:3000 only. An explicit migration job prepares the session volume and applies PostgreSQL migrations before services start. Managed PostgreSQL provides TLS, backups/PITR, monitoring, and a Dokploy network allowlist; its lifecycle is outside Compose.
+Dokploy Compose has no labels or host ports. `dokploy-network` is external and connects web, migration, server, and worker to Dokploy services; the private `backend` network exists only for server-worker RPC. Domains target web:80 and server:3000 only. An explicit migration job prepares the session volume and applies PostgreSQL migrations before services start. Managed PostgreSQL provides TLS, backups/PITR, monitoring, and a Dokploy network allowlist; its lifecycle is outside Compose.
 
 See [POSTGRES.md](POSTGRES.md) and [OPERATIONS.md](OPERATIONS.md) for provisioning, cutover, and rollback.

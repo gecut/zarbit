@@ -18,7 +18,9 @@ export function PriceInput({ value, onChange }: PriceInputProps) {
 
   return (
     <label>
-      <span className="mb-[0.55rem] block text-sm font-semibold text-foreground">قیمت هدف</span>
+      <span className="text-foreground mb-[0.55rem] block text-sm font-semibold">
+        قیمت هدف
+      </span>
       <Input
         aria-describedby="price-hint"
         className="min-h-[3.1rem] w-full text-base"
@@ -29,7 +31,7 @@ export function PriceInput({ value, onChange }: PriceInputProps) {
         placeholder="95,900,000"
         value={value}
       />
-      <span id="price-hint" className="mt-1 block text-xs leading-6 text-muted">
+      <span id="price-hint" className="text-muted mt-1 block text-xs leading-6">
         قیمت را به ریال وارد کنید.
       </span>
     </label>

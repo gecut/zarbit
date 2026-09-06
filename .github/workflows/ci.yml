@@ -10,8 +10,8 @@ permissions:
 
 env:
   HUSKY: "0"
-  DATABASE_URL: postgresql://zarbit_app:app-password@127.0.0.1:5432/zarbit?schema=public
-  MIGRATION_DATABASE_URL: postgresql://zarbit_migrator:migrator-password@127.0.0.1:5432/zarbit?schema=public
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/zarbit?schema=public
+  MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/zarbit?schema=public
   VITE_SERVER_URL: https://api.example.com
 
 jobs:
@@ -49,14 +49,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Provision CI database roles
-        run: >-
-          PGPASSWORD=postgres psql --host=127.0.0.1 --username=postgres --dbname=zarbit
-          --command="CREATE ROLE zarbit_migrator LOGIN PASSWORD 'migrator-password';
-          CREATE ROLE zarbit_app LOGIN PASSWORD 'app-password';
-          GRANT CONNECT ON DATABASE zarbit TO zarbit_migrator, zarbit_app;
-          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-          GRANT USAGE, CREATE ON SCHEMA public TO zarbit_migrator;"
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Lint workspace
+        run: pnpm run lint
 
       - name: Apply PostgreSQL baseline
         run: pnpm --filter @zarbit/db exec prisma migrate deploy

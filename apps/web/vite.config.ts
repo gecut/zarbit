@@ -12,7 +12,9 @@ export default defineConfig(({ command, mode }) => {
     const apiMode =
       process.env.VITE_API_MODE ?? configuredEnv.VITE_API_MODE ?? "server";
     if (apiMode !== "server") {
-      throw new Error("VITE_API_MODE must be server when building the web app.");
+      throw new Error(
+        "VITE_API_MODE must be server when building the web app.",
+      );
     }
     const url = configured ? new URL(configured) : null;
     if (

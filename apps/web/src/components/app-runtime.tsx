@@ -20,12 +20,18 @@ export function AppRuntime({ router, queryClient }: AppRuntimeProps) {
     const cleanupTelegram = initializeTelegramWebApp();
 
     applyTheme();
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", onSystemThemeChange);
+    matchMedia("(prefers-color-scheme: dark)").addEventListener(
+      "change",
+      onSystemThemeChange,
+    );
     app?.onEvent?.("themeChanged", onTelegramThemeChange);
 
     return () => {
       cleanupTelegram();
-      matchMedia("(prefers-color-scheme: dark)").removeEventListener("change", onSystemThemeChange);
+      matchMedia("(prefers-color-scheme: dark)").removeEventListener(
+        "change",
+        onSystemThemeChange,
+      );
       app?.offEvent?.("themeChanged", onTelegramThemeChange);
     };
   }, []);

@@ -35,7 +35,9 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (active)
           setError(
-            new Error("بارگذاری داده‌های توسعه ناموفق بود؛ برنامه را تازه کنید."),
+            new Error(
+              "بارگذاری داده‌های توسعه ناموفق بود؛ برنامه را تازه کنید.",
+            ),
           );
       });
 
@@ -46,14 +48,20 @@ export function ApiProvider({ children }: { children: ReactNode }) {
 
   if (error)
     return (
-      <p role="alert" className="rounded-[var(--radius-2xl)] border border-danger-soft bg-danger-soft px-4 py-7 text-center text-sm leading-7 text-danger-soft-foreground">
+      <p
+        role="alert"
+        className="border-danger-soft bg-danger-soft text-danger-soft-foreground rounded-[var(--radius-2xl)] border px-4 py-7 text-center text-sm leading-7"
+      >
         {error.message}
       </p>
     );
 
   if (!client)
     return (
-      <p className="rounded-[var(--radius-2xl)] border border-dashed border-border px-4 py-7 text-center text-sm leading-7 text-muted" role="status">
+      <p
+        className="border-border text-muted rounded-[var(--radius-2xl)] border border-dashed px-4 py-7 text-center text-sm leading-7"
+        role="status"
+      >
         در حال آماده‌سازی داده‌های توسعه…
       </p>
     );

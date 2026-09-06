@@ -413,7 +413,10 @@ export class Sessions {
       });
       workerLog.failure("telegram.session.runtime_failed", error, {
         retryCount: count,
-        retryInMs: Math.max(0, (this.retry.get(rt.userId)?.at ?? 0) - this.now()),
+        retryInMs: Math.max(
+          0,
+          (this.retry.get(rt.userId)?.at ?? 0) - this.now(),
+        ),
         sessionRef: sessionRef(rt.userId),
       });
     }
@@ -764,7 +767,8 @@ export class Sessions {
         ),
       );
       const failures = results.filter(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
       );
       for (const [index, result] of results.entries())
         if (result.status === "rejected")

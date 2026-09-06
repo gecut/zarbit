@@ -9,8 +9,11 @@ export function PwaUpdate() {
   const mutating = useIsMutating();
   if (!ready) return null;
   return (
-    <Card className="mt-4 grid gap-3 rounded-[var(--radius-2xl)] border border-border bg-surface p-[1.15rem] shadow-surface sm:p-[1.45rem]" role="status">
-      <p className="text-sm leading-7 text-foreground">
+    <Card
+      className="border-border bg-surface shadow-surface mt-4 grid gap-3 rounded-[var(--radius-2xl)] border p-[1.15rem] sm:p-[1.45rem]"
+      role="status"
+    >
+      <p className="text-foreground text-sm leading-7">
         نسخه جدید زربیت آماده است. ابتدا ورود یا تغییرات فرم خود را تمام کنید.
       </p>
       <Button

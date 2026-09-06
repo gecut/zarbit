@@ -6,6 +6,9 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsdown",
+    "lint": "eslint src test",
+    "format": "prettier --ignore-path ../../.prettierignore --write .",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "check-types": "tsc --noEmit",
     "dev": "tsx watch src/main.ts",
     "start": "node dist/index.mjs",

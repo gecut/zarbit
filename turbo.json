@@ -11,6 +11,12 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "format": {
+      "cache": false
+    },
+    "format:check": {
+      "dependsOn": ["^format:check"]
+    },
     "check-types": {
       "env": ["VITE_SERVER_URL"],
       "dependsOn": ["^check-types"]
@@ -39,6 +45,6 @@
     "db:studio": {
       "cache": false,
       "persistent": true
-    },
+    }
   }
 }

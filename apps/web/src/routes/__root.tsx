@@ -2,12 +2,12 @@ import {
   HeadContent,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
-import {Fragment} from 'react'
+import { Fragment } from "react";
 
 import "../index.css";
 import { AppShell } from "../components/app-shell";
 
-export interface RouterAppContext {}
+export type RouterAppContext = Record<string, never>;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   component: RootComponent,

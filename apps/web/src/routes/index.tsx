@@ -6,4 +6,6 @@ export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
 
-function HomeComponent() { return <Dashboard />; }
+function HomeComponent() {
+  return <Dashboard />;
+}

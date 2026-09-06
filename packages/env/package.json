@@ -11,6 +11,9 @@
     "./worker": "./src/worker.ts"
   },
   "scripts": {
+    "lint": "eslint src",
+    "format": "prettier --ignore-path ../../.prettierignore --write .",
+    "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

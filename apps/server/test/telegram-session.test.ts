@@ -40,8 +40,11 @@ function commandWith(options?: {
   return createWorkerCommand({
     fetch:
       options?.fetch ??
-      (async () =>
-        Response.json({ data: onlineStatus }, { status: 200 })) as typeof fetch,
+      ((async () =>
+        Response.json(
+          { data: onlineStatus },
+          { status: 200 },
+        )) as typeof fetch),
     log: options?.log ?? (() => undefined),
     store: options?.store ?? statusStore(),
     workerInternalToken:
@@ -50,9 +53,7 @@ function commandWith(options?: {
   });
 }
 
-async function assertOffline(
-  command: ReturnType<typeof createWorkerCommand>,
-) {
+async function assertOffline(command: ReturnType<typeof createWorkerCommand>) {
   const status = await command("user-1", { type: "status" });
   assert.equal(status.connection, "OFFLINE");
   assert.equal(status.canManageRequests, false);
@@ -66,10 +67,7 @@ function statusRouteApp(command: ReturnType<typeof createWorkerCommand>) {
     c.set("user", { id: "user-1", telegramUserId: "123456" });
     await next();
   });
-  registerTelegramSessionRoutes(
-    app,
-    { command, store: {} } as AppDependencies,
-  );
+  registerTelegramSessionRoutes(app, { command, store: {} } as AppDependencies);
   return app;
 }
 
@@ -89,7 +87,9 @@ test("keeps the status endpoint successful while the worker is offline", async (
     }),
   );
 
-  const response = await app.request("http://server/api/telegram-session/status");
+  const response = await app.request(
+    "http://server/api/telegram-session/status",
+  );
   const body = (await response.json()) as { data: TelegramSessionStatus };
 
   assert.equal(response.status, 200);

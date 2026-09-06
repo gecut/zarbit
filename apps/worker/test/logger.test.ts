@@ -4,6 +4,7 @@ import { AppError } from "@zarbit/contracts";
 import {
   formatWorkerDiagnostic,
   formatWorkerFailure,
+  challengeRef,
   sessionRef,
 } from "../src/logger";
 
@@ -11,6 +12,12 @@ test("creates a stable non-sensitive session reference", () => {
   assert.equal(sessionRef("user-1"), sessionRef("user-1"));
   assert.notEqual(sessionRef("user-1"), "user-1");
   assert.equal(sessionRef("user-1").length, 12);
+});
+
+test("creates a stable non-sensitive challenge reference", () => {
+  assert.equal(challengeRef("challenge-1"), challengeRef("challenge-1"));
+  assert.notEqual(challengeRef("challenge-1"), "challenge-1");
+  assert.equal(challengeRef("challenge-1").length, 12);
 });
 
 test("redacts secrets and phone numbers from error logs", () => {
@@ -36,14 +43,38 @@ test("keeps a safe source code in diagnostic logs", () => {
 
   assert.match(line, /"failureCategory":"database"/);
   assert.match(line, /"sourceCode":"P2024"/);
-  assert.doesNotMatch(line, /database operation timed out/);
+  assert.match(line, /"errorMessage":"database operation timed out"/);
 });
 
-test("omits non-code diagnostic causes", () => {
-  const error = Object.assign(new Error("ignored"), {
-    errorMessage: "phone=+989121234567 upstream failure",
+test("keeps redacted diagnostic causes for native errors", () => {
+  const cause = Object.assign(new Error("password=hunter2"), {
+    code: "ECONNRESET",
   });
+  const error = Object.assign(
+    new Error("phone=+989121234567 upstream failure"),
+    {
+      cause,
+      code: "ETIMEDOUT",
+    },
+  );
   const line = formatWorkerDiagnostic("telegram.login.failed", error);
 
-  assert.doesNotMatch(line, /upstream failure|989121234567/);
+  assert.match(line, /"failureCategory":"network"/);
+  assert.match(line, /"sourceCode":"ETIMEDOUT"/);
+  assert.match(line, /"cause1Code":"ECONNRESET"/);
+  assert.doesNotMatch(line, /hunter2|989121234567/);
+});
+
+test("classifies native DNS failures without leaking an OTP", () => {
+  const error = Object.assign(new Error("code=12345 lookup failed"), {
+    code: "EAI_AGAIN",
+    errno: "EAI_AGAIN",
+    syscall: "getaddrinfo",
+  });
+  const line = formatWorkerFailure("telegram.client.error", error);
+
+  assert.match(line, /"failureCategory":"network"/);
+  assert.match(line, /"errno":"EAI_AGAIN"/);
+  assert.match(line, /"syscall":"getaddrinfo"/);
+  assert.doesNotMatch(line, /12345/);
 });

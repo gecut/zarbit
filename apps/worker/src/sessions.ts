@@ -8,13 +8,14 @@ import {
 import { type Store, type SessionRecord } from "@zarbit/db";
 import { safeError, rpcCode, isRevoked } from "./errors";
 import { SessionFiles } from "./session-files";
-import { sessionRef, workerLog } from "./logger";
+import { challengeRef, sessionRef, workerLog } from "./logger";
 import type {
   TelegramTransport,
   TransportFactory,
   Account,
   CodeDelivery,
   QuoteEvent,
+  TelegramLifecycleEvent,
 } from "./transport";
 
 const LOGIN_TTL = 600_000;
@@ -25,6 +26,7 @@ interface Runtime {
   client: TelegramTransport;
   abort: AbortController;
   online: boolean;
+  operation?: string;
   stop?: () => void;
   closing?: Promise<void>;
 }
@@ -77,13 +79,21 @@ export class Sessions {
     return this.options.now?.() ?? Date.now();
   }
   private async serial<T>(userId: string, work: () => Promise<T>): Promise<T> {
+    const queuedAt = this.now();
     const previous = this.locks.get(userId) ?? Promise.resolve();
     const pending = previous.catch(() => undefined).then(work);
     this.locks.set(userId, pending);
     try {
+      workerLog.debug("telegram.session.lock.acquired", {
+        queueDelayMs: this.now() - queuedAt,
+        sessionRef: sessionRef(userId),
+      });
       return await pending;
     } finally {
       if (this.locks.get(userId) === pending) this.locks.delete(userId);
+      workerLog.debug("telegram.session.lock.released", {
+        sessionRef: sessionRef(userId),
+      });
     }
   }
   private keys(userId: string, phone: string) {
@@ -110,31 +120,92 @@ export class Sessions {
       );
     if (!record.storageKey)
       throw new AppError("NO_SESSION", "دوباره وارد تلگرام شوید.");
+    workerLog.info("telegram.session.runtime.opening", {
+      revision: record.revision,
+      runtimeCount: this.runtimes.size,
+      sessionRef: sessionRef(record.userId),
+    });
     await this.options.files.protect(record.storageKey);
     if (this.runtimes.size >= this.options.max)
       throw new AppError("CAPACITY", "ظرفیت اتصال‌ها تکمیل است.");
     // Reserve capacity before any network operation.
+    const observe = (event: TelegramLifecycleEvent) =>
+      this.observeTransport(record.userId, event);
     const rt: Runtime = {
       userId: record.userId,
       key: record.storageKey,
       revision: record.revision,
-      client: this.options.factory(this.options.files.path(record.storageKey)),
+      client: this.options.factory(
+        this.options.files.path(record.storageKey),
+        observe,
+      ),
       abort: new AbortController(),
       online: false,
     };
     this.runtimes.set(record.userId, rt);
+    workerLog.info("telegram.session.runtime.opened", {
+      revision: rt.revision,
+      runtimeCount: this.runtimes.size,
+      sessionRef: sessionRef(rt.userId),
+    });
     return rt;
   }
-  private async close(rt: Runtime) {
+  private observeTransport(userId: string, event: TelegramLifecycleEvent) {
+    const rt = this.runtimes.get(userId);
+    const context = {
+      operation: rt?.operation ?? null,
+      sessionRef: sessionRef(userId),
+    };
+    if (event.type === "connection_state") {
+      workerLog.info("telegram.connection.state_changed", {
+        ...context,
+        state: event.state,
+      });
+    } else if (event.type === "connection_dc") {
+      workerLog.info("telegram.connection.dc_selected", {
+        ...context,
+        dcId: event.dcId,
+      });
+    } else
+      workerLog.failure("telegram.client.error", event.error, {
+        ...context,
+        source: event.source,
+      });
+  }
+  private async close(rt: Runtime, reason = "normal") {
+    const startedAt = this.now();
     rt.online = false;
     rt.stop?.();
     rt.abort.abort();
+    workerLog.info("telegram.session.runtime.closing", {
+      operation: rt.operation ?? null,
+      reason,
+      sessionRef: sessionRef(rt.userId),
+    });
     await (rt.closing ??= rt.client.close());
     if (this.runtimes.get(rt.userId) === rt) this.runtimes.delete(rt.userId);
+    workerLog.info("telegram.session.runtime.closed", {
+      durationMs: this.now() - startedAt,
+      reason,
+      runtimeCount: this.runtimes.size,
+      sessionRef: sessionRef(rt.userId),
+    });
   }
-  private async io<T>(rt: Runtime, work: () => Promise<T>): Promise<T> {
+  private async io<T>(
+    rt: Runtime,
+    operation: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
     if (rt.abort.signal.aborted)
       throw new AppError("CANCELLED", "عملیات ورود لغو شد.");
+    const startedAt = this.now();
+    const previousOperation = rt.operation;
+    rt.operation = operation;
+    workerLog.info("telegram.operation.started", {
+      operation,
+      sessionRef: sessionRef(rt.userId),
+      timeoutMs: this.options.timeoutMs ?? 20_000,
+    });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abortListener: (() => void) | undefined;
     try {
@@ -161,22 +232,40 @@ export class Sessions {
       ]);
       if (rt.abort.signal.aborted || this.runtimes.get(rt.userId) !== rt)
         throw new AppError("CANCELLED", "عملیات لغو شد.");
+      workerLog.info("telegram.operation.completed", {
+        durationMs: this.now() - startedAt,
+        operation,
+        sessionRef: sessionRef(rt.userId),
+      });
       return result;
     } catch (error) {
+      workerLog.failure("telegram.operation.failed", error, {
+        durationMs: this.now() - startedAt,
+        operation,
+        sessionRef: sessionRef(rt.userId),
+      });
       if (error instanceof AppError && error.code === "TIMEOUT")
-        await this.close(rt);
+        await this.close(rt, "timeout");
       throw error;
     } finally {
       if (timer) clearTimeout(timer);
       if (abortListener)
         rt.abort.signal.removeEventListener("abort", abortListener);
+      rt.operation = previousOperation;
     }
   }
   private async announce(userId: string, text: string) {
+    const startedAt = this.now();
     try {
       await this.options.notify?.(userId, text);
+      workerLog.info("telegram.notification.completed", {
+        durationMs: this.now() - startedAt,
+        kind: "session_status",
+        sessionRef: sessionRef(userId),
+      });
     } catch (error) {
       workerLog.failure("telegram.notification.failed", error, {
+        durationMs: this.now() - startedAt,
         sessionRef: sessionRef(userId),
       });
     }
@@ -231,14 +320,24 @@ export class Sessions {
   }
   private async discard(challenge: Challenge, message: string) {
     if (this.challenges.get(challenge.rt.userId) !== challenge) return;
+    workerLog.info("telegram.login.discarding", {
+      challengeRef: challengeRef(challenge.id),
+      loginPhase: challenge.public.step,
+      sessionRef: sessionRef(challenge.rt.userId),
+    });
     this.challenges.delete(challenge.rt.userId);
-    await this.close(challenge.rt);
+    await this.close(challenge.rt, "login_discarded");
     await this.options.files.remove(challenge.rt.key);
     await this.store.updateSession(challenge.rt.userId, challenge.rt.revision, {
       state: "ERROR",
       storageKey: null,
       runtimeReady: false,
       lastError: message,
+    });
+    workerLog.info("telegram.login.discarded", {
+      challengeRef: challengeRef(challenge.id),
+      sessionRef: sessionRef(challenge.rt.userId),
+      state: "ERROR",
     });
   }
   private async applyCode(challenge: Challenge, code: CodeDelivery) {
@@ -259,13 +358,24 @@ export class Sessions {
         ? new Date(this.now() + Math.max(60, code.timeout) * 1000).toISOString()
         : null,
     };
+    workerLog.info("telegram.login.code_requested", {
+      canResend: code.canResend,
+      challengeRef: challengeRef(challenge.id),
+      codeLength: code.length,
+      delivery: code.type,
+      sessionRef: sessionRef(challenge.rt.userId),
+    });
   }
   private async accepted(challenge: Challenge, account: Account) {
     const rt = challenge.rt;
     const owner = await this.authorize(rt.userId);
     if (account.id !== owner.telegramUserId) {
+      workerLog.warn("telegram.login.identity_mismatch", {
+        challengeRef: challengeRef(challenge.id),
+        sessionRef: sessionRef(rt.userId),
+      });
       try {
-        await this.io(rt, () => rt.client.logout());
+        await this.io(rt, "logout", () => rt.client.logout());
       } catch {
         this.challenges.delete(rt.userId);
         await this.store.disableSession(
@@ -274,7 +384,7 @@ export class Sessions {
           "حساب متفاوت رد شد؛ در حال ابطال اتصال هستیم.",
           rt.revision,
         );
-        await this.close(rt);
+        await this.close(rt, "identity_mismatch");
         throw new AppError(
           "IDENTITY_MISMATCH",
           "حساب متفاوت رد شد؛ قطع اتصال در حال پیگیری است.",
@@ -290,11 +400,17 @@ export class Sessions {
       );
     }
     challenge.public.step = "VERIFYING";
+    workerLog.info("telegram.login.authorized", {
+      challengeRef: challengeRef(challenge.id),
+      sessionRef: sessionRef(rt.userId),
+    });
     await this.options.files.protect(rt.key);
     await this.store.activateSession(rt.userId, rt.revision, {
       connectedTelegramUserId: account.id,
     });
-    const member = await this.io(rt, () => rt.client.membership());
+    const member = await this.io(rt, "membership", () =>
+      rt.client.membership(),
+    );
     // Membership errors after authorization retain the session for a safe retry.
     const activated = await this.store.activateSession(rt.userId, rt.revision, {
       state: "ACTIVE",
@@ -311,6 +427,10 @@ export class Sessions {
     );
   }
   private async setMembership(rt: Runtime, member: boolean) {
+    workerLog.info("telegram.membership.checked", {
+      isMember: member,
+      sessionRef: sessionRef(rt.userId),
+    });
     if (!member) {
       const wasActive = (await this.store.session(rt.userId))?.runtimeReady;
       await this.store.disableSession(
@@ -322,7 +442,7 @@ export class Sessions {
       await this.store.updateSession(rt.userId, rt.revision, {
         membershipCheckedAt: new Date(this.now()),
       });
-      await this.close(rt);
+      await this.close(rt, "not_in_group");
       if (wasActive)
         void this.announce(
           rt.userId,
@@ -358,12 +478,20 @@ export class Sessions {
           }),
         );
       });
+    workerLog.info("telegram.session.active", {
+      revision: rt.revision,
+      sessionRef: sessionRef(rt.userId),
+    });
     return true;
   }
   private async recoverRuntime(record: SessionRecord) {
+    workerLog.info("telegram.session.recovery.started", {
+      revision: record.revision,
+      sessionRef: sessionRef(record.userId),
+    });
     const rt = await this.open(record);
     try {
-      const self = await this.io(rt, () => rt.client.getMe());
+      const self = await this.io(rt, "get_me", () => rt.client.getMe());
       const owner = await this.authorize(record.userId);
       if (
         self.id !== owner.telegramUserId ||
@@ -372,9 +500,13 @@ export class Sessions {
         throw new AppError("IDENTITY_MISMATCH", "هویت session معتبر نیست.");
       await this.setMembership(
         rt,
-        await this.io(rt, () => rt.client.membership()),
+        await this.io(rt, "membership", () => rt.client.membership()),
       );
       this.retry.delete(record.userId);
+      workerLog.info("telegram.session.recovery.completed", {
+        revision: record.revision,
+        sessionRef: sessionRef(record.userId),
+      });
     } catch (error) {
       await this.runtimeFailure(rt, error);
     }
@@ -388,7 +520,7 @@ export class Sessions {
         "اعتبار اتصال تلگرام پایان یافته است؛ دوباره وارد شوید.",
         rt.revision,
       );
-      await this.close(rt);
+      await this.close(rt, "session_revoked");
       await this.options.files.remove(rt.key);
       await this.store.updateSession(rt.userId, rt.revision, {
         storageKey: null,
@@ -405,7 +537,7 @@ export class Sessions {
         runtimeReady: false,
         lastError: safeError(error).message,
       });
-      await this.close(rt);
+      await this.close(rt, "runtime_failure");
       const count = (this.retry.get(rt.userId)?.count ?? 0) + 1;
       this.retry.set(rt.userId, {
         count,
@@ -435,7 +567,7 @@ export class Sessions {
       await this.authorize(userId);
       return await this.setMembership(
         rt,
-        await this.io(rt, () => rt.client.membership()),
+        await this.io(rt, "membership", () => rt.client.membership()),
       );
     } catch (error) {
       await this.runtimeFailure(rt, error);
@@ -446,13 +578,21 @@ export class Sessions {
     const rt = this.runtimes.get(userId);
     if (!rt?.online)
       throw new AppError("SESSION_NOT_READY", "اتصال آماده نیست.");
-    return this.io(rt, () => rt.client.sendReply(messageId, text));
+    return this.io(rt, "send_reply", () =>
+      rt.client.sendReply(messageId, text),
+    );
   }
   async command(
     userId: string,
     command: WorkerCommand,
   ): Promise<TelegramSessionStatus> {
     await this.authorize(userId);
+    if (command.type !== "status")
+      workerLog.info("telegram.command.received", {
+        command: command.type,
+        ...("id" in command ? { challengeRef: challengeRef(command.id) } : {}),
+        sessionRef: sessionRef(userId),
+      });
     const cancelling =
       command.type === "cancel" &&
       this.challenges.get(userId)?.id === command.id;
@@ -532,8 +672,13 @@ export class Sessions {
           },
         };
         this.challenges.set(userId, challenge);
+        workerLog.info("telegram.login.started", {
+          challengeRef: challengeRef(challenge.id),
+          expiresInMs: LOGIN_TTL,
+          sessionRef: sessionRef(userId),
+        });
         try {
-          const result = await this.io(rt, () =>
+          const result = await this.io(rt, "send_code", () =>
             rt.client.sendCode(command.phone, rt.abort.signal),
           );
           if ("account" in result)
@@ -586,7 +731,7 @@ export class Sessions {
                 challenge.rateKeys,
                 new Date(this.now()),
               );
-              const result = await this.io(challenge.rt, () =>
+              const result = await this.io(challenge.rt, "resend_code", () =>
                 challenge.rt.client.resendCode(
                   challenge.phone,
                   challenge.hash,
@@ -606,18 +751,21 @@ export class Sessions {
                   "WRONG_STEP",
                   "مرحله ورود تغییر کرده است؛ وضعیت را تازه کنید.",
                 );
-              const account = await this.io(challenge.rt, () =>
-                command.type === "code"
-                  ? challenge.rt.client.signIn(
-                      challenge.phone,
-                      challenge.hash,
-                      command.code,
-                      challenge.rt.abort.signal,
-                    )
-                  : challenge.rt.client.password(
-                      command.password,
-                      challenge.rt.abort.signal,
-                    ),
+              const account = await this.io(
+                challenge.rt,
+                command.type === "code" ? "sign_in" : "password",
+                () =>
+                  command.type === "code"
+                    ? challenge.rt.client.signIn(
+                        challenge.phone,
+                        challenge.hash,
+                        command.code,
+                        challenge.rt.abort.signal,
+                      )
+                    : challenge.rt.client.password(
+                        command.password,
+                        challenge.rt.abort.signal,
+                      ),
               );
               await this.accepted(challenge, account);
             }
@@ -629,7 +777,9 @@ export class Sessions {
     });
   }
   private async loginFailure(challenge: Challenge, error: unknown) {
-    workerLog.diagnostic("telegram.login.failed", error, {
+    workerLog.failure("telegram.login.failed", error, {
+      attempts: challenge.attempts,
+      challengeRef: challengeRef(challenge.id),
       loginPhase:
         challenge.public.step === "CODE"
           ? "sign_in"
@@ -694,14 +844,14 @@ export class Sessions {
     }
     const rt = await this.open(record);
     try {
-      await this.io(rt, () => rt.client.logout());
+      await this.io(rt, "logout", () => rt.client.logout());
     } catch (error) {
       if (!isRevoked(error)) {
-        await this.close(rt);
+        await this.close(rt, "logout_failed");
         throw safeError(error);
       }
     }
-    await this.close(rt);
+    await this.close(rt, "logout_completed");
     await this.options.files.remove(rt.key);
     await this.store.updateSession(userId, rt.revision, {
       state: "REVOKED",

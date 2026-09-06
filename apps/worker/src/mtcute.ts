@@ -1,6 +1,11 @@
 import { Dispatcher } from "@mtcute/dispatcher";
 import { TelegramClient, SentCode } from "@mtcute/node";
-import type { CodeDelivery, TransportFactory } from "./transport";
+import type {
+  CodeDelivery,
+  TelegramConnectionState,
+  TelegramLifecycleEvent,
+  TransportFactory,
+} from "./transport";
 import { rpcCode } from "./errors";
 
 export const ZARBIT_CONNECTION_IDENTITY = {
@@ -10,6 +15,49 @@ export const ZARBIT_CONNECTION_IDENTITY = {
   systemLangCode: "fa",
   langCode: "fa",
 } as const;
+interface MtcuteLifecycleClient {
+  onConnectionState: {
+    add(listener: (state: TelegramConnectionState) => void): unknown;
+    remove(listener: (state: TelegramConnectionState) => void): unknown;
+  };
+  onError: {
+    add(listener: (error: Error) => void): unknown;
+    remove(listener: (error: Error) => void): unknown;
+  };
+  getPrimaryDcId(): Promise<number>;
+}
+
+export function observeMtcuteClient(
+  client: MtcuteLifecycleClient,
+  observe?: (event: TelegramLifecycleEvent) => void,
+) {
+  const emit = (event: TelegramLifecycleEvent) => {
+    try {
+      observe?.(event);
+    } catch {
+      // Observability must never interrupt MTProto.
+    }
+  };
+  const onConnectionState = (state: TelegramConnectionState) => {
+    emit({ type: "connection_state", state });
+    if (state === "connected" || state === "updating")
+      void client
+        .getPrimaryDcId()
+        .then((dcId) => emit({ type: "connection_dc", dcId }))
+        .catch((error: unknown) =>
+          emit({ type: "client_error", source: "primary_dc_lookup", error }),
+        );
+  };
+  const onError = (error: Error) =>
+    emit({ type: "client_error", source: "mtcute", error });
+  client.onConnectionState.add(onConnectionState);
+  client.onError.add(onError);
+  return () => {
+    client.onConnectionState.remove(onConnectionState);
+    client.onError.remove(onError);
+  };
+}
+
 const delivery = (value: SentCode): CodeDelivery => ({
   type: value.type,
   hash: value.phoneCodeHash,
@@ -23,7 +71,7 @@ export function mtcuteFactory(config: {
   apiHash: string;
   groupId: number;
 }): TransportFactory {
-  return (storage) => {
+  return (storage, observe) => {
     // Disable automatic RPC retries; ambiguous trade sends must never be replayed.
     const client = new TelegramClient({
       apiId: config.apiId,
@@ -34,6 +82,7 @@ export function mtcuteFactory(config: {
       logLevel: 0,
     });
     const dispatcher = Dispatcher.for(client);
+    const stopObserving = observeMtcuteClient(client, observe);
     let peerLoaded = false;
     return {
       async sendCode(phone, abortSignal) {
@@ -130,6 +179,8 @@ export function mtcuteFactory(config: {
         await client.logOut();
       },
       async close() {
+        stopObserving();
+        await dispatcher.destroy();
         await client.destroy();
       },
     };

@@ -16,6 +16,16 @@ export interface QuoteEvent {
   text: string;
   date: Date;
 }
+export type TelegramConnectionState =
+  "offline" | "connecting" | "updating" | "connected";
+export type TelegramLifecycleEvent =
+  | {
+      type: "connection_state";
+      state: TelegramConnectionState;
+    }
+  | { type: "connection_dc"; dcId: number }
+  | { type: "client_error"; source: string; error: unknown };
+export type TelegramLifecycleObserver = (event: TelegramLifecycleEvent) => void;
 export interface TelegramTransport {
   sendCode(phone: string, signal: AbortSignal): Promise<LoginResult>;
   resendCode(
@@ -37,4 +47,7 @@ export interface TelegramTransport {
   logout(): Promise<void>;
   close(): Promise<void>;
 }
-export type TransportFactory = (storagePath: string) => TelegramTransport;
+export type TransportFactory = (
+  storagePath: string,
+  observe?: TelegramLifecycleObserver,
+) => TelegramTransport;

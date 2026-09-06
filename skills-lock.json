@@ -163,6 +163,12 @@
       "skillPath": "skills/turborepo/SKILL.md",
       "computedHash": "4289866858fc5314e10ca21584d00c48ddb7e6bc353e262283958f8e4b9bec87"
     },
+    "using-mtcute": {
+      "source": "mtcute/mtcute",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/using-mtcute/SKILL.md",
+      "computedHash": "0e13f48e9bb578606cc141812b6b32132d9d896e04dbb3b71d2a8d380782cfb1"
+    },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

@@ -8,7 +8,7 @@ x-log-options: &log-options
 
 services:
   web:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-web:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-web:${IMAGE_TAG:?Set an immutable IMAGE_TAG}
     expose: ["80"]
     depends_on:
       server: { condition: service_healthy }
@@ -23,7 +23,7 @@ services:
     networks: [dokploy-network]
 
   migrate:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:?Set an immutable IMAGE_TAG}
     user: "0:0"
     command: ["node", "/app/deploy/migrate.mjs"]
     environment:
@@ -37,7 +37,7 @@ services:
     networks: [dokploy-network]
 
   server:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-server:${IMAGE_TAG:?Set an immutable IMAGE_TAG}
     expose: ["3000"]
     environment:
       NODE_ENV: production
@@ -71,10 +71,11 @@ services:
     logging: *log-options
 
   worker:
-    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE_PREFIX:-ghcr.io/gecut/zarbit}-worker:${IMAGE_TAG:?Set an immutable IMAGE_TAG}
     environment:
       NODE_ENV: production
-      RELEASE_ID: ${IMAGE_TAG:-latest}
+      RELEASE_ID: ${IMAGE_TAG:?Set an immutable IMAGE_TAG}
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
       NODE_OPTIONS: --enable-source-maps
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}

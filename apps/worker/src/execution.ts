@@ -24,13 +24,40 @@ export function createExecutor(
   },
 ) {
   return async (userId: string, revision: number, event: QuoteEvent) => {
-    if (event.chatId !== config.groupId || event.senderId !== config.senderId)
+    if (event.chatId !== config.groupId || event.senderId !== config.senderId) {
+      workerLog.debug("telegram.quote.ignored", {
+        reason: "unexpected_source",
+        sessionRef: sessionRef(userId),
+      });
       return;
+    }
     const quote = parseQuoteMessage(event.text);
-    if (!quote) return;
+    if (!quote) {
+      workerLog.debug("telegram.quote.ignored", {
+        messageId: event.messageId,
+        reason: "unrecognized_format",
+        sessionRef: sessionRef(userId),
+      });
+      return;
+    }
+    workerLog.info("telegram.quote.received", {
+      messageId: event.messageId,
+      sessionRef: sessionRef(userId),
+    });
     const candidates = await store.candidates(userId, quote, event.date);
+    workerLog.info("telegram.quote.candidates_loaded", {
+      candidateCount: candidates.length,
+      messageId: event.messageId,
+      sessionRef: sessionRef(userId),
+    });
     for (const candidate of candidates) {
-      if (!(await sessions.checkForExecution(userId, revision))) return;
+      if (!(await sessions.checkForExecution(userId, revision))) {
+        workerLog.warn("telegram.quote.processing_stopped", {
+          reason: "session_not_ready",
+          sessionRef: sessionRef(userId),
+        });
+        return;
+      }
       const request = await store.claim(
         userId,
         candidate.id,
@@ -38,8 +65,20 @@ export function createExecutor(
         event.date,
         revision,
       );
-      if (!request?.claimToken) continue;
+      if (!request?.claimToken) {
+        workerLog.debug("telegram.quote.claim_skipped", {
+          candidateId: candidate.id,
+          sessionRef: sessionRef(userId),
+        });
+        continue;
+      }
+      workerLog.info("telegram.quote.claimed", {
+        action: request.action,
+        requestId: request.id,
+        sessionRef: sessionRef(userId),
+      });
       let outgoingMessageId: number | undefined;
+      const deliveryStartedAt = Date.now();
       try {
         if (request.action === "ALERT")
           await config.notify(
@@ -56,9 +95,15 @@ export function createExecutor(
               quote,
             }),
           );
+        workerLog.info("telegram.notification.completed", {
+          kind: request.action === "ALERT" ? "alert" : "trade_reply",
+          requestId: request.id,
+          sessionRef: sessionRef(userId),
+        });
       } catch (error) {
         workerLog.failure("telegram.request.delivery_failed", error, {
           action: request.action,
+          durationMs: Date.now() - deliveryStartedAt,
           requestId: request.id,
           sessionRef: sessionRef(userId),
         });
@@ -93,6 +138,12 @@ export function createExecutor(
         event.messageId,
         { outgoingMessageId },
       );
+      workerLog.info("telegram.request.delivery_completed", {
+        action: request.action,
+        durationMs: Date.now() - deliveryStartedAt,
+        requestId: request.id,
+        sessionRef: sessionRef(userId),
+      });
       if (request.action !== "ALERT")
         await config
           .notify(
@@ -101,6 +152,13 @@ export function createExecutor(
               action: request.action,
               units: request.units!,
               quote,
+            }),
+          )
+          .then(() =>
+            workerLog.info("telegram.notification.completed", {
+              kind: "trade_success",
+              requestId: request.id,
+              sessionRef: sessionRef(userId),
             }),
           )
           .catch((error) =>

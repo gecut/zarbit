@@ -9,7 +9,7 @@
 5. In Dokploy, use `docker-compose.production.yml`. Copy keys from `deploy/compose.env.example` into Environment and replace placeholders. Generate `WORKER_INTERNAL_TOKEN` with `openssl rand -hex 32`; keep it stable and secret.
 6. Set domains in Dokploy: Mini App → web:80, API → server:3000. Worker gets no public domain/port. Set `CORS_ORIGIN` and `WEB_APP_URL` to the Mini App HTTPS origin.
 
-Required runtime values include the bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin, launcher URL, and `DATABASE_URL`. `MIGRATION_DATABASE_URL` is for the migration job only. Remove legacy SQLite `DATABASE_URL=file:...` values and do not attach the old data volume.
+Required runtime values include the bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin, launcher URL, `DATABASE_URL`, immutable `IMAGE_TAG`, and `WORKER_LOG_LEVEL=info`. `MIGRATION_DATABASE_URL` is for the migration job only. Remove legacy SQLite `DATABASE_URL=file:...` values and do not attach the old data volume.
 
 ## SQLite to PostgreSQL cutover
 
@@ -29,7 +29,7 @@ The migration job is mandatory on future releases too. It never reads legacy SQL
 
 - Web healthcheck passes; refresh the Mini App or accept its update prompt.
 - Server root healthcheck and worker private `/health` both query PostgreSQL. A successful process healthcheck does not prove every Telegram account is connected.
-- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Database failures include safe pool total/idle/waiting counters, a failure category, and source code where available; credentials and Telegram secrets are redacted.
+- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Worker logs include MTProto connection state/DC, operation duration, retry context, and a redacted native error cause chain. `WORKER_LOG_LEVEL=info` records lifecycle transitions; use `debug` temporarily for high-frequency quote and health events. Credentials, Telegram secrets, numbers, OTPs, passwords, request bodies, and message text are redacted or never emitted.
 - Runtime server and worker use UID 1000. Only the migration maintenance job runs as root to initialize the **new session volume**. The server must not mount that volume or receive Telegram API ID/hash.
 - Provider monitoring shows connections below the configured caps, healthy backups/PITR, normal latency, and no sustained lock contention.
 

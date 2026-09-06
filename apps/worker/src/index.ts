@@ -32,6 +32,7 @@ export async function startWorker() {
     );
   workerLog.info("worker.starting", {
     allowlistSize: allowedTelegramUserIds.size,
+    logLevel: env.WORKER_LOG_LEVEL,
     maxTelegramSessions: env.MAX_TELEGRAM_SESSIONS,
   });
   process.umask(0o077);
@@ -61,12 +62,16 @@ export async function startWorker() {
       if (user) await notify(user.telegramUserId, text);
     },
   });
+  const initializeStartedAt = Date.now();
   try {
     await sessions.initialize();
   } catch (error) {
     releaseOwnership();
     throw error;
   }
+  workerLog.info("telegram.sessions.initialized", {
+    durationMs: Date.now() - initializeStartedAt,
+  });
   sessions.onQuote = createExecutor(store, sessions, {
     groupId: env.TELEGRAM_GROUP_ID!,
     senderId: env.QUOTE_SENDER_ID!,
@@ -100,6 +105,11 @@ export async function startWorker() {
           revocations: result.revocations,
           scanned: result.scanned,
         });
+      else
+        workerLog.debug("telegram.sessions.sync_completed", {
+          durationMs: Date.now() - startedAt,
+          scanned: result.scanned,
+        });
     } catch (error) {
       workerLog.failure("telegram.sessions.sync_failed", error, {
         durationMs: Date.now() - startedAt,
@@ -125,10 +135,14 @@ export async function startWorker() {
     workerLog.info("worker.stopped");
   };
   process.once("SIGTERM", () => {
-    void stop();
+    void stop().catch((error) =>
+      workerLog.failure("worker.stop_failed", error),
+    );
   });
   process.once("SIGINT", () => {
-    void stop();
+    void stop().catch((error) =>
+      workerLog.failure("worker.stop_failed", error),
+    );
   });
   return { stop };
 }

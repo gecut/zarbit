@@ -82,6 +82,8 @@ test("worker returns the PASSWORD login state as a successful code command", asy
     command: async () => ({
       state: "PENDING_OTP",
       connection: "CONNECTED",
+      groupId: -1001234567890,
+      quoteSenderId: "123456789",
       connectedTelegramUserId: null,
       membershipCheckedAt: null,
       error: null,

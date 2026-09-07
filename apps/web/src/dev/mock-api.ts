@@ -19,6 +19,8 @@ function initialSession(): TelegramSessionStatus {
   return {
     state: "ACTIVE",
     connection: "CONNECTED",
+    groupId: -1001234567890,
+    quoteSenderId: "123456789",
     connectedTelegramUserId: mockIdentity.telegramUserId,
     membershipCheckedAt: new Date().toISOString(),
     error: null,
@@ -56,6 +58,8 @@ export function createMockApi(): ApiClient {
         session = {
           state: "PENDING_OTP",
           connection: "CONNECTING",
+          groupId: -1001234567890,
+          quoteSenderId: "123456789",
           connectedTelegramUserId: null,
           membershipCheckedAt: null,
           error: null,
@@ -90,6 +94,8 @@ export function createMockApi(): ApiClient {
         session = {
           state: "DISCONNECTED",
           connection: "OFFLINE",
+          groupId: -1001234567890,
+          quoteSenderId: "123456789",
           connectedTelegramUserId: null,
           membershipCheckedAt: null,
           error: null,
@@ -101,6 +107,8 @@ export function createMockApi(): ApiClient {
         session = {
           state: "REVOKED",
           connection: "OFFLINE",
+          groupId: -1001234567890,
+          quoteSenderId: "123456789",
           connectedTelegramUserId: null,
           membershipCheckedAt: null,
           error: null,

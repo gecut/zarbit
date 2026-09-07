@@ -18,6 +18,8 @@ const storedSession = {
 const onlineStatus: TelegramSessionStatus = {
   state: "ACTIVE",
   connection: "CONNECTED",
+  groupId: -1001234567890,
+  quoteSenderId: "123456789",
   connectedTelegramUserId: "123456",
   membershipCheckedAt: "2026-09-05T16:00:00.000Z",
   error: null,

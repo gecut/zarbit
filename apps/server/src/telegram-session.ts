@@ -110,6 +110,8 @@ async function offlineStatus(
     return {
       state: session?.state ?? "DISCONNECTED",
       connection: "OFFLINE",
+      groupId: null,
+      quoteSenderId: null,
       connectedTelegramUserId: session?.connectedTelegramUserId ?? null,
       membershipCheckedAt: session?.membershipCheckedAt?.toISOString() ?? null,
       login: null,

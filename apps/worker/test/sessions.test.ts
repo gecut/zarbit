@@ -113,6 +113,8 @@ async function createSessions(
     clock,
     directory,
     sessions: new Sessions(createStore(), {
+      groupId: -1001234567890,
+      quoteSenderId: "123456789",
       max: 1,
       secret: "test-secret",
       allowlist: new Set([telegramUserId]),

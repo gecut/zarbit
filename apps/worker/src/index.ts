@@ -48,6 +48,8 @@ export async function startWorker() {
     await bot.api.sendMessage(id, text);
   };
   const sessions = new Sessions(store, {
+    groupId: env.TELEGRAM_GROUP_ID!,
+    quoteSenderId: env.QUOTE_SENDER_ID!,
     max: env.MAX_TELEGRAM_SESSIONS,
     secret: env.WORKER_INTERNAL_TOKEN!,
     allowlist: allowedTelegramUserIds,

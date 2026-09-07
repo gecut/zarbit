@@ -80,6 +80,39 @@ export function TelegramConnectionCard({
                 شناسه حساب: <bdi>{session.connectedTelegramUserId}</bdi>
               </p>
             ) : null}
+            <div className="border-border bg-background mt-4 rounded-xl border px-3 py-2 text-xs leading-6">
+              <p className="text-muted">گروه هدف تنظیم‌شده در worker</p>
+              {session.groupId === null ? (
+                <p className="text-warning">شناسه گروه از worker دریافت نشد.</p>
+              ) : (
+                <>
+                  <p className="text-foreground" dir="ltr">
+                    <bdi>{session.groupId}</bdi>
+                  </p>
+                  <p className="text-muted mt-1">
+                    فرستندهٔ مجاز مظنه:{" "}
+                    {session.quoteSenderId ? (
+                      <bdi dir="ltr">{session.quoteSenderId}</bdi>
+                    ) : (
+                      "نامشخص"
+                    )}
+                  </p>
+                  <p
+                    className={
+                      session.state === "NOT_IN_GROUP"
+                        ? "text-danger-soft-foreground"
+                        : "text-muted"
+                    }
+                  >
+                    {session.state === "NOT_IN_GROUP"
+                      ? "این حساب عضو گروه هدف نیست."
+                      : session.membershipCheckedAt
+                        ? "عضویت این حساب در گروه هدف تأیید شده است."
+                        : "عضویت گروه هنوز بررسی نشده است."}
+                  </p>
+                </>
+              )}
+            </div>
             {session.membershipCheckedAt ? (
               <p className="text-muted mt-1 text-xs leading-6">
                 آخرین بررسی عضویت:{" "}

@@ -83,6 +83,8 @@ interface Challenge {
 type LoginPhase =
   "password" | "post_auth" | "resend_code" | "send_code" | "sign_in";
 export interface SessionOptions {
+  groupId: number;
+  quoteSenderId: string;
   max: number;
   secret: string;
   allowlist: Set<string>;
@@ -365,6 +367,8 @@ export class Sessions {
     return {
       state: record?.state ?? "DISCONNECTED",
       connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : "OFFLINE",
+      groupId: this.options.groupId,
+      quoteSenderId: this.options.quoteSenderId,
       connectedTelegramUserId: record?.connectedTelegramUserId ?? null,
       membershipCheckedAt: record?.membershipCheckedAt?.toISOString() ?? null,
       error: record?.lastError ?? null,

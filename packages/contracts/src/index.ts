@@ -57,6 +57,8 @@ export type LoginStatus = z.infer<typeof loginStatusSchema>;
 export const telegramSessionStatusSchema = z.object({
   state: telegramSessionStateSchema,
   connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE"]),
+  groupId: z.number().int().safe().nullable(),
+  quoteSenderId: z.string().nullable(),
   connectedTelegramUserId: z.string().nullable(),
   membershipCheckedAt: z.string().nullable(),
   error: z.string().nullable(),

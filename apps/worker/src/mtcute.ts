@@ -7,6 +7,7 @@ import type {
   TransportFactory,
 } from "./transport";
 import { rpcCode } from "./errors";
+import { workerLog } from "./logger";
 
 export const ZARBIT_CONNECTION_IDENTITY = {
   deviceModel: "Zarbit",
@@ -162,6 +163,12 @@ export function mtcuteFactory(config: {
       },
       subscribe(handler) {
         dispatcher.onNewMessage((message) => {
+          workerLog.debug("telegram.message.observed", {
+            chatId: message.chat.id,
+            senderId: String(message.sender.id),
+            messageId: message.id,
+            textPreview: message.text.slice(0, 200),
+          });
           handler({
             chatId: message.chat.id,
             senderId: String(message.sender.id),

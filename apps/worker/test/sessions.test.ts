@@ -94,7 +94,7 @@ function baseTransport(
     password: async () => ({ id: telegramUserId }),
     getMe: async () => ({ id: telegramUserId }),
     membership: async () => true,
-    subscribe: () => () => undefined,
+    subscribe: async () => () => undefined,
     logout: async () => undefined,
     close: async () => undefined,
     ...overrides,

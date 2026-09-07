@@ -516,17 +516,8 @@ export class Sessions {
       record.state === "REVOKED"
     )
       return false;
-    const activated = await this.store.activateSession(rt.userId, rt.revision, {
-      state: "ACTIVE",
-      runtimeReady: true,
-      runtimeCheckedAt: new Date(this.now()),
-      membershipCheckedAt: new Date(this.now()),
-      lastError: null,
-    });
-    if (!activated.count) return false;
-    rt.online = true;
     if (!rt.stop)
-      rt.stop = rt.client.subscribe((event) => {
+      rt.stop = await rt.client.subscribe((event) => {
         void this.serial(rt.userId, async () => {
           if (rt.online && !this.stopped)
             await this.onQuote?.(rt.userId, rt.revision, event);
@@ -536,6 +527,19 @@ export class Sessions {
           }),
         );
       });
+    const activated = await this.store.activateSession(rt.userId, rt.revision, {
+      state: "ACTIVE",
+      runtimeReady: true,
+      runtimeCheckedAt: new Date(this.now()),
+      membershipCheckedAt: new Date(this.now()),
+      lastError: null,
+    });
+    if (!activated.count) {
+      rt.stop?.();
+      rt.stop = undefined;
+      return false;
+    }
+    rt.online = true;
     workerLog.info("telegram.session.active", {
       revision: rt.revision,
       sessionRef: sessionRef(rt.userId),

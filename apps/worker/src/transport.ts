@@ -42,7 +42,7 @@ export interface TelegramTransport {
   password(password: string, signal: AbortSignal): Promise<Account>;
   getMe(): Promise<Account>;
   membership(): Promise<boolean>;
-  subscribe(handler: (event: QuoteEvent) => void): () => void;
+  subscribe(handler: (event: QuoteEvent) => void): Promise<() => void>;
   logout(): Promise<void>;
   close(): Promise<void>;
 }

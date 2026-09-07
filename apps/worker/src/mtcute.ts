@@ -161,7 +161,7 @@ export function mtcuteFactory(config: {
           throw error;
         }
       },
-      subscribe(handler) {
+      async subscribe(handler) {
         dispatcher.onNewMessage((message) => {
           workerLog.debug("telegram.message.observed", {
             chatId: message.chat.id,
@@ -177,8 +177,15 @@ export function mtcuteFactory(config: {
             date: message.date,
           });
         });
+        try {
+          await client.startUpdatesLoop();
+        } catch (error) {
+          dispatcher.removeUpdateHandler("all");
+          throw error;
+        }
         return () => {
           dispatcher.removeUpdateHandler("all");
+          void client.stopUpdatesLoop();
         };
       },
       async logout() {

@@ -33,6 +33,15 @@ export const latestQuoteSchema = z
   })
   .strict();
 export type LatestQuote = z.infer<typeof latestQuoteSchema>;
+export const quotePointSchema = latestQuoteSchema;
+export type QuotePoint = z.infer<typeof quotePointSchema>;
+export const quoteDashboardSchema = z
+  .object({
+    latest: latestQuoteSchema.nullable(),
+    points: z.array(quotePointSchema),
+  })
+  .strict();
+export type QuoteDashboard = z.infer<typeof quoteDashboardSchema>;
 export const telegramSessionStateSchema = z.enum([
   "DISCONNECTED",
   "PENDING_OTP",

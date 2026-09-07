@@ -62,3 +62,14 @@ model LatestQuote {
   sourceMessageId Int
   updatedAt       DateTime @updatedAt
 }
+
+model QuoteHistory {
+  id              Int      @id @default(autoincrement())
+  compactQuote    Int
+  announcedAt     DateTime
+  receivedAt      DateTime
+  sourceMessageId Int      @unique
+  createdAt       DateTime @default(now())
+
+  @@index([announcedAt])
+}

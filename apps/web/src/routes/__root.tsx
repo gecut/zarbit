@@ -18,7 +18,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         name: "description",
-        content: "مدیریت درخواست‌های مظنه زربیت",
+        content: "نمایش آخرین مظنه زربیت",
       },
     ],
     links: [

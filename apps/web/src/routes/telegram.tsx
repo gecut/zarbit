@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { TelegramConnection } from "../components/telegram-connection";
+import { TelegramPage } from "../components/telegram";
 
 export const Route = createFileRoute("/telegram")({
-  component: TelegramConnection,
+  component: TelegramPage,
 });

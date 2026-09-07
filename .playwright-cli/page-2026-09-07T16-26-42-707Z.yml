@@ -1,0 +1,63 @@
+- main [ref=f2e4]:
+  - navigation [ref=f2e6]:
+    - link "صفحه اصلی زربیت" [ref=f2e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f2e8]: ز
+      - generic [ref=f2e9]:
+        - generic [ref=f2e10]: زربیت
+        - generic [ref=f2e11]: نمایش آخرین مظنه
+    - link "تنظیمات اتصال تلگرام" [ref=f2e12] [cursor=pointer]:
+      - /url: /telegram
+  - generic [ref=f2e17]:
+    - article [ref=f2e18]:
+      - generic [ref=f2e19]:
+        - generic [ref=f2e20]:
+          - generic [ref=f2e21]:
+            - heading "تلگرام متصل است" [level=3] [ref=f2e22]
+            - paragraph [ref=f2e23]: این حساب برای دریافت مظنه از گروه هدف آماده است.
+          - generic [ref=f2e24]: دریافت مظنه فعال
+        - generic [ref=f2e26]:
+          - generic [ref=f2e27]:
+            - generic [ref=f2e28]:
+              - term [ref=f2e29]: وضعیت گروه
+              - definition [ref=f2e30]: عضویت تأیید شده
+            - generic [ref=f2e31]:
+              - term [ref=f2e32]: آخرین بررسی
+              - definition [ref=f2e33]: ۱۴۰۵/۶/۱۶, ۱۹:۵۶:۲۵
+          - generic [ref=f2e35]:
+            - heading [level=3] [ref=f2e36]:
+              - button "جزئیات اتصال" [expanded] [active] [ref=f2e37] [cursor=pointer]
+            - group "جزئیات اتصال" [ref=f2e75]:
+              - generic [ref=f2e78]:
+                - generic [ref=f2e79]:
+                  - term [ref=f2e80]: شناسه حساب
+                  - definition [ref=f2e81]: "10000001"
+                - generic [ref=f2e82]:
+                  - term [ref=f2e83]: شناسه گروه
+                  - definition [ref=f2e84]: "-1001234567890"
+                - generic [ref=f2e85]:
+                  - term [ref=f2e86]: فرستنده مجاز
+                  - definition [ref=f2e87]: "123456789"
+        - generic [ref=f2e40]:
+          - generic [ref=f2e41]:
+            - button "بررسی دوباره عضویت" [ref=f2e42] [cursor=pointer]
+            - paragraph [ref=f2e43]: دسترسی این حساب به گروه هدف دوباره بررسی می‌شود.
+          - link "مشاهده آخرین مظنه" [ref=f2e44] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f2e45]:
+            - generic [ref=f2e46]:
+              - paragraph [ref=f2e47]: قطع اتصال
+              - paragraph [ref=f2e48]: دریافت مظنه از این حساب متوقف می‌شود.
+            - button "قطع اتصال تلگرام" [ref=f2e49] [cursor=pointer]
+    - generic [ref=f2e51]:
+      - generic [ref=f2e53]:
+        - heading "ظاهر برنامه" [level=3] [ref=f2e54]
+        - paragraph [ref=f2e55]: تم دلخواه را برای این دستگاه انتخاب کنید.
+      - group "تم برنامه" [ref=f2e56]:
+        - button "روشن" [pressed] [ref=f2e57] [cursor=pointer]
+        - button "تیره" [ref=f2e58] [cursor=pointer]
+  - navigation "ناوبری اصلی" [ref=f2e59]:
+    - link "خانه" [ref=f2e60] [cursor=pointer]:
+      - /url: /
+    - link "تلگرام" [ref=f2e67] [cursor=pointer]:
+      - /url: /telegram

@@ -1,22 +1,28 @@
 import { AlertDialog, Button } from "@heroui/react";
 import { useState } from "react";
-export function ConfirmAction({
-  title,
-  description,
-  label,
-  pending,
-  onConfirm,
-}: {
-  title: string;
+
+type ConfirmActionProps = {
   description: string;
+  isDisabled: boolean;
   label: string;
-  pending?: boolean;
-  onConfirm: () => Promise<unknown>;
-}) {
+  onConfirm: () => Promise<void>;
+  pending: boolean;
+  title: string;
+};
+
+export function ConfirmAction({
+  description,
+  isDisabled,
+  label,
+  onConfirm,
+  pending,
+  title,
+}: ConfirmActionProps) {
   const [open, setOpen] = useState(false);
+
   return (
     <AlertDialog isOpen={open} onOpenChange={setOpen}>
-      <Button variant="danger-soft" isDisabled={pending}>
+      <Button isDisabled={pending || isDisabled} variant="danger-soft">
         {label}
       </Button>
       <AlertDialog.Backdrop>
@@ -27,17 +33,22 @@ export function ConfirmAction({
             </AlertDialog.Header>
             <AlertDialog.Body>{description}</AlertDialog.Body>
             <AlertDialog.Footer>
-              <Button slot="close" variant="secondary" isDisabled={pending}>
+              <Button
+                isDisabled={pending || isDisabled}
+                slot="close"
+                variant="secondary"
+              >
                 انصراف
               </Button>
               <Button
-                variant="danger"
+                isDisabled={isDisabled}
                 isPending={pending}
                 onPress={() => {
                   void onConfirm()
                     .then(() => setOpen(false))
                     .catch(() => undefined);
                 }}
+                variant="danger"
               >
                 تأیید {label}
               </Button>

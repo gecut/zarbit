@@ -2,6 +2,7 @@ import { env } from "@zarbit/env/web";
 import {
   AppError,
   type Identity,
+  type QuoteDashboard,
   type LatestQuote,
   type TelegramSessionStatus,
   type WorkerCommand,
@@ -9,10 +10,15 @@ import {
 
 import { telegramInitData } from "./telegram";
 
-export type { LatestQuote, TelegramSessionState } from "@zarbit/contracts";
+export type {
+  LatestQuote,
+  QuoteDashboard,
+  TelegramSessionState,
+} from "@zarbit/contracts";
 
 export interface ApiClient {
   authenticate(): Promise<Identity>;
+  getQuoteDashboard(): Promise<QuoteDashboard>;
   getLatestQuote(): Promise<LatestQuote | null>;
   getTelegramSession(): Promise<TelegramSessionStatus>;
   sessionCommand(
@@ -72,6 +78,7 @@ export function createServerApi(): ApiClient {
         body: JSON.stringify({ initData: telegramInitData() }),
       }),
     getLatestQuote: () => request<LatestQuote | null>("/api/quote/latest"),
+    getQuoteDashboard: () => request<QuoteDashboard>("/api/quote/dashboard"),
     getTelegramSession: () =>
       request<TelegramSessionStatus>("/api/telegram-session/status"),
     sessionCommand: (command) => {

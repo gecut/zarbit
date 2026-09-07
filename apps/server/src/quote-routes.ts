@@ -15,4 +15,26 @@ export function registerQuoteRoutes(app: Hono<AppEnv>, deps: AppDependencies) {
         : null,
     });
   });
+
+  app.get("/api/quote/dashboard", async (c) => {
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1_000);
+    const [latest, points] = await Promise.all([
+      deps.store.latestQuote(),
+      deps.store.quotesSince(since),
+    ]);
+    return c.json({
+      data: {
+        latest: latest
+          ? {
+              quote: compactQuoteToDisplayPrice(latest.compactQuote),
+              announcedAt: latest.announcedAt.toISOString(),
+            }
+          : null,
+        points: points.map((point) => ({
+          quote: compactQuoteToDisplayPrice(point.compactQuote),
+          announcedAt: point.announcedAt.toISOString(),
+        })),
+      },
+    });
+  });
 }

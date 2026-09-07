@@ -5,7 +5,7 @@ import type { QuoteEvent } from "./transport";
 import { sessionRef, workerLog } from "./logger";
 
 export function createQuoteRecorder(
-  store: Pick<Store, "recordLatestQuote">,
+  store: Pick<Store, "recordQuote">,
   config: { groupId: number; senderId: string },
 ) {
   return async (userId: string, _revision: number, event: QuoteEvent) => {
@@ -27,7 +27,7 @@ export function createQuoteRecorder(
       return;
     }
 
-    const recorded = await store.recordLatestQuote({
+    const recorded = await store.recordQuote({
       compactQuote,
       announcedAt: event.date,
       receivedAt: new Date(),
@@ -35,8 +35,9 @@ export function createQuoteRecorder(
     });
     workerLog.info("telegram.quote.recorded", {
       compactQuote,
+      historyRecorded: recorded.historyRecorded,
+      latestUpdated: recorded.latestUpdated,
       messageId: event.messageId,
-      recorded,
       sessionRef: sessionRef(userId),
     });
   };

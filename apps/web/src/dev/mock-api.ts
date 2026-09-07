@@ -2,12 +2,12 @@ import {
   AppError,
   workerCommandSchema,
   type Identity,
-  type LatestQuote,
   type TelegramSessionStatus,
   type WorkerCommand,
 } from "@zarbit/contracts";
 
 import type { ApiClient } from "../lib/api";
+import { createQuoteDashboard, getQuoteScenario } from "./quote-scenarios";
 
 const mockIdentity: Identity = {
   telegramUserId: "10000001",
@@ -34,10 +34,8 @@ function copySession(session: TelegramSessionStatus): TelegramSessionStatus {
 
 export function createMockApi(): ApiClient {
   let session = initialSession();
-  const latestQuote: LatestQuote = {
-    quote: 95_900_000,
-    announcedAt: new Date().toISOString(),
-  };
+  const scenario = getQuoteScenario(window.location.search);
+  const dashboard = createQuoteDashboard(scenario);
 
   const completeLogin = () => {
     session = initialSession();
@@ -45,7 +43,18 @@ export function createMockApi(): ApiClient {
 
   return {
     authenticate: async () => ({ ...mockIdentity }),
-    getLatestQuote: async () => ({ ...latestQuote }),
+    getLatestQuote: async () =>
+      dashboard.latest ? { ...dashboard.latest } : null,
+    getQuoteDashboard: async () => {
+      if (scenario === "loading")
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+      if (scenario === "error")
+        throw new AppError("MOCK_ERROR", "خطای آزمایشی دریافت مظنه.", 503);
+      return {
+        latest: dashboard.latest ? { ...dashboard.latest } : null,
+        points: dashboard.points.map((point) => ({ ...point })),
+      };
+    },
     getTelegramSession: async () => copySession(session),
     sessionCommand: async (command) => {
       const parsed = workerCommandSchema.safeParse(command);

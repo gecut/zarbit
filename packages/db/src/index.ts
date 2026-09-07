@@ -17,7 +17,10 @@ export function createPrismaClient(url = databaseUrl) {
     ),
   });
 }
-export function createStore(prisma: PrismaClient) {
+export function createStore(
+  prisma: PrismaClient,
+  now: () => Date = () => new Date(),
+) {
   const session = (userId: string) =>
     prisma.telegramSession.findUnique({ where: { userId } });
   return {
@@ -149,13 +152,33 @@ export function createStore(prisma: PrismaClient) {
       });
     },
     latestQuote: () => prisma.latestQuote.findUnique({ where: { id: 1 } }),
-    recordLatestQuote: async (input: {
+    quotesSince: (announcedAt: Date) =>
+      prisma.quoteHistory.findMany({
+        where: { announcedAt: { gte: announcedAt } },
+        orderBy: [{ announcedAt: "asc" }, { sourceMessageId: "asc" }],
+      }),
+    recordQuote: async (input: {
       compactQuote: number;
       announcedAt: Date;
       receivedAt: Date;
       sourceMessageId: number;
-    }) => {
-      const result = await prisma.$executeRaw`
+    }) =>
+      prisma.$transaction(async (tx) => {
+        const cutoff = new Date(now().getTime() - 7 * 24 * 60 * 60 * 1_000);
+        await tx.quoteHistory.deleteMany({
+          where: { announcedAt: { lt: cutoff } },
+        });
+        const shouldRetainHistory = input.announcedAt >= cutoff;
+        if (shouldRetainHistory) {
+          const history = await tx.quoteHistory.createMany({
+            data: input,
+            skipDuplicates: true,
+          });
+          if (!history.count)
+            return { historyRecorded: false, latestUpdated: false };
+        }
+
+        const result = await tx.$executeRaw`
         INSERT INTO "LatestQuote" ("id", "compactQuote", "announcedAt", "receivedAt", "sourceMessageId", "updatedAt")
         VALUES (1, ${input.compactQuote}, ${input.announcedAt}, ${input.receivedAt}, ${input.sourceMessageId}, CURRENT_TIMESTAMP)
         ON CONFLICT ("id") DO UPDATE
@@ -167,8 +190,11 @@ export function createStore(prisma: PrismaClient) {
         WHERE ("LatestQuote"."announcedAt", "LatestQuote"."sourceMessageId")
           < (EXCLUDED."announcedAt", EXCLUDED."sourceMessageId")
       `;
-      return result === 1;
-    },
+        return {
+          historyRecorded: shouldRetainHistory,
+          latestUpdated: result === 1,
+        };
+      }),
   };
 }
 export type Store = ReturnType<typeof createStore>;

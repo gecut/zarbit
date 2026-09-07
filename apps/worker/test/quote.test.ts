@@ -7,9 +7,9 @@ test("records only recognized quotes from the configured group publisher", async
   const events: Array<Record<string, unknown>> = [];
   const record = createQuoteRecorder(
     {
-      recordLatestQuote: async (input) => {
+      recordQuote: async (input) => {
         events.push(input);
-        return true;
+        return { historyRecorded: true, latestUpdated: true };
       },
     },
     { groupId: -1001, senderId: "55" },
@@ -37,4 +37,34 @@ test("records only recognized quotes from the configured group publisher", async
     (events[0]?.announcedAt as Date).toISOString(),
     "2026-09-07T08:00:00.000Z",
   );
+});
+
+test("does not record a malformed quote or a message from another source", async () => {
+  const events: Array<Record<string, unknown>> = [];
+  const record = createQuoteRecorder(
+    {
+      recordQuote: async (input) => {
+        events.push(input);
+        return { historyRecorded: true, latestUpdated: true };
+      },
+    },
+    { groupId: -1001, senderId: "55" },
+  );
+
+  await record("user-1", 1, {
+    chatId: -1002,
+    senderId: "55",
+    messageId: 10,
+    text: "مظنه: 95900",
+    date: new Date(),
+  });
+  await record("user-1", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 11,
+    text: "مظنه 95900",
+    date: new Date(),
+  });
+
+  assert.equal(events.length, 0);
 });

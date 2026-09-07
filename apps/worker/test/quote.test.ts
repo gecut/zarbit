@@ -19,7 +19,7 @@ test("records only recognized quotes from the configured group publisher", async
     chatId: -1001,
     senderId: "55",
     messageId: 9,
-    text: "مظنه: ۹۵,۹۰۰",
+    text: "مظنه: ۹۵۹۰۰",
     date: new Date("2026-09-07T08:00:00.000Z"),
   });
   await record("user-1", 1, {

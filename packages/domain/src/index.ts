@@ -13,16 +13,13 @@ export function compactQuoteToDisplayPrice(compactQuote: number): number {
   return displayPrice;
 }
 
-/** Accepts only a standalone compact quote, optionally with the known Persian label. */
+/** Accepts a labelled compact quote surrounded by formatting or emoji. */
 export function parseQuoteMessage(text: string): number | null {
   const normalized = text
     .trim()
     .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
     .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
-  const match =
-    /^(?:مظنه[ \t]*[:：-]?[ \t]*)?(\d{4,}|\d{1,3}(?:[,٬]\d{3})+)$/u.exec(
-      normalized,
-    );
+  const match = /(?:^|[^\p{L}])مظنه:[ \t]*(\d{4,})(?!\d)/u.exec(normalized);
 
   if (!match?.[1]) {
     return null;

@@ -7,6 +7,7 @@ export const env = createEnv({
   server: {
     DATABASE_URL: z.string().startsWith("postgresql://"),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     CORS_ORIGIN: z.url().default("http://localhost:3001"),
     NODE_ENV: z
       .enum(["development", "production", "test"])

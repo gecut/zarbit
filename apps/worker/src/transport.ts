@@ -42,7 +42,6 @@ export interface TelegramTransport {
   password(password: string, signal: AbortSignal): Promise<Account>;
   getMe(): Promise<Account>;
   membership(): Promise<boolean>;
-  sendReply(messageId: number, text: string): Promise<number>;
   subscribe(handler: (event: QuoteEvent) => void): () => void;
   logout(): Promise<void>;
   close(): Promise<void>;

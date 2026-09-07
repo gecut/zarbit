@@ -7,7 +7,7 @@ export const env = createEnv({
   server: {
     DATABASE_URL: z.string().startsWith("postgresql://"),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
-    WORKER_LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
     TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
     TELEGRAM_API_HASH: z.string().min(1).optional(),
     TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),

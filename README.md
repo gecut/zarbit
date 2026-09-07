@@ -1,6 +1,6 @@
 # Zarbit
 
-Private Persian/RTL Telegram Mini App for one-shot price alerts and buy/sell replies. Each allowlisted user connects their own Telegram account with phone → code → optional two-step password. QR is removed. The worker alone owns all MTProto sessions.
+Private Persian/RTL Telegram Mini App that shows the latest quote received from one fixed group and publisher. Each allowlisted user connects their own Telegram account with phone → code → optional two-step password. QR is removed. The worker alone owns all MTProto sessions.
 
 ## Development
 

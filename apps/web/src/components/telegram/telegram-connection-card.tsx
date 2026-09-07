@@ -45,8 +45,8 @@ export function TelegramConnectionCard({
               اتصال حساب تلگرام
             </h1>
             <p className="text-muted mt-[0.2rem] text-xs leading-7">
-              سفارش‌ها از حساب خودتان ارسال می‌شوند. کد و رمز دوم فقط برای ورود
-              استفاده می‌شوند و ذخیره نمی‌شوند.
+              این اتصال برای دریافت مظنه گروه استفاده می‌شود. کد و رمز دوم فقط
+              برای ورود استفاده می‌شوند و ذخیره نمی‌شوند.
             </p>
           </div>
         </header>
@@ -62,15 +62,17 @@ export function TelegramConnectionCard({
             <div className="bg-default mt-5 flex items-center justify-between gap-4 rounded-[var(--radius-2xl)] px-[0.9rem] py-[0.8rem]">
               <span>{states[session.state]}</span>
               <Chip
-                color={session.canManageRequests ? "success" : "warning"}
+                color={
+                  session.connection === "CONNECTED" ? "success" : "warning"
+                }
                 size="sm"
                 variant="soft"
               >
-                {session.canManageRequests
-                  ? "آماده اجرای درخواست"
+                {session.connection === "CONNECTED"
+                  ? "متصل و آماده دریافت مظنه"
                   : session.connection === "CONNECTING"
                     ? "در حال اتصال…"
-                    : "اجرای درخواست غیرفعال"}
+                    : "دریافت مظنه غیرفعال"}
               </Chip>
             </div>
             {session.connectedTelegramUserId ? (
@@ -105,7 +107,7 @@ export function TelegramConnectionCard({
                   بررسی دوباره عضویت
                 </Button>
                 <ConfirmAction
-                  description="درخواست‌های اجرا‌نشده لغو می‌شوند. سفارش در حال ارسال ممکن است قبلاً به گروه رسیده باشد."
+                  description="اتصال حساب تلگرام قطع می‌شود و دریافت مظنه از این حساب متوقف خواهد شد."
                   label="قطع اتصال"
                   onConfirm={() => onRun({ type: "revoke" })}
                   pending={isPending}

@@ -20,7 +20,6 @@ const onlineStatus: TelegramSessionStatus = {
   connection: "CONNECTED",
   connectedTelegramUserId: "123456",
   membershipCheckedAt: "2026-09-05T16:00:00.000Z",
-  canManageRequests: true,
   error: null,
   login: null,
 };
@@ -56,7 +55,6 @@ function commandWith(options?: {
 async function assertOffline(command: ReturnType<typeof createWorkerCommand>) {
   const status = await command("user-1", { type: "status" });
   assert.equal(status.connection, "OFFLINE");
-  assert.equal(status.canManageRequests, false);
   assert.equal(status.login, null);
   assert.equal(status.state, "ACTIVE");
 }

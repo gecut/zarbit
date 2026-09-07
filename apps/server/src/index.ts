@@ -6,7 +6,6 @@ import { startApplicationServer } from "./server-lifecycle";
 import { workerCommand } from "./telegram-session";
 
 export { createApp } from "./app";
-export { requestDto } from "./request-dto";
 
 export const app = createApp({
   store,

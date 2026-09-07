@@ -72,7 +72,7 @@ export function mtcuteFactory(config: {
   groupId: number;
 }): TransportFactory {
   return (storage, observe) => {
-    // Disable automatic RPC retries; ambiguous trade sends must never be replayed.
+    // Disable automatic RPC retries so Telegram operations stay explicitly controlled.
     const client = new TelegramClient({
       apiId: config.apiId,
       apiHash: config.apiHash,
@@ -159,9 +159,6 @@ export function mtcuteFactory(config: {
           }
           throw error;
         }
-      },
-      async sendReply(replyTo, text) {
-        return (await client.sendText(config.groupId, text, { replyTo })).id;
       },
       subscribe(handler) {
         dispatcher.onNewMessage((message) => {

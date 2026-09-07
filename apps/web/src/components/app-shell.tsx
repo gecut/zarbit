@@ -1,5 +1,3 @@
-import { ClipboardListIcon } from "@solar-icons/react/linear/clipboard-list";
-import { HistoryIcon } from "@solar-icons/react/linear/history";
 import { HomeIcon } from "@solar-icons/react/linear/home";
 import { SettingsMinimalisticIcon } from "@solar-icons/react/linear/settings-minimalistic";
 import { Link, Outlet } from "@tanstack/react-router";
@@ -9,8 +7,6 @@ import { PwaUpdate } from "./pwa-update";
 
 const navigationItems = [
   { label: "خانه", to: "/", Icon: HomeIcon },
-  { label: "فعال", to: "/requests/active", Icon: ClipboardListIcon },
-  { label: "سوابق", to: "/requests/history", Icon: HistoryIcon },
   { label: "تلگرام", to: "/telegram", Icon: SettingsMinimalisticIcon },
 ] as const;
 
@@ -35,7 +31,7 @@ export function AppShell() {
                 زربیت
               </span>
               <span className="text-muted mt-px block text-xs">
-                دستیار معامله شما
+                نمایش آخرین مظنه
               </span>
             </span>
           </Link>
@@ -58,7 +54,7 @@ export function AppShell() {
       </div>
 
       <nav
-        className="max-w-124 border-border bg-surface shadow-surface fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-4 rounded-2xl border p-1 backdrop-blur-[15px]"
+        className="max-w-124 border-border bg-surface shadow-surface fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-2 rounded-2xl border p-1 backdrop-blur-[15px]"
         aria-label="ناوبری اصلی"
       >
         {navigationItems.map(({ label, to, Icon }) => (

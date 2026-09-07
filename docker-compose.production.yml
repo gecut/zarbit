@@ -41,6 +41,7 @@ services:
     expose: ["3000"]
     environment:
       NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
@@ -75,7 +76,7 @@ services:
     environment:
       NODE_ENV: production
       RELEASE_ID: ${IMAGE_TAG:?Set an immutable IMAGE_TAG}
-      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_OPTIONS: --enable-source-maps
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}

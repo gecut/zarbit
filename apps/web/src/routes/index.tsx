@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Dashboard } from "../components/requests";
+import { LatestQuote } from "../components/latest-quote";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
 
 function HomeComponent() {
-  return <Dashboard />;
+  return <LatestQuote />;
 }

@@ -23,6 +23,7 @@
     "@zarbit/db": "workspace:*",
     "@zarbit/domain": "workspace:*",
     "@zarbit/env": "workspace:*",
+    "@zarbit/logger": "workspace:*",
     "dotenv": "catalog:",
     "grammy": "^1.42.0",
     "zod": "catalog:",

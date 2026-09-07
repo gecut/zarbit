@@ -9,7 +9,7 @@
 5. In Dokploy, use `docker-compose.production.yml`. Copy keys from `deploy/compose.env.example` into Environment and replace placeholders. Generate `WORKER_INTERNAL_TOKEN` with `openssl rand -hex 32`; keep it stable and secret.
 6. Set domains in Dokploy: Mini App → web:80, API → server:3000. Worker gets no public domain/port. Set `CORS_ORIGIN` and `WEB_APP_URL` to the Mini App HTTPS origin.
 
-Required runtime values include the bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin, launcher URL, `DATABASE_URL`, immutable `IMAGE_TAG`, and `WORKER_LOG_LEVEL=info`. `MIGRATION_DATABASE_URL` is for the migration job only. Remove legacy SQLite `DATABASE_URL=file:...` values and do not attach the old data volume.
+Required runtime values include the bot token, application API ID/hash, group ID, publisher ID, allowlist, internal token, CORS origin, launcher URL, `DATABASE_URL`, immutable `IMAGE_TAG`, and `LOG_LEVEL=info`. `MIGRATION_DATABASE_URL` is for the migration job only. Remove legacy SQLite `DATABASE_URL=file:...` values and do not attach the old data volume.
 
 ## SQLite to PostgreSQL cutover
 
@@ -29,7 +29,7 @@ The migration job is mandatory on future releases too. It never reads legacy SQL
 
 - Web healthcheck passes; refresh the Mini App or accept its update prompt.
 - Server root healthcheck and worker private `/health` both query PostgreSQL. A successful process healthcheck does not prove every Telegram account is connected.
-- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Worker logs include MTProto connection state/DC, operation duration, retry context, and a redacted native error cause chain. `WORKER_LOG_LEVEL=info` records lifecycle transitions; use `debug` temporarily for high-frequency quote and health events. Credentials, Telegram secrets, numbers, OTPs, passwords, request bodies, and message text are redacted or never emitted.
+- Container logs use Docker's `local` driver, capped at five 10 MB files per service. Server and worker emit structured Pino JSON with MTProto connection state/DC, operation duration, retry context, and a redacted native error cause chain. `LOG_LEVEL=info` records lifecycle transitions; use `debug` temporarily for high-frequency quote and health events. Credentials, Telegram secrets, numbers, OTPs, passwords, request bodies, and message text are redacted or never emitted.
 - Runtime server and worker use UID 1000. Only the migration maintenance job runs as root to initialize the **new session volume**. The server must not mount that volume or receive Telegram API ID/hash.
 - Provider monitoring shows connections below the configured caps, healthy backups/PITR, normal latency, and no sustained lock contention.
 
@@ -37,7 +37,7 @@ GitHub Actions runs the PostgreSQL baseline, migration status, integration tests
 
 ## Owner's Telegram check
 
-Begin with a controlled group and no financially consequential requests. Open from the allowlisted account, enter its own number, verify code and optional 2FA, then check membership. Verify actual quote reply account/message/price, loss of membership, revoked session and disconnect. Confirm a second account cannot see or execute the first account's requests. Restart the worker and confirm recovery of ready state and unfinished claim safety.
+Begin with a controlled group. Open from the allowlisted account, enter its own number, verify code and optional 2FA, then check membership. Send a valid quote from the configured publisher and verify its compact value is displayed multiplied by 1,000 with the Telegram message timestamp. Check loss of membership, revoked session and disconnect. Restart the worker and confirm the last quote remains available and ready session recovery still works.
 
 Telegram decides code delivery; an unsupported delivery flow produces an error instead of QR fallback. Start the bot once so notifications can be delivered. Never send OTP or 2FA to the bot or in a bug report.
 
@@ -46,11 +46,11 @@ Telegram decides code delivery; an unsupported delivery flow produces an error i
 - Missing config: worker logs missing **key names**. Check explicit Dokploy values and recreate/restart; changing `.env` does not update a running container.
 - Database health fails: verify database URL, network, password, provider status, and connection limit. Inspect sanitized pool counters and provider metrics; do not increase the pool cap blindly.
 - Migration fails: stop runtime services, correct database state, then rerun `migrate`. Do not use `db push` to bypass migration history.
-- Worker unavailable: history and unclaimed cancellation still work; create/edit is blocked. Check private token/URL, database health, network, and worker logs.
+- Worker unavailable: the stored quote remains readable, but no newer quote can be collected. Check private token/URL, database health, network, and worker logs.
 - OTP/2FA diagnosis: `telegram.login.failed` with `failureCategory: telegram_rpc` and `sourceCode: SESSION_PASSWORD_NEEDED` is expected for accounts with two-step verification. The matching `telegram.login.password_required` event must follow, and the client receives `login.step: PASSWORD` with HTTP 200. It is not a network outage. `ECONN*`, `ETIMEDOUT`, and `EAI_AGAIN` are `network`; Prisma errors are `database`; `telegram.connection.dc_selected` is normal MTProto DC selection, not a failure.
-- NOT_IN_GROUP: join the configured group manually, then press membership recheck. Old cancelled orders stay cancelled.
+- NOT_IN_GROUP: join the configured group manually, then press membership recheck.
 - REVOKING: do not delete an open file. Wait for worker logout; if Telegram is unreachable, check network and session status. The user can also revoke Zarbit from Telegram Devices.
-- Unknown send result: inspect the triggering group message before creating another request. Never clear claim tokens or bulk-reactivate FAILED requests.
+- Missing quote: verify the group and publisher IDs, then inspect the worker's redacted `telegram.quote.ignored` and `telegram.quote.recorded` events.
 - Rollback before new PostgreSQL activity: stop the new services, restore the old image tag, reattach the two matching legacy volumes, and restore the old Compose environment. Do not run old code against PostgreSQL. After new PostgreSQL activity, rollback requires an explicit data decision; do not discard new activity or overwrite it with SQLite snapshots by default.
 
 For a bug report include the deployed image tag, endpoint/status, time, displayed session state and sanitized error event. Exclude initData, phone number, code, password, API hash, bot/internal token, database URLs, and session files.

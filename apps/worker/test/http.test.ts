@@ -84,7 +84,6 @@ test("worker returns the PASSWORD login state as a successful code command", asy
       connection: "CONNECTED",
       connectedTelegramUserId: null,
       membershipCheckedAt: null,
-      canManageRequests: false,
       error: null,
       login: {
         id: "6d94e5f1-3b0e-4c3c-a793-7182504684f2",

@@ -5,6 +5,7 @@ import type { Hono } from "hono";
 
 import type { AppEnv } from "./app-types";
 import { createTelegramBot } from "./telegram";
+import { serverLog } from "./logger";
 
 export function startApplicationServer(app: Hono<AppEnv>) {
   if (!env.TELEGRAM_BOT_TOKEN)
@@ -12,15 +13,24 @@ export function startApplicationServer(app: Hono<AppEnv>) {
 
   const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
 
-  void bot.start().catch(() => console.error("telegram.bot.failed"));
+  void bot
+    .start()
+    .catch((error) =>
+      serverLog.error(
+        { event: "telegram.bot.failed", err: error },
+        "telegram.bot.failed",
+      ),
+    );
 
   const server = serve({ fetch: app.fetch, port: 3000 });
+  serverLog.info({ event: "server.ready", port: 3000 }, "server.ready");
   let stopping = false;
 
   const stop = async () => {
     if (stopping) return;
 
     stopping = true;
+    serverLog.info({ event: "server.stopping" }, "server.stopping");
 
     if (bot.isRunning()) await bot.stop();
 

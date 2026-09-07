@@ -2,15 +2,16 @@
 
 ## Boundaries
 
-| Component          | Responsibility                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------- |
-| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI                                   |
-| apps/server        | Hono API, Mini App identity/allowlist, request CRUD, bot launcher, worker proxy             |
-| apps/worker        | All MTProto clients, OTP, membership, session files, quote execution, Bot API notifications |
-| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                       |
-| packages/domain    | Integer price conversion, quote parser and Telegram message builders                        |
-| packages/db        | Prisma/PostgreSQL, atomic request/session operations                                        |
-| packages/env       | Service-specific environment contracts and independent database configuration               |
+| Component          | Responsibility                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI                           |
+| apps/server        | Hono API, Mini App identity/allowlist, latest-quote API, bot launcher, worker proxy |
+| apps/worker        | All MTProto clients, OTP, membership, session files and quote ingestion             |
+| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                               |
+| packages/domain    | Integer quote conversion and quote parser                                           |
+| packages/db        | Prisma/PostgreSQL, latest quote and session operations                              |
+| packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references               |
+| packages/env       | Service-specific environment contracts and independent database configuration       |
 
 There is no MTProto client or session volume on the server. Server, worker, and migration job use one PostgreSQL user. The worker alone owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership and locking maintenance.
 
@@ -32,15 +33,13 @@ One runtime client and one serialized operation stream per user. Runtime reserva
 
 A local SQLite OS lock on `.worker-owner.sqlite` prevents another current-version worker opening the same session volume. It is released on shutdown/crash; this assumes a local volume with reliable file locking, not a network filesystem. State revision and conditional activation prevent a late operation reactivating a revoked/replaced session. File names are random 64-hex values, directory mode 0700, files 0600, runtime UID 1000. Clients close before files are removed. Network failures keep authorization; revoked authorization is removed.
 
-## Requests and PostgreSQL
+## Latest quote and PostgreSQL
 
-Only short database transactions; no Telegram calls inside them. Atomic claims check owner, ACTIVE/unclaimed state, current price condition, quote date, and ready session revision. Concurrent edits/cancellations cannot modify a claimed request. The request list uses `(userId, status, createdAt DESC, id DESC)`; active candidates use separate `LTE` and `GTE` partial indexes.
-
-PostgreSQL and Telegram cannot jointly guarantee exactly-once delivery. After a crash, unfinished claims become FAILED with an explicit unknown-result warning and are never retried automatically. A successful trade followed by bot failure remains successful.
+Each valid quote event is persisted as one global singleton. A conditional upsert prevents an older Telegram message from replacing a newer quote; duplicate observations are idempotent. Database writes remain short and contain no Telegram calls.
 
 ## Web state
 
-Private queries are gated by Mini App authentication and scoped by Telegram user ID. Session polling is one second during enrollment/disconnect, otherwise ten seconds while visible; request polling is ten seconds while visible. Focus refreshes state. Mutations do not retry automatically. OTP mutation data is cleared after each response, never persisted.
+Private queries are gated by Mini App authentication. Session polling is one second during enrollment/disconnect, otherwise ten seconds while visible; latest-quote polling is fifteen seconds while visible. Focus refreshes state. Mutations do not retry automatically. OTP mutation data is cleared after each response, never persisted.
 
 API/login responses use no-store. `VITE_SERVER_URL` is a required build-time URL; production rejects HTTP and loopback. Nginx serves hashed assets immutably, but revalidates index.html and sw.js. PWA updates require explicit user action.
 

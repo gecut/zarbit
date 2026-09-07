@@ -28,7 +28,7 @@ export function useSessionCommand() {
     },
     onSettled: () => {
       void client.invalidateQueries({ queryKey: ["telegram-session"] });
-      void client.invalidateQueries({ queryKey: ["requests"] });
+      void client.invalidateQueries({ queryKey: ["latest-quote"] });
     },
   });
 }

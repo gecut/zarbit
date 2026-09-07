@@ -2,35 +2,18 @@ import { env } from "@zarbit/env/web";
 import {
   AppError,
   type Identity,
-  type RequestPayload,
-  type RequestPage,
-  type RequestStatus,
+  type LatestQuote,
   type TelegramSessionStatus,
   type WorkerCommand,
-  type ZarbitRequest,
 } from "@zarbit/contracts";
 
 import { telegramInitData } from "./telegram";
 
-export type {
-  RequestAction,
-  RequestCondition,
-  RequestPayload,
-  RequestStatus,
-  TelegramSessionState,
-  ZarbitRequest,
-} from "@zarbit/contracts";
+export type { LatestQuote, TelegramSessionState } from "@zarbit/contracts";
 
 export interface ApiClient {
   authenticate(): Promise<Identity>;
-  getRequests(
-    status?: RequestStatus | "HISTORY",
-    page?: number,
-  ): Promise<RequestPage>;
-  getRequest(id: string): Promise<ZarbitRequest>;
-  createRequest(payload: RequestPayload): Promise<ZarbitRequest>;
-  updateRequest(id: string, payload: RequestPayload): Promise<ZarbitRequest>;
-  cancelRequest(id: string): Promise<{ cancelled: boolean }>;
+  getLatestQuote(): Promise<LatestQuote | null>;
   getTelegramSession(): Promise<TelegramSessionStatus>;
   sessionCommand(
     command: Exclude<WorkerCommand, { type: "status" }>,
@@ -88,25 +71,7 @@ export function createServerApi(): ApiClient {
         method: "POST",
         body: JSON.stringify({ initData: telegramInitData() }),
       }),
-    getRequests: (status, page = 1) =>
-      request<RequestPage>(
-        `/api/requests?page=${page}${status ? `&status=${status}` : ""}`,
-      ),
-    getRequest: (id) => request<ZarbitRequest>(`/api/requests/${id}`),
-    createRequest: (payload) =>
-      request<ZarbitRequest>("/api/requests", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    updateRequest: (id, payload) =>
-      request<ZarbitRequest>(`/api/requests/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      }),
-    cancelRequest: (id) =>
-      request<{ cancelled: boolean }>(`/api/requests/${id}`, {
-        method: "DELETE",
-      }),
+    getLatestQuote: () => request<LatestQuote | null>("/api/quote/latest"),
     getTelegramSession: () =>
       request<TelegramSessionStatus>("/api/telegram-session/status"),
     sessionCommand: (command) => {

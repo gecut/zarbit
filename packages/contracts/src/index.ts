@@ -26,55 +26,13 @@ export const codeSchema = z
 export const passwordSchema = z
   .object({ password: z.string().min(1).max(1024) })
   .strict();
-export const requestInputSchema = z
+export const latestQuoteSchema = z
   .object({
-    condition: z.enum(["LTE", "GTE"]),
-    targetPrice: z
-      .number()
-      .int()
-      .positive()
-      .max(2_147_483_647_000)
-      .refine((n) => n % 1000 === 0, "قیمت باید مضربی از ۱٬۰۰۰ ریال باشد."),
-    action: z.enum(["ALERT", "BUY", "SELL"]),
-    units: z.number().int().positive().max(2_147_483_647).nullable(),
+    quote: z.number().int().positive(),
+    announcedAt: z.string().datetime(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (value.action !== "ALERT" && value.units === null)
-      ctx.addIssue({
-        code: "custom",
-        message: "تعداد واحد برای خرید و فروش الزامی است.",
-        path: ["units"],
-      });
-    if (value.action === "ALERT" && value.units !== null)
-      ctx.addIssue({
-        code: "custom",
-        message: "درخواست هشدار تعداد واحد ندارد.",
-        path: ["units"],
-      });
-  });
-export type RequestPayload = z.infer<typeof requestInputSchema>;
-export type RequestAction = RequestPayload["action"];
-export type RequestCondition = RequestPayload["condition"];
-export type RequestStatus = "ACTIVE" | "DONE" | "CANCELLED" | "FAILED";
-export interface ZarbitRequest extends RequestPayload {
-  id: string;
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-  triggeredQuote: number | null;
-  completedAt: string | null;
-  failureReason: string | null;
-  cancellationReason: string | null;
-  isExecuting: boolean;
-}
-export interface RequestPage {
-  items: ZarbitRequest[];
-  total: number;
-  page: number;
-  pageSize: number;
-  activeCount: number;
-}
+  .strict();
+export type LatestQuote = z.infer<typeof latestQuoteSchema>;
 export const telegramSessionStateSchema = z.enum([
   "DISCONNECTED",
   "PENDING_OTP",
@@ -101,7 +59,6 @@ export const telegramSessionStatusSchema = z.object({
   connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE"]),
   connectedTelegramUserId: z.string().nullable(),
   membershipCheckedAt: z.string().nullable(),
-  canManageRequests: z.boolean(),
   error: z.string().nullable(),
   login: loginStatusSchema.nullable(),
 });

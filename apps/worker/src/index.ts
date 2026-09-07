@@ -11,7 +11,7 @@ import { Sessions } from "./sessions";
 import { SessionFiles } from "./session-files";
 import { mtcuteFactory } from "./mtcute";
 import { createWorkerApp } from "./http";
-import { createExecutor } from "./execution";
+import { createQuoteRecorder } from "./quote";
 import { acquireWorkerOwnership } from "./ownership";
 import { workerLog } from "./logger";
 
@@ -32,7 +32,7 @@ export async function startWorker() {
     );
   workerLog.info("worker.starting", {
     allowlistSize: allowedTelegramUserIds.size,
-    logLevel: env.WORKER_LOG_LEVEL,
+    logLevel: env.LOG_LEVEL,
     maxTelegramSessions: env.MAX_TELEGRAM_SESSIONS,
   });
   process.umask(0o077);
@@ -72,10 +72,9 @@ export async function startWorker() {
   workerLog.info("telegram.sessions.initialized", {
     durationMs: Date.now() - initializeStartedAt,
   });
-  sessions.onQuote = createExecutor(store, sessions, {
+  sessions.onQuote = createQuoteRecorder(store, {
     groupId: env.TELEGRAM_GROUP_ID!,
     senderId: env.QUOTE_SENDER_ID!,
-    notify,
   });
   const server = serve({
     fetch: createWorkerApp(

@@ -94,7 +94,6 @@ function baseTransport(
     password: async () => ({ id: telegramUserId }),
     getMe: async () => ({ id: telegramUserId }),
     membership: async () => true,
-    sendReply: async () => 1,
     subscribe: () => () => undefined,
     logout: async () => undefined,
     close: async () => undefined,
@@ -197,7 +196,6 @@ test("completes the existing challenge after a valid two-step password", async (
   assert.equal(completed.login, null);
   assert.equal(completed.state, "ACTIVE");
   assert.equal(completed.connection, "CONNECTED");
-  assert.equal(completed.canManageRequests, true);
 });
 
 test("discards a challenge after five invalid codes", async (t) => {
@@ -366,7 +364,6 @@ test("preserves the authorized session but disables execution for non-members", 
   assert.equal(completed.login, null);
   assert.equal(completed.state, "NOT_IN_GROUP");
   assert.equal(completed.connection, "OFFLINE");
-  assert.equal(completed.canManageRequests, false);
 });
 
 test("discards unsupported Telegram delivery without exposing delivery data", async (t) => {

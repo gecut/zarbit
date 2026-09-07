@@ -9,24 +9,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum RequestCondition {
-  LTE
-  GTE
-}
-
-enum RequestAction {
-  ALERT
-  BUY
-  SELL
-}
-
-enum RequestStatus {
-  ACTIVE
-  DONE
-  CANCELLED
-  FAILED
-}
-
 enum TelegramSessionState {
   PENDING_OTP
   ACTIVE
@@ -43,7 +25,6 @@ model TelegramUser {
   username       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-  requests       Request[]
   telegramSession TelegramSession?
 }
 
@@ -66,32 +47,18 @@ model TelegramSession {
   @@index([state, updatedAt])
 }
 
-model Request {
-  id                 String           @id @default(cuid())
-  userId             String
-  condition          RequestCondition
-  targetPrice        Int
-  action             RequestAction
-  units              Int?
-  status             RequestStatus    @default(ACTIVE)
-  claimToken         String?          @unique
-  claimedAt          DateTime?
-  triggeredQuote     Int?
-  triggeredMessageId Int?
-  outgoingMessageId  Int?
-  completedAt        DateTime?
-  failureReason      String?
-  cancellationReason String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  user               TelegramUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, status, createdAt(sort: Desc), id(sort: Desc)])
-}
-
 model LoginRateLimit {
   key             String   @id
   windowStartedAt DateTime
   count           Int      @default(0)
   blockedUntil    DateTime?
+}
+
+model LatestQuote {
+  id              Int      @id @default(1)
+  compactQuote    Int
+  announcedAt     DateTime
+  receivedAt      DateTime
+  sourceMessageId Int
+  updatedAt       DateTime @updatedAt
 }

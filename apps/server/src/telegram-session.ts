@@ -6,6 +6,7 @@ import {
 } from "@zarbit/contracts";
 import { env } from "@zarbit/env/server";
 import { store } from "@zarbit/db";
+import { serverLog } from "./logger";
 
 type WorkerFailure =
   | "unconfigured"
@@ -111,7 +112,6 @@ async function offlineStatus(
       connection: "OFFLINE",
       connectedTelegramUserId: session?.connectedTelegramUserId ?? null,
       membershipCheckedAt: session?.membershipCheckedAt?.toISOString() ?? null,
-      canManageRequests: false,
       login: null,
       error: offlineMessage,
     };
@@ -220,7 +220,7 @@ export function createWorkerCommand(dependencies: WorkerCommandDependencies) {
 
 export const workerCommand = createWorkerCommand({
   fetch,
-  log: console.error,
+  log: (event, details) => serverLog.error({ event, ...details }, event),
   store: { session: async (userId) => store.session(userId) },
   workerInternalToken: env.WORKER_INTERNAL_TOKEN,
   workerInternalUrl: env.WORKER_INTERNAL_URL,

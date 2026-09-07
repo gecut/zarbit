@@ -1,5 +1,5 @@
 {
-  "name": "@zarbit/domain",
+  "name": "@zarbit/logger",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,11 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "lint": "eslint src",
+    "lint": "eslint src test",
     "format": "prettier --ignore-path ../../.prettierignore --write .",
     "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "check-types": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "pino": "^10.3.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",

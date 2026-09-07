@@ -1,20 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
-import { humanPriceToCompactQuote } from "@zarbit/domain";
 import { Pool } from "pg";
-import {
-  AppError,
-  type Identity,
-  type RequestPayload,
-  type RequestStatus as PublicRequestStatus,
-} from "@zarbit/contracts";
-import {
-  PrismaClient,
-  Prisma,
-  RequestStatus,
-  TelegramSessionState,
-} from "../prisma/generated/client";
+import { AppError, type Identity } from "@zarbit/contracts";
+import { PrismaClient, Prisma } from "../prisma/generated/client";
 
 export const databasePoolOptions = {
   max: databasePoolMax,
@@ -29,37 +17,9 @@ export function createPrismaClient(url = databaseUrl) {
     ),
   });
 }
-export const READY_TTL_MS = 30_000;
-export const MEMBERSHIP_TTL_MS = 60_000;
-export function readyWhere(now = new Date()): Prisma.TelegramSessionWhereInput {
-  return {
-    state: "ACTIVE",
-    runtimeReady: true,
-    runtimeCheckedAt: { gte: new Date(now.getTime() - READY_TTL_MS) },
-    membershipCheckedAt: { gte: new Date(now.getTime() - MEMBERSHIP_TTL_MS) },
-  };
-}
-export const uncertainMessage =
-  "نتیجه ارسال قبلی مشخص نیست؛ پیش از ثبت مجدد درخواست، پیام‌های گروه را بررسی کنید.";
-const compactInput = (input: RequestPayload) => ({
-  ...input,
-  targetPrice: humanPriceToCompactQuote(input.targetPrice),
-});
-
 export function createStore(prisma: PrismaClient) {
   const session = (userId: string) =>
     prisma.telegramSession.findUnique({ where: { userId } });
-  const requireReady = async (tx: Prisma.TransactionClient, userId: string) => {
-    if (
-      !(await tx.telegramSession.findFirst({
-        where: { userId, ...readyWhere() },
-      }))
-    )
-      throw new AppError(
-        "SESSION_NOT_READY",
-        "اتصال تلگرام و عضویت گروه باید آماده باشد.",
-      );
-  };
   return {
     db: prisma,
     user: (identity: Identity) =>
@@ -155,17 +115,13 @@ export function createStore(prisma: PrismaClient) {
       error: string,
       revision?: number,
     ) =>
-      prisma.$transaction(async (tx) => {
-        const changed = await tx.telegramSession.updateMany({
+      prisma.telegramSession
+        .updateMany({
           where: {
             userId,
             ...(revision === undefined ? {} : { revision }),
             ...(state === "NOT_IN_GROUP"
-              ? {
-                  state: {
-                    notIn: ["REVOKING", "REVOKED"] as TelegramSessionState[],
-                  },
-                }
+              ? { state: { notIn: ["REVOKING", "REVOKED"] } }
               : {}),
           },
           data: {
@@ -174,18 +130,8 @@ export function createStore(prisma: PrismaClient) {
             lastError: error,
             stateChangedAt: new Date(),
           },
-        });
-        if (changed.count)
-          await tx.request.updateMany({
-            where: { userId, status: "ACTIVE", claimToken: null },
-            data: {
-              status: "CANCELLED",
-              cancellationReason: error,
-              completedAt: new Date(),
-            },
-          });
-        return changed.count === 1;
-      }),
+        })
+        .then((changed) => changed.count === 1),
     recover: async () => {
       await prisma.telegramSession.updateMany({
         data: { runtimeReady: false, runtimeCheckedAt: null },
@@ -201,133 +147,32 @@ export function createStore(prisma: PrismaClient) {
           lastError: "ورود نیمه‌تمام منقضی شد؛ دوباره وارد شوید.",
         },
       });
-      await prisma.request.updateMany({
-        where: { status: "ACTIVE", claimToken: { not: null } },
-        data: {
-          status: "FAILED",
-          failureReason: uncertainMessage,
-          completedAt: new Date(),
-        },
-      });
     },
-    request: (userId: string, id: string) =>
-      prisma.request.findFirst({ where: { id, userId } }),
-    list: async (
-      userId: string,
-      status: PublicRequestStatus | "HISTORY" | undefined,
-      page = 1,
-    ) => {
-      const where: Prisma.RequestWhereInput = {
-        userId,
-        ...(status === "HISTORY"
-          ? { status: { not: "ACTIVE" } }
-          : status
-            ? { status }
-            : {}),
-      };
-      const [items, total, activeCount] = await prisma.$transaction([
-        prisma.request.findMany({
-          where,
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          skip: (page - 1) * 20,
-          take: 20,
-        }),
-        prisma.request.count({ where }),
-        prisma.request.count({ where: { userId, status: "ACTIVE" } }),
-      ]);
-      return { items, total, activeCount, page, pageSize: 20 };
-    },
-    create: (userId: string, input: RequestPayload) =>
-      prisma.$transaction(async (tx) => {
-        await requireReady(tx, userId);
-        return tx.request.create({ data: { userId, ...compactInput(input) } });
-      }),
-    edit: (userId: string, id: string, input: RequestPayload) =>
-      prisma.$transaction(async (tx) => {
-        await requireReady(tx, userId);
-        const update = await tx.request.updateMany({
-          where: { id, userId, status: "ACTIVE", claimToken: null },
-          data: compactInput(input),
-        });
-        return update.count ? tx.request.findUnique({ where: { id } }) : null;
-      }),
-    cancel: async (userId: string, id: string) => {
-      const result = await prisma.request.updateMany({
-        where: { id, userId, status: "ACTIVE", claimToken: null },
-        data: { status: "CANCELLED", completedAt: new Date() },
-      });
-      return result.count === 1;
-    },
-    candidates: (userId: string, quote: number, quoteAt: Date) =>
-      prisma.request.findMany({
-        where: {
-          userId,
-          createdAt: { lte: quoteAt },
-          status: "ACTIVE",
-          claimToken: null,
-          OR: [
-            { condition: "LTE", targetPrice: { gte: quote } },
-            { condition: "GTE", targetPrice: { lte: quote } },
-          ],
-        },
-        select: { id: true },
-      }),
-    claim: async (
-      userId: string,
-      id: string,
-      quote: number,
-      quoteAt: Date,
-      revision: number,
-    ) => {
-      const token = randomUUID();
-      const changed = await prisma.request.updateMany({
-        where: {
-          id,
-          userId,
-          createdAt: { lte: quoteAt },
-          status: "ACTIVE",
-          claimToken: null,
-          user: { telegramSession: { is: { ...readyWhere(), revision } } },
-          OR: [
-            { condition: "LTE", targetPrice: { gte: quote } },
-            { condition: "GTE", targetPrice: { lte: quote } },
-          ],
-        },
-        data: { claimToken: token, claimedAt: new Date() },
-      });
-      return changed.count
-        ? prisma.request.findUnique({
-            where: { claimToken: token },
-            include: { user: true },
-          })
-        : null;
-    },
-    finish: async (
-      id: string,
-      token: string,
-      quote: number,
-      messageId: number,
-      result: { outgoingMessageId?: number; error?: string },
-    ) => {
-      const changed = await prisma.request.updateMany({
-        where: { id, claimToken: token, status: "ACTIVE" },
-        data: {
-          status: result.error ? "FAILED" : "DONE",
-          failureReason: result.error ?? null,
-          triggeredQuote: quote,
-          triggeredMessageId: messageId,
-          outgoingMessageId: result.outgoingMessageId ?? null,
-          completedAt: new Date(),
-        },
-      });
-      if (changed.count !== 1)
-        throw new AppError("CLAIM_LOST", uncertainMessage);
+    latestQuote: () => prisma.latestQuote.findUnique({ where: { id: 1 } }),
+    recordLatestQuote: async (input: {
+      compactQuote: number;
+      announcedAt: Date;
+      receivedAt: Date;
+      sourceMessageId: number;
+    }) => {
+      const result = await prisma.$executeRaw`
+        INSERT INTO "LatestQuote" ("id", "compactQuote", "announcedAt", "receivedAt", "sourceMessageId", "updatedAt")
+        VALUES (1, ${input.compactQuote}, ${input.announcedAt}, ${input.receivedAt}, ${input.sourceMessageId}, CURRENT_TIMESTAMP)
+        ON CONFLICT ("id") DO UPDATE
+        SET "compactQuote" = EXCLUDED."compactQuote",
+            "announcedAt" = EXCLUDED."announcedAt",
+            "receivedAt" = EXCLUDED."receivedAt",
+            "sourceMessageId" = EXCLUDED."sourceMessageId",
+            "updatedAt" = CURRENT_TIMESTAMP
+        WHERE ("LatestQuote"."announcedAt", "LatestQuote"."sourceMessageId")
+          < (EXCLUDED."announcedAt", EXCLUDED."sourceMessageId")
+      `;
+      return result === 1;
     },
   };
 }
 export type Store = ReturnType<typeof createStore>;
 export type SessionRecord = NonNullable<Awaited<ReturnType<Store["session"]>>>;
-export { RequestStatus, TelegramSessionState };
 const databasePool = new Pool({
   connectionString: databaseUrl,
   ...databasePoolOptions,

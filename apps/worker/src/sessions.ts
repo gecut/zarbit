@@ -362,24 +362,11 @@ export class Sessions {
     const record = await this.store.session(userId);
     const rt = this.runtimes.get(userId);
     const challenge = this.challenges.get(userId);
-    const fresh =
-      record?.runtimeCheckedAt &&
-      this.now() - record.runtimeCheckedAt.getTime() < 30_000;
-    const memberFresh =
-      record?.membershipCheckedAt &&
-      this.now() - record.membershipCheckedAt.getTime() < 60_000;
     return {
       state: record?.state ?? "DISCONNECTED",
       connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : "OFFLINE",
       connectedTelegramUserId: record?.connectedTelegramUserId ?? null,
       membershipCheckedAt: record?.membershipCheckedAt?.toISOString() ?? null,
-      canManageRequests: Boolean(
-        rt?.online &&
-        record?.state === "ACTIVE" &&
-        record.runtimeReady &&
-        fresh &&
-        memberFresh,
-      ),
       error: record?.lastError ?? null,
       login:
         challenge && challenge.expires > this.now() ? challenge.public : null,
@@ -619,35 +606,6 @@ export class Sessions {
         sessionRef: sessionRef(rt.userId),
       });
     }
-  }
-  async checkForExecution(userId: string, revision: number): Promise<boolean> {
-    const rt = this.runtimes.get(userId);
-    const record = await this.store.session(userId);
-    if (
-      !rt?.online ||
-      !record ||
-      record.state !== "ACTIVE" ||
-      rt.revision !== revision
-    )
-      return false;
-    try {
-      await this.authorize(userId);
-      return await this.setMembership(
-        rt,
-        await this.io(rt, "membership", () => rt.client.membership()),
-      );
-    } catch (error) {
-      await this.runtimeFailure(rt, error);
-      return false;
-    }
-  }
-  async sendReply(userId: string, messageId: number, text: string) {
-    const rt = this.runtimes.get(userId);
-    if (!rt?.online)
-      throw new AppError("SESSION_NOT_READY", "اتصال آماده نیست.");
-    return this.io(rt, "send_reply", () =>
-      rt.client.sendReply(messageId, text),
-    );
   }
   async command(
     userId: string,

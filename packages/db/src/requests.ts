@@ -205,7 +205,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         data: { ...result, completedAt: now() },
       }),
     recoverRequests: () =>
-      db.request.updateMany({
+      db.request.updateManyAndReturn({
         where: { status: "ACTIVE", claimToken: { not: null } },
         data: {
           status: "UNKNOWN",

@@ -81,7 +81,7 @@ export function registerTelegramSessionRoutes(
     await deps.store.disableSession(
       userId,
       "REVOKING",
-      "قطع اتصال درخواست شده؛ درخواست‌های اجرا‌نشده لغو شدند.",
+      "قطع اتصال درخواست شده؛ وضعیت درخواست‌های خود را بررسی کنید.",
     );
 
     return c.json({ data: await deps.command(userId, { type: "revoke" }) });

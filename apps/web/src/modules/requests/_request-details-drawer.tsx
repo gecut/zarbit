@@ -19,32 +19,35 @@ import {
 
 export function RequestDetailsDrawer({
   request: initialRequest,
+  requestId,
   onClose,
   onRefresh,
 }: {
   request: RequestDetail | null;
+  requestId?: string;
   onClose: () => void;
   onRefresh: () => Promise<void>;
 }) {
   const api = useApi(useIdentity().telegramUserId);
   const { cancel, forceSend } = useRequestActions();
+  const selectedId = requestId ?? initialRequest?.id;
   const detail = useQuery(
     api.requests.detail.queryOptions({
-      input: initialRequest ? { id: initialRequest.id } : skipToken,
+      input: selectedId ? { id: selectedId } : skipToken,
       initialData: initialRequest ?? undefined,
       initialDataUpdatedAt: 0,
       refetchInterval: (query) =>
         query.state.data?.status === "ACTIVE" ? 3000 : false,
     }),
   );
-  const request = detail.data ?? initialRequest;
+  const request = detail.isError ? null : detail.data ?? initialRequest;
   const [pending, setPending] = useState<"send" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setError(null);
     setPending(null);
-  }, [request?.id]);
+  }, [selectedId]);
 
   const runAction = async (action: "send" | "cancel") => {
     if (!request) return;
@@ -67,7 +70,7 @@ export function RequestDetailsDrawer({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      open={request !== null}
+      open={!!selectedId}
       icon={<DocumentTextIcon size={22} />}
       title="جزئیات درخواست"
       description={
@@ -96,7 +99,7 @@ export function RequestDetailsDrawer({
               لغو درخواست
             </Button>
           </div>
-        ) : request ? (
+        ) : selectedId ? (
           <Button
             data-base-ui-swipe-ignore
             fullWidth
@@ -108,6 +111,13 @@ export function RequestDetailsDrawer({
         ) : null
       }
     >
+      {selectedId && detail.isPending ? <p role="status">در حال دریافت جزئیات درخواست…</p> : null}
+      {selectedId && detail.isError ? (
+        <div role="alert">
+          <p>جزئیات درخواست در دسترس نیست؛ ممکن است حذف شده باشد یا به آن دسترسی نداشته باشید.</p>
+          <Button variant="secondary" onPress={() => void detail.refetch()}>تلاش دوباره</Button>
+        </div>
+      ) : null}
       {request ? (
         <>
           <dl className="grid gap-3 text-sm">

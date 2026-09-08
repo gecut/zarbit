@@ -30,7 +30,8 @@
     "zod": "catalog:",
     "@orpc/server": "1.15.0",
     "@orpc/openapi": "1.15.0",
-    "@orpc/zod": "1.15.0"
+    "@orpc/zod": "1.15.0",
+    "@zarbit/messages": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

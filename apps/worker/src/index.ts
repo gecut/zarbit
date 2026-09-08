@@ -8,6 +8,8 @@ import {
 } from "@zarbit/db";
 import { env, allowedTelegramUserIds } from "@zarbit/env/worker";
 import { Bot } from "grammy";
+import { formatSessionMessage } from "@zarbit/messages";
+import { createPrivateNotifier, notifyRecoveredRequests } from "./notifications";
 import { Sessions } from "./sessions";
 import { SessionFiles } from "./session-files";
 import { mtcuteFactory } from "./mtcute";
@@ -45,9 +47,7 @@ export async function startWorker() {
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN!, {
     client: { timeoutSeconds: 10 },
   });
-  const notify = async (id: string, text: string) => {
-    return (await bot.api.sendMessage(id, text)).message_id;
-  };
+  const notify = createPrivateNotifier(bot, { webAppUrl: env.WEB_APP_URL, groupId: env.TELEGRAM_GROUP_ID! });
   const sessions = new Sessions(store, {
     groupId: env.TELEGRAM_GROUP_ID!,
     quoteSenderId: env.QUOTE_SENDER_ID!,
@@ -60,9 +60,10 @@ export async function startWorker() {
       apiHash: env.TELEGRAM_API_HASH!,
       groupId: env.TELEGRAM_GROUP_ID!,
     }),
-    notify: async (userId, text) => {
+    notify: async (userId, event) => {
       const user = await store.owner(userId);
-      if (user) await notify(user.telegramUserId, text);
+      if (!user) throw new Error("NOTIFICATION_OWNER_MISSING");
+      await notify(user.telegramUserId, formatSessionMessage(event), { connection: true });
     },
   });
   const initializeStartedAt = Date.now();
@@ -75,7 +76,7 @@ export async function startWorker() {
   workerLog.info("telegram.sessions.initialized", {
     durationMs: Date.now() - initializeStartedAt,
   });
-  await store.recoverRequests();
+  const recoveredRequests = await store.recoverRequests();
   const requests = createRequestExecutor(store, {
     ready: async (userId) => {
       await sessions.requireConnected(userId);
@@ -101,6 +102,9 @@ export async function startWorker() {
     port: 3002,
   });
   workerLog.info("worker.ready", { internalPort: 3002 });
+  void notifyRecoveredRequests(recoveredRequests, store.owner, notify).catch((error: unknown) =>
+    workerLog.failure("request.recovery_notifications.failed", error),
+  );
   const sync = async () => {
     const startedAt = Date.now();
     try {

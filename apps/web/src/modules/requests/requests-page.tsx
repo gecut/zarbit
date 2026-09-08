@@ -14,7 +14,11 @@ import { RequestCard } from "./_request-card";
 import { RequestDetailsDrawer } from "./_request-details-drawer";
 import { RequestFormDrawer } from "./_request-form-drawer";
 
-export function RequestList({ history = false }: { history?: boolean }) {
+export function RequestList({ history = false, requestId, onCloseLinkedRequest }: {
+  history?: boolean;
+  requestId?: string;
+  onCloseLinkedRequest?: () => void;
+}) {
   const api = useApi(useIdentity().telegramUserId);
   const client = useQueryClient();
   const active = useQuery(
@@ -123,9 +127,13 @@ export function RequestList({ history = false }: { history?: boolean }) {
       ) : null}
 
       <RequestDetailsDrawer
-        onClose={() => setSelectedRequest(null)}
+        onClose={() => {
+          setSelectedRequest(null);
+          if (requestId) onCloseLinkedRequest?.();
+        }}
         onRefresh={load}
-        request={selectedRequest}
+        request={requestId ? null : selectedRequest}
+        requestId={requestId}
       />
     </section>
   );

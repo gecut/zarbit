@@ -8,6 +8,6 @@ export default defineConfig({
   dts: false,
   deps: {
     neverBundle: true,
-    alwaysBundle: [/@zarbit\/.*/],
+    alwaysBundle: [/@orpc\/contract$/, /@zarbit\/.*/],
   },
 });

@@ -31,7 +31,8 @@
     "@zarbit/contracts": "workspace:*",
     "hono": "^4.12.32",
     "@hono/node-server": "^2.0.12",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "@zarbit/messages": "workspace:*"
   },
   "devDependencies": {
     "@zarbit/config": "workspace:*",

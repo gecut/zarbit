@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@zarbit/contracts";
 import type { Store } from "@zarbit/db";
 import { formatGroupMessage } from "@zarbit/domain";
+import { formatAlertMessage, formatRequestResultMessage, requestFailureText, type RequestFailure, type MessageLinks } from "@zarbit/messages";
 import { rpcCode } from "./errors";
 import { workerLog } from "./logger";
 
@@ -9,13 +10,13 @@ type RequestStore = Pick<
   Store,
   "requestCandidates" | "claimRequest" | "completeRequest" | "owner"
 >;
-type Quote = { compactQuote: number; sourceMessageId: number };
+type Quote = { compactQuote: number; sourceMessageId: number; announcedAt: Date };
 export function createRequestExecutor(
   store: RequestStore,
   delivery: {
     ready(userId: string): Promise<void>;
     group(userId: string, text: string): Promise<number>;
-    private(telegramUserId: string, text: string): Promise<number>;
+    private(telegramUserId: string, text: string, links?: MessageLinks): Promise<number>;
   },
   timeoutMs = 15_000,
 ) {
@@ -35,6 +36,7 @@ export function createRequestExecutor(
     let status: "DONE" | "FAILED" | "UNKNOWN" = "FAILED";
     let outgoingMessageId: number | undefined;
     let failureReason: string | undefined;
+    let failure: RequestFailure = "unknown";
     let sending = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const owner = await store.owner(userId);
@@ -47,7 +49,8 @@ export function createRequestExecutor(
         row.action === "ALERT"
           ? delivery.private(
               owner.telegramUserId,
-              `هشدار مظنه: ${price} هزار تومان؛ درخواست ${row.id}`,
+              formatAlertMessage({ ...row, trigger: quote }),
+              { requestId: id },
             )
           : delivery.group(
               userId,
@@ -82,9 +85,14 @@ export function createRequestExecutor(
           "error_code" in error &&
           [400, 403].includes(Number(error.error_code)));
       status = definitive ? "FAILED" : "UNKNOWN";
-      failureReason = definitive
-        ? "ارسال انجام نشد؛ اتصال و مجوز ارسال را بررسی کنید."
-        : "نتیجه ارسال مشخص نیست؛ پیش از اقدام دوباره، گروه را بررسی کنید.";
+      failure = error instanceof AppError && error.code === "SESSION_REQUIRED"
+        || ["AUTH_KEY_UNREGISTERED", "SESSION_REVOKED", "USER_DEACTIVATED"].includes(code ?? "")
+        ? "connection"
+        : ["CHAT_WRITE_FORBIDDEN", "USER_BANNED_IN_CHANNEL", "CHANNEL_PRIVATE", "CHAT_ADMIN_REQUIRED"].includes(code ?? "")
+          ? "group_permission"
+          : row.action === "ALERT" && typeof error === "object" && error !== null && "error_code" in error && error.error_code === 403
+            ? "private_permission" : "unknown";
+      failureReason = requestFailureText(row.action, status, failure);
       workerLog.failure("request.execution.failed", error, {
         requestId: id,
         status,
@@ -93,16 +101,20 @@ export function createRequestExecutor(
       if (timer) clearTimeout(timer);
     }
     // A persistence failure must never be converted into a retry of the send.
-    await store.completeRequest(id, token, {
+    const completed = await store.completeRequest(id, token, {
       status,
       outgoingMessageId,
       failureReason,
     });
-    if (owner) {
+    if (completed.count && owner && !(row.action === "ALERT" && status === "DONE")) {
       try {
         await delivery.private(
           owner.telegramUserId,
-          `نتیجه درخواست ${id}: ${status === "DONE" ? "انجام شد" : failureReason}`,
+          formatRequestResultMessage({
+            ...row, status, failure, manual: !quote,
+            groupText: row.action === "ALERT" ? undefined : formatGroupMessage(row.action, row.units!, row.targetPrice),
+          }),
+          { requestId: id, connection: status === "FAILED" && (failure === "connection" || failure === "group_permission"), groupMessageId: row.action !== "ALERT" && status === "DONE" ? outgoingMessageId : undefined },
         );
       } catch (error) {
         workerLog.failure("request.notification.failed", error, {

@@ -208,7 +208,7 @@ export function createOrpcRouter(deps: AppDependencies) {
             await deps.store.disableSession(
               id,
               "REVOKING",
-              "قطع اتصال درخواست شده؛ درخواست‌های اجرا‌نشده لغو شدند.",
+              "قطع اتصال درخواست شده؛ وضعیت درخواست‌های خود را بررسی کنید.",
             );
           return await deps.command(id, input);
         } finally {

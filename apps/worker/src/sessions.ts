@@ -1,4 +1,6 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import type { SessionNotification } from "@zarbit/messages";
+import { SessionOutages } from "./session-outages";
 import {
   AppError,
   type LoginStatus,
@@ -92,7 +94,7 @@ export interface SessionOptions {
   factory: TransportFactory;
   timeoutMs?: number;
   now?: () => number;
-  notify?: (userId: string, text: string) => Promise<void>;
+  notify?: (userId: string, event: SessionNotification) => Promise<void>;
 }
 
 export interface SynchronizeResult {
@@ -129,6 +131,7 @@ export interface SessionStore {
 }
 
 export class Sessions {
+  private readonly outages = new SessionOutages();
   private readonly runtimes = new Map<string, Runtime>();
   private readonly challenges = new Map<string, Challenge>();
   private readonly locks = new Map<string, Promise<unknown>>();
@@ -346,20 +349,23 @@ export class Sessions {
       rt.operation = previousOperation;
     }
   }
-  private async announce(userId: string, text: string) {
+  private async announce(userId: string, event: SessionNotification): Promise<boolean> {
     const startedAt = this.now();
     try {
-      await this.options.notify?.(userId, text);
+      if (!this.options.notify) return false;
+      await this.options.notify(userId, event);
       workerLog.info("telegram.notification.completed", {
         durationMs: this.now() - startedAt,
-        kind: "session_status",
+        kind: event.type,
         sessionRef: sessionRef(userId),
       });
+      return true;
     } catch (error) {
       workerLog.failure("telegram.notification.failed", error, {
         durationMs: this.now() - startedAt,
         sessionRef: sessionRef(userId),
       });
+      return false;
     }
   }
   async initialize() {
@@ -502,9 +508,7 @@ export class Sessions {
     await this.setMembership(rt, member);
     void this.announce(
       rt.userId,
-      member
-        ? "اتصال تلگرام زربیت فعال شد."
-        : "وارد تلگرام شدید؛ پس از عضویت در گروه معامله، بررسی دوباره را بزنید.",
+      { type: "connected", member },
     );
   }
   private async setMembership(rt: Runtime, member: boolean) {
@@ -513,11 +517,12 @@ export class Sessions {
       sessionRef: sessionRef(rt.userId),
     });
     if (!member) {
+      this.outages.clear(rt.userId);
       const wasActive = (await this.store.session(rt.userId))?.runtimeReady;
       await this.store.disableSession(
         rt.userId,
         "NOT_IN_GROUP",
-        "عضویت در گروه معامله تأیید نشد؛ درخواست‌های اجرا‌نشده لغو شدند.",
+        "عضویت در گروه معامله تأیید نشد؛ وضعیت درخواست‌های خود را بررسی کنید.",
         rt.revision,
       );
       await this.store.updateSession(rt.userId, rt.revision, {
@@ -527,7 +532,7 @@ export class Sessions {
       if (wasActive)
         void this.announce(
           rt.userId,
-          "عضویت گروه تأیید نشد؛ درخواست‌های اجرا‌نشده لغو شدند.",
+          { type: "membership_lost" },
         );
       return false;
     }
@@ -563,6 +568,8 @@ export class Sessions {
       return false;
     }
     rt.online = true;
+    if (this.outages.connected(rt.userId, rt.revision))
+      await this.announce(rt.userId, { type: "recovered" });
     workerLog.info("telegram.session.active", {
       revision: rt.revision,
       sessionRef: sessionRef(rt.userId),
@@ -599,6 +606,7 @@ export class Sessions {
   private async runtimeFailure(rt: Runtime, error: unknown) {
     rt.online = false;
     if (isRevoked(error) || rpcCode(error) === "IDENTITY_MISMATCH") {
+      this.outages.clear(rt.userId);
       await this.store.disableSession(
         rt.userId,
         "REVOKED",
@@ -615,9 +623,10 @@ export class Sessions {
       });
       void this.announce(
         rt.userId,
-        "اتصال تلگرام باطل شد؛ درخواست‌های اجرا‌نشده لغو شدند.",
+        { type: "revoked" },
       );
     } else {
+      this.outages.failed(rt.userId, rt.revision, this.now());
       await this.store.updateSession(rt.userId, rt.revision, {
         runtimeReady: false,
         lastError: safeError(error).message,
@@ -664,10 +673,11 @@ export class Sessions {
       if (challenge?.id === command.id) challenge.rt.abort.abort();
     }
     if (command.type === "revoke") {
+      this.outages.clear(userId);
       await this.store.disableSession(
         userId,
         "REVOKING",
-        "قطع اتصال درخواست شده است؛ درخواست‌های اجرا‌نشده لغو شدند.",
+        "قطع اتصال درخواست شده است؛ وضعیت درخواست‌های خود را بررسی کنید.",
       );
       this.challenges.get(userId)?.rt.abort.abort();
     }
@@ -904,6 +914,7 @@ export class Sessions {
     throw safe;
   }
   private async revoke(userId: string) {
+    this.outages.clear(userId);
     const challenge = this.challenges.get(userId);
     if (challenge) {
       await this.discard(challenge, "ورود لغو شد.");
@@ -972,7 +983,13 @@ export class Sessions {
                 );
               return;
             }
-            if (current.state !== "ACTIVE") return;
+            if (current.state !== "ACTIVE") {
+              this.outages.clear(record.userId);
+              return;
+            }
+            await this.outages.check(record.userId, current.revision, this.now(), () =>
+              this.announce(record.userId, { type: "outage" }),
+            );
             if ((this.retry.get(record.userId)?.at ?? 0) > this.now()) return;
             const rt = this.runtimes.get(record.userId);
             if (

@@ -10,6 +10,7 @@ export function createQuoteRecorder(
   match?: (quote: {
     compactQuote: number;
     sourceMessageId: number;
+    announcedAt: Date;
   }) => Promise<void>,
 ) {
   return async (userId: string, _revision: number, event: QuoteEvent) => {
@@ -45,6 +46,6 @@ export function createQuoteRecorder(
       sessionRef: sessionRef(userId),
     });
     if (recorded.historyRecorded && isFreshQuote(event.date, receivedAt))
-      await match?.({ compactQuote, sourceMessageId: event.messageId });
+      await match?.({ compactQuote, sourceMessageId: event.messageId, announcedAt: event.date });
   };
 }

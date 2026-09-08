@@ -122,6 +122,9 @@ importers:
       '@zarbit/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@zarbit/messages':
+        specifier: workspace:*
+        version: link:../../packages/messages
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
@@ -289,6 +292,9 @@ importers:
       '@zarbit/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@zarbit/messages':
+        specifier: workspace:*
+        version: link:../../packages/messages
       dotenv:
         specifier: 'catalog:'
         version: 17.4.2
@@ -424,6 +430,25 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.4.1
+      '@zarbit/config':
+        specifier: workspace:*
+        version: link:../config
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.13
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
+  packages/messages:
+    dependencies:
+      '@zarbit/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

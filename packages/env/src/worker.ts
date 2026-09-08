@@ -11,6 +11,7 @@ export const env = createEnv({
     TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
     TELEGRAM_API_HASH: z.string().min(1).optional(),
     TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+    WEB_APP_URL: z.url().optional(),
     TELEGRAM_GROUP_ID: z.coerce.number().int().safe().negative().optional(),
     QUOTE_SENDER_ID: z.string().min(1).optional(),
     TELEGRAM_SESSIONS_DIR: z.string().min(1).default("./telegram-sessions"),

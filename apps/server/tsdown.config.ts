@@ -8,6 +8,10 @@ export default defineConfig({
   dts: false,
   deps: {
     neverBundle: true,
-    alwaysBundle: [/@orpc\/contract$/, /@zarbit\/.*/],
+    alwaysBundle: [
+      /^@orpc\//,
+      /^(?:json-schema-typed|radash|rou3)(?:\/|$)/,
+      /@zarbit\/.*/,
+    ],
   },
 });

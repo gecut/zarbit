@@ -23,6 +23,8 @@ Graphify is the preferred repository-navigation and relationship tool for archit
 
 After meaningful repository changes, refresh the graph incrementally or rebuild it when stale. Avoid deep/LLM analysis unless the task genuinely requires it. Graphify assists discovery; it never overrides source code, project contracts, or explicit requirements. Current extraction has a known limitation: SQL syntax is not indexed when the optional `tree_sitter_sql` dependency is unavailable.
 
+For every Node service release, inspect the built `dist` artifact's external imports and verify each one is available from the production runtime layout; do not assume a transitive pnpm dependency is present in a Docker image. Bundle dependency families with `tsdown` when the runtime image does not install their full transitive tree, and run this audit for every service after build changes.
+
 ## Caveman
 
 Caveman is an optional token-efficiency skill installed at `.agents/skills/caveman/SKILL.md`. It is not a source of truth and is not required for every task. Use it conservatively for large, low-signal command output, logs, search results, or similarly verbose context. Preserve exact code, commands, paths, errors, identifiers, requirements, architectural decisions, security/review findings, and other evidence needed for a correct change. If compression might hide useful context, do not use it. This repository intentionally uses only the skill; do not add Caveman Proxy, Cavemem, Agent SDK, routing, interception, or global infrastructure unless a future task explicitly requires it.

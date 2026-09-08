@@ -43,6 +43,7 @@ export interface TelegramTransport {
   getMe(): Promise<Account>;
   membership(): Promise<boolean>;
   subscribe(handler: (event: QuoteEvent) => void): Promise<() => void>;
+  sendGroup(text: string): Promise<number>;
   logout(): Promise<void>;
   close(): Promise<void>;
 }

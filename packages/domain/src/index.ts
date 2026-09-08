@@ -30,3 +30,28 @@ export function parseQuoteMessage(text: string): number | null {
     ? quote
     : null;
 }
+
+export function matchesRequest(
+  condition: "GTE" | "LTE",
+  targetPrice: number,
+  quote: number,
+): boolean {
+  return condition === "GTE" ? quote >= targetPrice : quote <= targetPrice;
+}
+export function isFreshQuote(announcedAt: Date, receivedAt: Date): boolean {
+  const age = receivedAt.getTime() - announcedAt.getTime();
+  return age >= 0 && age <= 60_000;
+}
+export function formatGroupMessage(
+  action: "BUY" | "SELL",
+  units: number,
+  quote: number,
+): string {
+  if (
+    ![units, quote].every(
+      (value) => Number.isInteger(value) && value > 0 && value <= 2_147_483_647,
+    )
+  )
+    throw new Error("قیمت یا تعداد نامعتبر است.");
+  return `${units}${action === "BUY" ? "خ" : "ف"}${quote}`;
+}

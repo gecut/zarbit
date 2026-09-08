@@ -1,5 +1,5 @@
 import type { Store } from "@zarbit/db";
-import { parseQuoteMessage } from "@zarbit/domain";
+import { isFreshQuote, parseQuoteMessage } from "@zarbit/domain";
 
 import type { QuoteEvent } from "./transport";
 import { sessionRef, workerLog } from "./logger";
@@ -7,6 +7,10 @@ import { sessionRef, workerLog } from "./logger";
 export function createQuoteRecorder(
   store: Pick<Store, "recordQuote">,
   config: { groupId: number; senderId: string },
+  match?: (quote: {
+    compactQuote: number;
+    sourceMessageId: number;
+  }) => Promise<void>,
 ) {
   return async (userId: string, _revision: number, event: QuoteEvent) => {
     if (event.chatId !== config.groupId || event.senderId !== config.senderId) {
@@ -27,18 +31,20 @@ export function createQuoteRecorder(
       return;
     }
 
+    const receivedAt = new Date();
     const recorded = await store.recordQuote({
       compactQuote,
       announcedAt: event.date,
-      receivedAt: new Date(),
+      receivedAt,
       sourceMessageId: event.messageId,
     });
     workerLog.info("telegram.quote.recorded", {
       compactQuote,
       historyRecorded: recorded.historyRecorded,
-      latestUpdated: recorded.latestUpdated,
       messageId: event.messageId,
       sessionRef: sessionRef(userId),
     });
+    if (recorded.historyRecorded && isFreshQuote(event.date, receivedAt))
+      await match?.({ compactQuote, sourceMessageId: event.messageId });
   };
 }

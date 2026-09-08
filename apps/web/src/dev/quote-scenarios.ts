@@ -1,4 +1,4 @@
-import type { LatestQuote, QuoteDashboard } from "@zarbit/contracts";
+import type { QuotePoint, QuoteDashboard } from "@zarbit/contracts";
 
 export type QuoteScenario = "normal" | "empty" | "loading" | "stale" | "error";
 
@@ -23,7 +23,7 @@ export function createQuoteDashboard(
       now - (compactQuotes.length - index) * 12 * 60 * 60 * 1_000,
     ).toISOString(),
   }));
-  const latest: LatestQuote = {
+  const latest: QuotePoint = {
     quote: 96_120_000,
     announcedAt: new Date(now - latestOffset).toISOString(),
   };

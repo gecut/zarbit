@@ -1,3 +1,4 @@
+import { createRequestStore } from "./requests";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
 import { Pool } from "pg";
@@ -25,6 +26,7 @@ export function createStore(
     prisma.telegramSession.findUnique({ where: { userId } });
   return {
     db: prisma,
+    ...createRequestStore(prisma, now),
     user: (identity: Identity) =>
       prisma.telegramUser.upsert({
         where: { telegramUserId: identity.telegramUserId },
@@ -151,7 +153,10 @@ export function createStore(
         },
       });
     },
-    latestQuote: () => prisma.latestQuote.findUnique({ where: { id: 1 } }),
+    latestQuote: () =>
+      prisma.quoteHistory.findFirst({
+        orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
+      }),
     quotesSince: (announcedAt: Date) =>
       prisma.quoteHistory.findMany({
         where: { announcedAt: { gte: announcedAt } },
@@ -168,32 +173,11 @@ export function createStore(
         await tx.quoteHistory.deleteMany({
           where: { announcedAt: { lt: cutoff } },
         });
-        const shouldRetainHistory = input.announcedAt >= cutoff;
-        if (shouldRetainHistory) {
-          const history = await tx.quoteHistory.createMany({
-            data: input,
-            skipDuplicates: true,
-          });
-          if (!history.count)
-            return { historyRecorded: false, latestUpdated: false };
-        }
-
-        const result = await tx.$executeRaw`
-        INSERT INTO "LatestQuote" ("id", "compactQuote", "announcedAt", "receivedAt", "sourceMessageId", "updatedAt")
-        VALUES (1, ${input.compactQuote}, ${input.announcedAt}, ${input.receivedAt}, ${input.sourceMessageId}, CURRENT_TIMESTAMP)
-        ON CONFLICT ("id") DO UPDATE
-        SET "compactQuote" = EXCLUDED."compactQuote",
-            "announcedAt" = EXCLUDED."announcedAt",
-            "receivedAt" = EXCLUDED."receivedAt",
-            "sourceMessageId" = EXCLUDED."sourceMessageId",
-            "updatedAt" = CURRENT_TIMESTAMP
-        WHERE ("LatestQuote"."announcedAt", "LatestQuote"."sourceMessageId")
-          < (EXCLUDED."announcedAt", EXCLUDED."sourceMessageId")
-      `;
-        return {
-          historyRecorded: shouldRetainHistory,
-          latestUpdated: result === 1,
-        };
+        const history = await tx.quoteHistory.createMany({
+          data: input,
+          skipDuplicates: true,
+        });
+        return { historyRecorded: history.count === 1 };
       }),
   };
 }

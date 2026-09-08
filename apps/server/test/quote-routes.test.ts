@@ -36,7 +36,7 @@ test("returns a three-day dashboard with display amounts", async () => {
       announcedAt: new Date("2026-09-07T08:00:00.000Z"),
       receivedAt: new Date("2026-09-07T08:00:01.000Z"),
       sourceMessageId: 3,
-      updatedAt: new Date("2026-09-07T08:00:01.000Z"),
+      createdAt: new Date("2026-09-07T08:00:01.000Z"),
     },
     [
       {
@@ -95,7 +95,7 @@ test("maps compact storage value to the public display amount", async () => {
     announcedAt: new Date("2026-09-07T08:00:00.000Z"),
     receivedAt: new Date("2026-09-07T08:00:01.000Z"),
     sourceMessageId: 1,
-    updatedAt: new Date("2026-09-07T08:00:01.000Z"),
+    createdAt: new Date("2026-09-07T08:00:01.000Z"),
   }).request("http://server/api/quote/latest");
 
   assert.deepEqual(await response.json(), {

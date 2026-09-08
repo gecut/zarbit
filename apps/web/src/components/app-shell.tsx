@@ -2,6 +2,7 @@ import { HomeIcon } from "@solar-icons/react/linear/home";
 import { HomeIcon as HomeBoldIcon } from "@solar-icons/react/bold/home";
 import { SettingsMinimalisticIcon } from "@solar-icons/react/linear/settings-minimalistic";
 import { SettingsMinimalisticIcon as SettingsMinimalisticBoldIcon } from "@solar-icons/react/bold/settings-minimalistic";
+import { HistoryIcon } from "@solar-icons/react/linear/history";
 import { Link, Outlet } from "@tanstack/react-router";
 
 import { AuthGate } from "../lib/auth";
@@ -9,6 +10,12 @@ import { PwaUpdate } from "./pwa-update";
 
 const navigationItems = [
   { label: "خانه", to: "/", Icon: HomeIcon, ActiveIcon: HomeBoldIcon },
+  {
+    label: "سوابق",
+    to: "/history",
+    Icon: HistoryIcon,
+    ActiveIcon: HistoryIcon,
+  },
   {
     label: "تنظیمات",
     to: "/telegram",
@@ -62,7 +69,7 @@ export function AppShell() {
       </div>
 
       <nav
-        className="max-w-124 border-border bg-surface/80 shadow-surface fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-2 rounded-4xl border p-1 backdrop-blur-sm"
+        className="max-w-124 border-border bg-surface/80 shadow-surface rounded-4xl fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-3 border p-1 backdrop-blur-sm"
         aria-label="ناوبری اصلی"
       >
         {navigationItems.map(({ label, to, Icon, ActiveIcon }) => (
@@ -75,8 +82,8 @@ export function AppShell() {
             }}
           >
             <div className="relative flex h-6 w-full min-w-6 items-center justify-center">
-              <Icon className="absolute size-6 opacity-100 group-data-status:opacity-0 transition-opacity" />
-              <ActiveIcon className="absolute size-6 opacity-0 group-data-status:opacity-100 transition-opacity" />
+              <Icon className="group-data-status:opacity-0 absolute size-6 opacity-100 transition-opacity" />
+              <ActiveIcon className="group-data-status:opacity-100 absolute size-6 opacity-0 transition-opacity" />
             </div>
 
             <span>{label}</span>

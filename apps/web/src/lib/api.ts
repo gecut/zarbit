@@ -3,15 +3,18 @@ import {
   AppError,
   type Identity,
   type QuoteDashboard,
-  type LatestQuote,
   type TelegramSessionStatus,
   type WorkerCommand,
+  type CreateRequestInput,
+  type UpdateRequestInput,
+  type RequestDetail,
+  type RequestHistoryPage,
 } from "@zarbit/contracts";
 
 import { telegramInitData } from "./telegram";
 
 export type {
-  LatestQuote,
+  QuotePoint,
   QuoteDashboard,
   TelegramSessionState,
 } from "@zarbit/contracts";
@@ -19,11 +22,16 @@ export type {
 export interface ApiClient {
   authenticate(): Promise<Identity>;
   getQuoteDashboard(): Promise<QuoteDashboard>;
-  getLatestQuote(): Promise<LatestQuote | null>;
   getTelegramSession(): Promise<TelegramSessionStatus>;
   sessionCommand(
     command: Exclude<WorkerCommand, { type: "status" }>,
   ): Promise<TelegramSessionStatus>;
+  getActiveRequests(): Promise<RequestDetail[]>;
+  getRequestHistory(cursor?: string): Promise<RequestHistoryPage>;
+  createRequest(input: CreateRequestInput): Promise<RequestDetail>;
+  updateRequest(id: string, input: UpdateRequestInput): Promise<RequestDetail>;
+  cancelRequest(id: string): Promise<RequestDetail>;
+  forceSendRequest(id: string): Promise<RequestDetail>;
 }
 
 function serverUrl(): string {
@@ -77,7 +85,6 @@ export function createServerApi(): ApiClient {
         method: "POST",
         body: JSON.stringify({ initData: telegramInitData() }),
       }),
-    getLatestQuote: () => request<LatestQuote | null>("/api/quote/latest"),
     getQuoteDashboard: () => request<QuoteDashboard>("/api/quote/dashboard"),
     getTelegramSession: () =>
       request<TelegramSessionStatus>("/api/telegram-session/status"),
@@ -119,5 +126,29 @@ export function createServerApi(): ApiClient {
         body: body ? JSON.stringify(body) : undefined,
       });
     },
+    getActiveRequests: () => request<RequestDetail[]>("/api/requests/active"),
+    getRequestHistory: (cursor) =>
+      request<RequestHistoryPage>(
+        `/api/requests/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      ),
+    createRequest: (input) =>
+      request<RequestDetail>("/api/requests", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    updateRequest: (id, input) =>
+      request<RequestDetail>(`/api/requests/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    cancelRequest: (id) =>
+      request<RequestDetail>(`/api/requests/${encodeURIComponent(id)}/cancel`, {
+        method: "POST",
+      }),
+    forceSendRequest: (id) =>
+      request<RequestDetail>(
+        `/api/requests/${encodeURIComponent(id)}/force-send`,
+        { method: "POST" },
+      ),
   };
 }

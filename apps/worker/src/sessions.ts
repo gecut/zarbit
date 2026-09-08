@@ -135,6 +135,29 @@ export class Sessions {
   private readonly retry = new Map<string, { at: number; count: number }>();
   private syncing = false;
   private stopped = false;
+  forceSend?: (userId: string, id: string) => Promise<void>;
+  async requireConnected(userId: string) {
+    await this.authorize(userId);
+    const record = await this.store.session(userId);
+    const rt = this.runtimes.get(userId);
+    if (
+      !record ||
+      record.state !== "ACTIVE" ||
+      !record.runtimeReady ||
+      !rt?.online ||
+      rt.abort.signal.aborted ||
+      rt.revision !== record.revision
+    )
+      throw new AppError(
+        "SESSION_REQUIRED",
+        "ابتدا اتصال تلگرام را برقرار کنید.",
+      );
+    return rt;
+  }
+  async sendGroup(userId: string, text: string) {
+    const rt = await this.requireConnected(userId);
+    return rt.client.sendGroup(text);
+  }
   onQuote?: (
     userId: string,
     revision: number,
@@ -630,6 +653,12 @@ export class Sessions {
       command.type === "cancel" &&
       this.challenges.get(userId)?.id === command.id;
     if (command.type === "status") return this.status(userId);
+    if (command.type === "force-send") {
+      if (!this.forceSend)
+        throw new AppError("UNAVAILABLE", "سرویس اجرا در دسترس نیست.", 503);
+      await this.forceSend(userId, command.id);
+      return this.status(userId);
+    }
     if (command.type === "cancel") {
       const challenge = this.challenges.get(userId);
       if (challenge?.id === command.id) challenge.rt.abort.abort();

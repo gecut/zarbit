@@ -1,3 +1,4 @@
+import { registerRequestRoutes } from "./request-routes";
 import { Hono } from "hono";
 
 import { registerApiErrorHandlers } from "./api-error-handlers";
@@ -22,6 +23,7 @@ export function createApp(deps: AppDependencies) {
   });
 
   registerQuoteRoutes(app, deps);
+  registerRequestRoutes(app, deps);
   registerTelegramSessionRoutes(app, deps);
   registerApiErrorHandlers(app);
 

@@ -4,6 +4,8 @@ import {
   type Identity,
   type TelegramSessionStatus,
   type WorkerCommand,
+  type RequestDetail,
+  type CreateRequestInput,
 } from "@zarbit/contracts";
 
 import type { ApiClient } from "../lib/api";
@@ -32,8 +34,64 @@ function copySession(session: TelegramSessionStatus): TelegramSessionStatus {
   return { ...session, login: session.login ? { ...session.login } : null };
 }
 
+function seedRequests(): RequestDetail[] {
+  const now = Date.now();
+  const make = (
+    input: CreateRequestInput,
+    status: RequestDetail["status"],
+    extra: Partial<RequestDetail> = {},
+  ): RequestDetail => ({
+    ...input,
+    id: crypto.randomUUID(),
+    status,
+    executing: status === "ACTIVE" && input.action === "BUY",
+    triggeredQuote: status === "ACTIVE" ? null : input.targetPrice + 120,
+    triggeredMessageId: status === "ACTIVE" ? null : 1842,
+    outgoingMessageId: status === "DONE" ? 9901 : null,
+    completedAt:
+      status === "ACTIVE" ? null : new Date(now - 15 * 60_000).toISOString(),
+    failureReason:
+      status === "FAILED"
+        ? "ارسال انجام نشد؛ اتصال و مجوز ارسال را بررسی کنید."
+        : status === "UNKNOWN"
+          ? "نتیجه ارسال مشخص نیست؛ گروه را بررسی کنید."
+          : null,
+    cancellationReason: status === "CANCELLED" ? "لغو توسط کاربر" : null,
+    createdAt: new Date(now - 30 * 60_000).toISOString(),
+    updatedAt: new Date(now - 5 * 60_000).toISOString(),
+    ...extra,
+  });
+  return [
+    make(
+      { action: "ALERT", condition: "GTE", targetPrice: 96_000, units: null },
+      "ACTIVE",
+    ),
+    make(
+      { action: "BUY", condition: "LTE", targetPrice: 95_500, units: 2 },
+      "ACTIVE",
+    ),
+    make(
+      { action: "SELL", condition: "GTE", targetPrice: 97_200, units: 5 },
+      "DONE",
+    ),
+    make(
+      { action: "ALERT", condition: "LTE", targetPrice: 94_800, units: null },
+      "CANCELLED",
+    ),
+    make(
+      { action: "BUY", condition: "LTE", targetPrice: 93_000, units: 10 },
+      "FAILED",
+    ),
+    make(
+      { action: "SELL", condition: "GTE", targetPrice: 98_000, units: 3 },
+      "UNKNOWN",
+    ),
+  ];
+}
+
 export function createMockApi(): ApiClient {
   let session = initialSession();
+  const requests: RequestDetail[] = seedRequests();
   const scenario = getQuoteScenario(window.location.search);
   const dashboard = createQuoteDashboard(scenario);
 
@@ -43,8 +101,6 @@ export function createMockApi(): ApiClient {
 
   return {
     authenticate: async () => ({ ...mockIdentity }),
-    getLatestQuote: async () =>
-      dashboard.latest ? { ...dashboard.latest } : null,
     getQuoteDashboard: async () => {
       if (scenario === "loading")
         await new Promise((resolve) => setTimeout(resolve, 1_200));
@@ -126,6 +182,53 @@ export function createMockApi(): ApiClient {
       }
 
       return copySession(session);
+    },
+    getActiveRequests: async () =>
+      requests.filter((r) => r.status === "ACTIVE"),
+    getRequestHistory: async () => ({
+      items: requests.filter((r) => r.status !== "ACTIVE"),
+      nextCursor: null,
+    }),
+    createRequest: async (input) => {
+      const now = new Date().toISOString();
+      const row = {
+        ...input,
+        id: crypto.randomUUID(),
+        status: "ACTIVE" as const,
+        executing: false,
+        triggeredQuote: null,
+        triggeredMessageId: null,
+        outgoingMessageId: null,
+        completedAt: null,
+        failureReason: null,
+        cancellationReason: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      requests.unshift(row);
+      return row;
+    },
+    updateRequest: async (id, input) => {
+      const row = requests.find((r) => r.id === id);
+      if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+      Object.assign(row, input);
+      return row;
+    },
+    cancelRequest: async (id) => {
+      const row = requests.find((r) => r.id === id);
+      if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+      row.status = "CANCELLED";
+      row.cancellationReason = "لغو توسط کاربر";
+      row.completedAt = new Date().toISOString();
+      return row;
+    },
+    forceSendRequest: async (id) => {
+      const row = requests.find((r) => r.id === id);
+      if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+      row.status = "DONE";
+      row.outgoingMessageId = 1;
+      row.completedAt = new Date().toISOString();
+      return row;
     },
   };
 }

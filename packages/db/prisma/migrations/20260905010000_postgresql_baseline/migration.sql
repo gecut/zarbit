@@ -1,7 +1,7 @@
 -- PostgreSQL baseline for a fresh Zarbit installation. SQLite history is intentionally incompatible.
 CREATE TYPE "RequestCondition" AS ENUM ('LTE', 'GTE');
 CREATE TYPE "RequestAction" AS ENUM ('ALERT', 'BUY', 'SELL');
-CREATE TYPE "RequestStatus" AS ENUM ('ACTIVE', 'DONE', 'CANCELLED', 'FAILED');
+CREATE TYPE "RequestStatus" AS ENUM ('ACTIVE', 'DONE', 'CANCELLED', 'FAILED', 'UNKNOWN');
 CREATE TYPE "TelegramSessionState" AS ENUM ('PENDING_OTP', 'ACTIVE', 'NOT_IN_GROUP', 'REVOKED', 'REVOKING', 'ERROR');
 
 CREATE TABLE "TelegramUser" (
@@ -80,3 +80,15 @@ ALTER TABLE "TelegramSession" ADD CONSTRAINT "TelegramSession_userId_fkey"
 FOREIGN KEY ("userId") REFERENCES "TelegramUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Request" ADD CONSTRAINT "Request_userId_fkey"
 FOREIGN KEY ("userId") REFERENCES "TelegramUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "QuoteHistory" (
+    "id" SERIAL NOT NULL,
+    "compactQuote" INTEGER NOT NULL,
+    "announcedAt" TIMESTAMP(3) NOT NULL,
+    "receivedAt" TIMESTAMP(3) NOT NULL,
+    "sourceMessageId" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "QuoteHistory_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "QuoteHistory_sourceMessageId_key" ON "QuoteHistory"("sourceMessageId");
+CREATE INDEX "QuoteHistory_announcedAt_idx" ON "QuoteHistory"("announcedAt");

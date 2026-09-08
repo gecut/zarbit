@@ -1,3 +1,4 @@
+import { createRequestExecutor } from "./requests";
 import { serve } from "@hono/node-server";
 import {
   checkDatabaseHealth,
@@ -45,7 +46,7 @@ export async function startWorker() {
     client: { timeoutSeconds: 10 },
   });
   const notify = async (id: string, text: string) => {
-    await bot.api.sendMessage(id, text);
+    return (await bot.api.sendMessage(id, text)).message_id;
   };
   const sessions = new Sessions(store, {
     groupId: env.TELEGRAM_GROUP_ID!,
@@ -74,10 +75,23 @@ export async function startWorker() {
   workerLog.info("telegram.sessions.initialized", {
     durationMs: Date.now() - initializeStartedAt,
   });
-  sessions.onQuote = createQuoteRecorder(store, {
-    groupId: env.TELEGRAM_GROUP_ID!,
-    senderId: env.QUOTE_SENDER_ID!,
+  await store.recoverRequests();
+  const requests = createRequestExecutor(store, {
+    ready: async (userId) => {
+      await sessions.requireConnected(userId);
+    },
+    group: (userId, text) => sessions.sendGroup(userId, text),
+    private: notify,
   });
+  sessions.forceSend = (userId, id) => requests.execute(userId, id);
+  sessions.onQuote = createQuoteRecorder(
+    store,
+    {
+      groupId: env.TELEGRAM_GROUP_ID!,
+      senderId: env.QUOTE_SENDER_ID!,
+    },
+    requests.match,
+  );
   const server = serve({
     fetch: createWorkerApp(
       sessions,
@@ -119,6 +133,14 @@ export async function startWorker() {
       });
     }
   };
+  const pruneTimer = setInterval(() => {
+    void store
+      .pruneRequests()
+      .catch((error: unknown) =>
+        workerLog.failure("request.prune.failed", error),
+      );
+  }, 3600_000);
+  await store.pruneRequests();
   const timer = setInterval(() => {
     void sync();
   }, 5000);
@@ -129,6 +151,7 @@ export async function startWorker() {
     stopping = true;
     workerLog.info("worker.stopping");
     clearInterval(timer);
+    clearInterval(pruneTimer);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await sessions.stop();
     await prisma.$disconnect();

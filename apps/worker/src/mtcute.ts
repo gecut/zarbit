@@ -188,6 +188,9 @@ export function mtcuteFactory(config: {
           void client.stopUpdatesLoop();
         };
       },
+      async sendGroup(text) {
+        return (await client.sendText(config.groupId, text)).id;
+      },
       async logout() {
         await client.logOut();
       },

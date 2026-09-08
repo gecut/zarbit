@@ -9,7 +9,7 @@ const store = createStore(prisma, () => currentTime);
 
 async function clean() {
   await prisma.quoteHistory.deleteMany();
-  await prisma.latestQuote.deleteMany();
+  await prisma.request.deleteMany();
   await prisma.telegramSession.deleteMany();
   await prisma.loginRateLimit.deleteMany();
   await prisma.telegramUser.deleteMany();

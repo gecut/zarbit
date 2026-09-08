@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { tl } from "@mtcute/node";
 import { SessionFiles } from "../src/session-files";
+import type { SessionNotification } from "@zarbit/messages";
 import { Sessions, type SessionStore } from "../src/sessions";
 import type { TelegramTransport, TransportFactory } from "../src/transport";
 
@@ -31,7 +32,7 @@ function createStore(): SessionStore {
       updatedAt: now,
     }),
     session: async () => record,
-    sessions: async () => [],
+    sessions: async () => record ? [{ ...record, user: { telegramUserId } }] : [],
     consumeSend: async () => undefined,
     blockLogin: async () => [],
     beginSession: async (id, storageKey) => {
@@ -103,7 +104,7 @@ function baseTransport(
 
 async function createSessions(
   transport: TelegramTransport,
-  options?: { clock?: { value: number }; timeoutMs?: number },
+  options?: { clock?: { value: number }; timeoutMs?: number; notify?: (userId: string, event: SessionNotification) => Promise<void> },
 ) {
   const directory = await mkdtemp(path.join(tmpdir(), "zarbit-worker-test-"));
   const files = new SessionFiles(directory);
@@ -121,6 +122,7 @@ async function createSessions(
       files,
       factory: transportFactory(transport),
       now: () => clock.value,
+      notify: options?.notify,
       ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
     }),
   };
@@ -388,4 +390,49 @@ test("discards unsupported Telegram delivery without exposing delivery data", as
     { code: "UNSUPPORTED_DELIVERY" },
   );
   assert.equal((await sessions.status(userId)).login, null);
+});
+
+test("session integration announces long outage once and recovery after readiness checks", async (t) => {
+  let offline = false;
+  const events: SessionNotification[] = [];
+  const transport = baseTransport({ getMe: async () => { if (offline) throw new Error("network offline"); return { id: telegramUserId }; } });
+  const { directory, sessions, clock } = await createSessions(transport, { notify: async (_userId, event) => { events.push(event); } });
+  t.after(async () => { await sessions.stop(); await rm(directory, { recursive: true, force: true }); });
+  const login = await sessions.command(userId, { type: "login", phone: "+989121234567" });
+  await sessions.command(userId, { type: "code", id: login.login!.id, code: "12345" });
+  assert.deepEqual(events.map((e) => e.type), ["connected"]);
+  offline = true;
+  clock.value += 31000;
+  await sessions.synchronize();
+  clock.value += 119999;
+  await sessions.synchronize();
+  assert.deepEqual(events.map((e) => e.type), ["connected"]);
+  clock.value += 1;
+  await sessions.synchronize();
+  assert.deepEqual(events.map((e) => e.type), ["connected", "outage"]);
+  clock.value += 300000;
+  await sessions.synchronize();
+  assert.equal(events.filter((e) => e.type === "outage").length, 1);
+  offline = false;
+  clock.value += 300000;
+  await sessions.synchronize();
+  assert.deepEqual(events.map((e) => e.type), ["connected", "outage", "recovered"]);
+  assert.equal((await sessions.command(userId, { type: "status" })).connection, "CONNECTED");
+});
+
+test("manual revocation clears pending outage without claiming cancellation", async (t) => {
+  let offline = false;
+  const events: SessionNotification[] = [];
+  const transport = baseTransport({ getMe: async () => { if (offline) throw new Error("network offline"); return { id: telegramUserId }; } });
+  const { directory, sessions, clock } = await createSessions(transport, { notify: async (_id, event) => { events.push(event); } });
+  t.after(async () => { await sessions.stop(); await rm(directory, { recursive: true, force: true }); });
+  const login = await sessions.command(userId, { type: "login", phone: "+989121234567" });
+  await sessions.command(userId, { type: "code", id: login.login!.id, code: "12345" });
+  offline = true;
+  clock.value += 31000;
+  await sessions.synchronize();
+  await sessions.command(userId, { type: "revoke" });
+  clock.value += 300000;
+  await sessions.synchronize();
+  assert.deepEqual(events.map((e) => e.type), ["connected"]);
 });

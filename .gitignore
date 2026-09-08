@@ -14,6 +14,8 @@ build
 *.tsbuildinfo
 
 # Generated files
+.graphify_*.json
+.playwright-cli/
 apps/web/src/routeTree.gen.ts
 local.db
 local.db-*

@@ -22,7 +22,7 @@
     /* Theme Colors (Light Mode) */
     --accent: oklch(52.82% 0.2628 262.87);
     --accent-foreground: oklch(99.11% 0 0);
-    --background: oklch(97.02% 0.002 262.87);
+    --background: oklch(99.02% 0.002 262.87);
     --border: oklch(90% 0.002 262.87);
     --danger: oklch(0.5507 0.2062 24);
     --danger-foreground: oklch(98% 0.02 24);
@@ -115,6 +115,11 @@
 }
 
 @layer base {
+  :root{
+    --background-secondary: color-mix(in oklab, var(--background) 98%, var(--foreground) 2%);
+    /* --background-tertiary: color-mix(in oklab, var(--background) 92%, var(--foreground) 8%); */
+  }
+
   :root {
     color: var(--foreground);
     background: var(--background);
@@ -159,6 +164,59 @@
 }
 
 @layer components {
+  .zarbit-drawer-backdrop {
+    opacity: calc(1 - var(--drawer-swipe-progress, 0));
+    transition:
+      opacity 450ms cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: opacity;
+  }
+
+  .zarbit-drawer-backdrop[data-swiping] {
+    transition-duration: 0ms;
+  }
+
+  .zarbit-drawer-popup {
+    --zarbit-drawer-top-margin: max(0.75rem, env(safe-area-inset-top, 0px));
+    box-sizing: border-box;
+    height: calc(100dvh - var(--zarbit-drawer-top-margin));
+    max-height: calc(100dvh - var(--zarbit-drawer-top-margin));
+    overflow: visible;
+    padding-bottom: max(
+      0px,
+      calc(
+        var(--drawer-snap-point-offset, 0px) +
+          var(--drawer-swipe-movement-y, 0px)
+      )
+    );
+    transform: translate3d(
+      0,
+      calc(
+        var(--drawer-snap-point-offset, 0px) +
+          var(--drawer-swipe-movement-y, 0px)
+      ),
+      0
+    );
+    transition:
+      transform 450ms cubic-bezier(0.32, 0.72, 0, 1),
+      box-shadow 450ms cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+  }
+
+  .zarbit-drawer-popup[data-swiping] {
+    transition-duration: 0ms;
+  }
+
+  .zarbit-drawer-popup[data-starting-style],
+  .zarbit-drawer-popup[data-ending-style],
+  .zarbit-drawer-popup[data-closed] {
+    transform: translate3d(0, calc(100% + 2px), 0);
+    padding-bottom: 0;
+  }
+
+  .zarbit-drawer-popup[data-ending-style] {
+    transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms);
+  }
+
   .card {
     @apply rounded-4xl p-4 sm:p-6;
   }

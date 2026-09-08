@@ -175,7 +175,9 @@ export function createWorkerCommand(dependencies: WorkerCommandDependencies) {
             Authorization: `Bearer ${dependencies.workerInternalToken}`,
           },
           body: JSON.stringify({ userId, command }),
-          signal: AbortSignal.timeout(25_000),
+          signal: AbortSignal.timeout(
+            command.type === "status" ? 2500 : 25_000,
+          ),
           cache: "no-store",
         },
       );

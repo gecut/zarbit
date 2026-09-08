@@ -39,7 +39,9 @@ Each valid quote event is persisted as one global singleton. A conditional upser
 
 ## Web state
 
-Private queries are gated by Mini App authentication. Session polling is one second during enrollment/disconnect, otherwise ten seconds while visible; latest-quote polling is fifteen seconds while visible. Focus refreshes state. Mutations do not retry automatically. OTP mutation data is cleared after each response, never persisted.
+Private queries use the shared oRPC v1 contract and its official TanStack Query integration. Quote and active requests poll every three seconds in foreground/background; changing session states poll every two seconds, stable sessions every five seconds, and disconnected/revoked sessions stop polling. Identity/history use five-minute freshness. Focus/reconnect refresh stale queries. Mutations never retry automatically. OTP mutation data is cleared after each response and is never persisted.
+
+Hono exposes authenticated `/rpc/*` and `/openapi/*` adapters over one contract-first router. Bounded process-local caches, single-flight reads, separate read capacity and per-user rate budgets protect PostgreSQL and the worker. Session checks for writes are always live. Legacy HTTP routes remain for the explicit build-time rollback flag. See [RPC.md](RPC.md) for limits, stale bounds, compatibility, metrics and browser background constraints.
 
 API/login responses use no-store. `VITE_SERVER_URL` is a required build-time URL; production rejects HTTP and loopback. Nginx serves hashed assets immutably, but revalidates index.html and sw.js. PWA updates require explicit user action.
 

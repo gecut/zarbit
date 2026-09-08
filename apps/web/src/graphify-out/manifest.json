@@ -1,0 +1,197 @@
+{
+  "app/api-provider.tsx": {
+    "mtime": 1788869177.350726,
+    "ast_hash": "376e24bf0e4461f2eb0d73b57b1b5a94",
+    "semantic_hash": "376e24bf0e4461f2eb0d73b57b1b5a94"
+  },
+  "app/app-runtime.tsx": {
+    "mtime": 1788869177.486132,
+    "ast_hash": "343e6e447be627c9fb2806d7368782ed",
+    "semantic_hash": "343e6e447be627c9fb2806d7368782ed"
+  },
+  "app/app-shell.tsx": {
+    "mtime": 1788868406.6564536,
+    "ast_hash": "bb547a7a08af9a4528a7848955faee60",
+    "semantic_hash": "bb547a7a08af9a4528a7848955faee60"
+  },
+  "app/main.tsx": {
+    "mtime": 1788868406.412591,
+    "ast_hash": "ec7d226894b9848ebd61ff1a9360332e",
+    "semantic_hash": "ec7d226894b9848ebd61ff1a9360332e"
+  },
+  "app/pwa-update.tsx": {
+    "mtime": 1788690269.5423775,
+    "ast_hash": "ee477d32f02386cccd70173ae56103b6",
+    "semantic_hash": "ee477d32f02386cccd70173ae56103b6"
+  },
+  "dev/mock-api.ts": {
+    "mtime": 1788868407.3530407,
+    "ast_hash": "34413011bfedb31d0e457adf7f5c8cda",
+    "semantic_hash": "34413011bfedb31d0e457adf7f5c8cda"
+  },
+  "dev/quote-scenarios.ts": {
+    "mtime": 1788855461.5096757,
+    "ast_hash": "356346248d1c902c27e5abedc49bf826",
+    "semantic_hash": "356346248d1c902c27e5abedc49bf826"
+  },
+  "modules/quote/_toman-icon.tsx": {
+    "mtime": 1788791949.567088,
+    "ast_hash": "91e6baf3f74827a5468442258c6ad53f",
+    "semantic_hash": "91e6baf3f74827a5468442258c6ad53f"
+  },
+  "modules/quote/_use-quote-dashboard.ts": {
+    "mtime": 1788869177.6966126,
+    "ast_hash": "aa1e633ed2c525a0866bfa9b3e7abd54",
+    "semantic_hash": "aa1e633ed2c525a0866bfa9b3e7abd54"
+  },
+  "modules/quote/index.ts": {
+    "mtime": 1788868898.8937852,
+    "ast_hash": "7e57e58ea63a5d129d2962b8da45239e",
+    "semantic_hash": "7e57e58ea63a5d129d2962b8da45239e"
+  },
+  "modules/quote/quote-dashboard-card.tsx": {
+    "mtime": 1788868407.4357672,
+    "ast_hash": "875af239dde25c872611e4337c39e8c0",
+    "semantic_hash": "875af239dde25c872611e4337c39e8c0"
+  },
+  "modules/requests/_request-card.tsx": {
+    "mtime": 1788873734.88669,
+    "ast_hash": "f4534ea26ecf00ea134f8f72a501d545",
+    "semantic_hash": "f4534ea26ecf00ea134f8f72a501d545"
+  },
+  "modules/requests/_request-details-drawer.tsx": {
+    "mtime": 1788873058.8950582,
+    "ast_hash": "8154ab5addb40c4382019b620589a9a2",
+    "semantic_hash": "8154ab5addb40c4382019b620589a9a2"
+  },
+  "modules/requests/_request-form-drawer.tsx": {
+    "mtime": 1788877273.7312846,
+    "ast_hash": "d7ca7f039cf3fdcbbdea1bb4b544f5fc",
+    "semantic_hash": "d7ca7f039cf3fdcbbdea1bb4b544f5fc"
+  },
+  "modules/requests/_request-view-model.ts": {
+    "mtime": 1788877239.2146058,
+    "ast_hash": "e31f61a87ab409facf3c804fdbaf9fae",
+    "semantic_hash": "e31f61a87ab409facf3c804fdbaf9fae"
+  },
+  "modules/requests/index.ts": {
+    "mtime": 1788868574.8931875,
+    "ast_hash": "d7280e17885ac3ef481fc0eb06c78077",
+    "semantic_hash": "d7280e17885ac3ef481fc0eb06c78077"
+  },
+  "modules/requests/requests-page.tsx": {
+    "mtime": 1788869887.9755661,
+    "ast_hash": "2e5f06a659b37300ecef4730ec9773bf",
+    "semantic_hash": "2e5f06a659b37300ecef4730ec9773bf"
+  },
+  "modules/telegram/_confirm-action.tsx": {
+    "mtime": 1788799112.4186914,
+    "ast_hash": "a1568b155b378ee7894a9bbc9cad39ff",
+    "semantic_hash": "a1568b155b378ee7894a9bbc9cad39ff"
+  },
+  "modules/telegram/_session-view-model.ts": {
+    "mtime": 1788799383.3725994,
+    "ast_hash": "70c26412381da7d90308623901985ba3",
+    "semantic_hash": "70c26412381da7d90308623901985ba3"
+  },
+  "modules/telegram/_telegram-login-form.tsx": {
+    "mtime": 1788799112.419452,
+    "ast_hash": "5f8ab0cc0e0e3a1affacbb10a780e66b",
+    "semantic_hash": "5f8ab0cc0e0e3a1affacbb10a780e66b"
+  },
+  "modules/telegram/_telegram-session-panel.tsx": {
+    "mtime": 1788800878.2798655,
+    "ast_hash": "ec18c50a2cc40723481769657eccf1e7",
+    "semantic_hash": "ec18c50a2cc40723481769657eccf1e7"
+  },
+  "modules/telegram/_theme-picker.tsx": {
+    "mtime": 1788869041.4647284,
+    "ast_hash": "14b7e4280b9c4ec3316d5560dbe55042",
+    "semantic_hash": "14b7e4280b9c4ec3316d5560dbe55042"
+  },
+  "modules/telegram/_use-telegram-connection.ts": {
+    "mtime": 1788868882.6002223,
+    "ast_hash": "501900928a180396689f5c35f67b7409",
+    "semantic_hash": "501900928a180396689f5c35f67b7409"
+  },
+  "modules/telegram/_use-telegram-session.ts": {
+    "mtime": 1788869177.7522833,
+    "ast_hash": "4dc8508ce209174108c6e6defb8f1ce7",
+    "semantic_hash": "4dc8508ce209174108c6e6defb8f1ce7"
+  },
+  "modules/telegram/index.ts": {
+    "mtime": 1788799112.4182262,
+    "ast_hash": "e9702326f69061554cab7fefe15932a8",
+    "semantic_hash": "e9702326f69061554cab7fefe15932a8"
+  },
+  "modules/telegram/telegram-page.tsx": {
+    "mtime": 1788799788.2448559,
+    "ast_hash": "68ba89b1aef33a452168de11dc27c07b",
+    "semantic_hash": "68ba89b1aef33a452168de11dc27c07b"
+  },
+  "routes/__root.tsx": {
+    "mtime": 1788868406.7626395,
+    "ast_hash": "3748049ae2ea9e363625213d7f304f51",
+    "semantic_hash": "3748049ae2ea9e363625213d7f304f51"
+  },
+  "routes/history.tsx": {
+    "mtime": 1788868406.8988585,
+    "ast_hash": "2508362fe4b0ee37bcd21bb5b0796fa1",
+    "semantic_hash": "2508362fe4b0ee37bcd21bb5b0796fa1"
+  },
+  "routes/index.tsx": {
+    "mtime": 1788868406.8453891,
+    "ast_hash": "48b27caaee162425226b5bcac1ff377b",
+    "semantic_hash": "48b27caaee162425226b5bcac1ff377b"
+  },
+  "routes/telegram.tsx": {
+    "mtime": 1788868406.9820821,
+    "ast_hash": "f0c0fed04226f9b6e15e13efd975fbc7",
+    "semantic_hash": "f0c0fed04226f9b6e15e13efd975fbc7"
+  },
+  "routing/router.ts": {
+    "mtime": 1788868406.351463,
+    "ast_hash": "205629ac12eb2a0f0be1f637ef290caf",
+    "semantic_hash": "205629ac12eb2a0f0be1f637ef290caf"
+  },
+  "shared/api/api-context.tsx": {
+    "mtime": 1788869177.2942212,
+    "ast_hash": "96a925abd62ed5b3bf8e78bbb9f365fc",
+    "semantic_hash": "96a925abd62ed5b3bf8e78bbb9f365fc"
+  },
+  "shared/api/api.ts": {
+    "mtime": 1788868407.1521041,
+    "ast_hash": "23ee380d16ce3649b2a9411c352a7153",
+    "semantic_hash": "23ee380d16ce3649b2a9411c352a7153"
+  },
+  "shared/auth/auth.tsx": {
+    "mtime": 1788869177.6183903,
+    "ast_hash": "38e2ce8d07f3e1a5b5496598a5d8c3c6",
+    "semantic_hash": "38e2ce8d07f3e1a5b5496598a5d8c3c6"
+  },
+  "shared/telegram/telegram.ts": {
+    "mtime": 1788636489.0253644,
+    "ast_hash": "0999c81161091b35c659422eb9febb06",
+    "semantic_hash": "0999c81161091b35c659422eb9febb06"
+  },
+  "shared/theme/theme.ts": {
+    "mtime": 1788799112.4162674,
+    "ast_hash": "553316edcde544f031dc8fc4fe071443",
+    "semantic_hash": "553316edcde544f031dc8fc4fe071443"
+  },
+  "shared/ui/drawer/drawer.tsx": {
+    "mtime": 1788875694.0158985,
+    "ast_hash": "966876922da377830cdd54a65243889e",
+    "semantic_hash": "966876922da377830cdd54a65243889e"
+  },
+  "shared/ui/drawer/index.ts": {
+    "mtime": 1788871211.3615255,
+    "ast_hash": "baf8b76ff10b24fb82e24aa2c84a439a",
+    "semantic_hash": "baf8b76ff10b24fb82e24aa2c84a439a"
+  },
+  "shared/ui/drawer/drawer-sheet.tsx": {
+    "mtime": 1788875472.4473066,
+    "ast_hash": "8adadc60dee6a21a04be22de25873714",
+    "semantic_hash": "8adadc60dee6a21a04be22de25873714"
+  }
+}

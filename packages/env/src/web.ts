@@ -6,6 +6,7 @@ declare global {
     readonly [key: string]: string | undefined;
     readonly VITE_API_MODE?: string;
     readonly VITE_SERVER_URL?: string;
+    readonly VITE_RPC_TRANSPORT?: string;
   }
 
   interface ImportMeta {
@@ -16,6 +17,7 @@ declare global {
 export const env = createEnv({
   clientPrefix: "VITE_",
   client: {
+    VITE_RPC_TRANSPORT: z.enum(["rpc", "legacy"]).default("rpc"),
     VITE_API_MODE: z
       .enum(["mock", "server"])
       .default(import.meta.env.DEV ? "mock" : "server")

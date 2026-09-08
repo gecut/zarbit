@@ -26,7 +26,7 @@ The existing compact mobile layout, RTL and Vazirmatn font remain. HeroUI semant
 
 ## Quote
 
-Telegram and PostgreSQL retain the compact integer, such as `95900`. The web application displays `95,900,000 تومان`. The global latest quote records the Telegram message timestamp and does not maintain quote history in this phase.
+Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `95900`. Only the primary latest-quote figure on the dashboard displays `95,900,000 تومان`; other prices remain compact. The global latest quote records the Telegram message timestamp and does not maintain quote history in this phase.
 
 ## Release validation
 

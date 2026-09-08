@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { QuoteDashboardCard } from "../components/latest-quote";
-import { RequestList } from "../components/requests";
+import { QuoteDashboardCard } from "../modules/quote";
+import { RequestList } from "../modules/requests";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,

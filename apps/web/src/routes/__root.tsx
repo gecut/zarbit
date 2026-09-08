@@ -4,8 +4,7 @@ import {
 } from "@tanstack/react-router";
 import { Fragment } from "react";
 
-import "../index.css";
-import { AppShell } from "../components/app-shell";
+import { AppShell } from "../app/app-shell";
 
 export type RouterAppContext = Record<string, never>;
 

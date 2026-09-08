@@ -77,11 +77,7 @@ export interface Identity {
   firstName?: string;
   username?: string;
 }
-export const workerCommandSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("status") }).strict(),
-  z
-    .object({ type: z.literal("force-send"), id: z.string().min(1).max(100) })
-    .strict(),
+export const sessionCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("login"), ...loginSchema.shape }).strict(),
   z
     .object({
@@ -101,6 +97,13 @@ export const workerCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("cancel"), id: z.string().uuid() }).strict(),
   z.object({ type: z.literal("membership") }).strict(),
   z.object({ type: z.literal("revoke") }).strict(),
+]);
+export const workerCommandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("status") }).strict(),
+  z
+    .object({ type: z.literal("force-send"), id: z.string().min(1).max(100) })
+    .strict(),
+  ...sessionCommandSchema.options,
 ]);
 export type WorkerCommand = z.infer<typeof workerCommandSchema>;
 export class AppError extends Error {

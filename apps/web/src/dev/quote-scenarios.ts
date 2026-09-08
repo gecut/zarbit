@@ -18,13 +18,13 @@ export function createQuoteDashboard(
   const latestOffset = scenario === "stale" ? 6 * 60_000 : 2 * 60_000;
   const compactQuotes = [95_820, 95_940, 95_760, 96_080, 95_900, 96_120];
   const points = compactQuotes.map((compactQuote, index) => ({
-    quote: compactQuote * 1_000,
+    quote: compactQuote,
     announcedAt: new Date(
       now - (compactQuotes.length - index) * 12 * 60 * 60 * 1_000,
     ).toISOString(),
   }));
   const latest: QuotePoint = {
-    quote: 96_120_000,
+    quote: 96_120,
     announcedAt: new Date(now - latestOffset).toISOString(),
   };
 

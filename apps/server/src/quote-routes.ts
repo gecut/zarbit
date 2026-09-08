@@ -1,9 +1,20 @@
-import { compactQuoteToDisplayPrice } from "@zarbit/domain";
 import type { Hono } from "hono";
 
 import type { AppEnv, AppDependencies } from "./app-types";
 
 export function registerQuoteRoutes(app: Hono<AppEnv>, deps: AppDependencies) {
+  app.get("/api/quote/latest", async (c) => {
+    const latest = await deps.store.latestQuote();
+    return c.json({
+      data: latest
+        ? {
+            quote: latest.compactQuote,
+            announcedAt: latest.announcedAt.toISOString(),
+          }
+        : null,
+    });
+  });
+
   app.get("/api/quote/dashboard", async (c) => {
     const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1_000);
     const [latest, points] = await Promise.all([
@@ -14,12 +25,12 @@ export function registerQuoteRoutes(app: Hono<AppEnv>, deps: AppDependencies) {
       data: {
         latest: latest
           ? {
-              quote: compactQuoteToDisplayPrice(latest.compactQuote),
+              quote: latest.compactQuote,
               announcedAt: latest.announcedAt.toISOString(),
             }
           : null,
         points: points.map((point) => ({
-          quote: compactQuoteToDisplayPrice(point.compactQuote),
+          quote: point.compactQuote,
           announcedAt: point.announcedAt.toISOString(),
         })),
       },

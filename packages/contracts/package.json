@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts"
   },
   "scripts": {
     "lint": "eslint src",
@@ -13,7 +14,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@orpc/contract": "1.15.0"
   },
   "devDependencies": {
     "@zarbit/config": "workspace:*",

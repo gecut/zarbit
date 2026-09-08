@@ -28,7 +28,7 @@ test("returns null when no quote has been received", async () => {
   assert.deepEqual(await response.json(), { data: null });
 });
 
-test("returns a three-day dashboard with display amounts", async () => {
+test("returns a three-day dashboard with compact amounts", async () => {
   const response = await appWithQuote(
     {
       id: 1,
@@ -62,16 +62,16 @@ test("returns a three-day dashboard with display amounts", async () => {
   assert.deepEqual(await response.json(), {
     data: {
       latest: {
-        quote: 96_120_000,
+        quote: 96_120,
         announcedAt: "2026-09-07T08:00:00.000Z",
       },
       points: [
         {
-          quote: 95_900_000,
+          quote: 95_900,
           announcedAt: "2026-09-06T08:00:00.000Z",
         },
         {
-          quote: 96_120_000,
+          quote: 96_120,
           announcedAt: "2026-09-07T08:00:00.000Z",
         },
       ],
@@ -88,7 +88,7 @@ test("returns an empty dashboard before the first quote", async () => {
   });
 });
 
-test("maps compact storage value to the public display amount", async () => {
+test("returns the compact storage value from the quote API", async () => {
   const response = await appWithQuote({
     id: 1,
     compactQuote: 95_900,
@@ -99,7 +99,7 @@ test("maps compact storage value to the public display amount", async () => {
   }).request("http://server/api/quote/latest");
 
   assert.deepEqual(await response.json(), {
-    data: { quote: 95_900_000, announcedAt: "2026-09-07T08:00:00.000Z" },
+    data: { quote: 95_900, announcedAt: "2026-09-07T08:00:00.000Z" },
   });
 });
 

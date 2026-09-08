@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { LoginStatus, TelegramSessionStatus } from "@zarbit/contracts";
 
-import { resolveTelegramSessionPresentation } from "../src/components/telegram/_session-view-model";
+import { resolveTelegramSessionPresentation } from "../src/modules/telegram/_session-view-model";
 
 function createSession(
   overrides: Partial<TelegramSessionStatus> = {},

@@ -8,7 +8,7 @@ import {
   type CreateRequestInput,
 } from "@zarbit/contracts";
 
-import type { ApiClient } from "../lib/api";
+import type { LegacyApi } from "../shared/api/legacy-api";
 import { createQuoteDashboard, getQuoteScenario } from "./quote-scenarios";
 
 const mockIdentity: Identity = {
@@ -89,7 +89,7 @@ function seedRequests(): RequestDetail[] {
   ];
 }
 
-export function createMockApi(): ApiClient {
+export function createMockApi(): LegacyApi {
   let session = initialSession();
   const requests: RequestDetail[] = seedRequests();
   const scenario = getQuoteScenario(window.location.search);
@@ -183,10 +183,15 @@ export function createMockApi(): ApiClient {
 
       return copySession(session);
     },
+    getRequest: async (id) => {
+      const row = requests.find((row) => row.id === id);
+      if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+      return structuredClone(row);
+    },
     getActiveRequests: async () =>
-      requests.filter((r) => r.status === "ACTIVE"),
+      structuredClone(requests.filter((r) => r.status === "ACTIVE")),
     getRequestHistory: async () => ({
-      items: requests.filter((r) => r.status !== "ACTIVE"),
+      items: structuredClone(requests.filter((r) => r.status !== "ACTIVE")),
       nextCursor: null,
     }),
     createRequest: async (input) => {
@@ -206,13 +211,13 @@ export function createMockApi(): ApiClient {
         updatedAt: now,
       };
       requests.unshift(row);
-      return row;
+      return structuredClone(row);
     },
     updateRequest: async (id, input) => {
       const row = requests.find((r) => r.id === id);
       if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
       Object.assign(row, input);
-      return row;
+      return structuredClone(row);
     },
     cancelRequest: async (id) => {
       const row = requests.find((r) => r.id === id);
@@ -220,7 +225,7 @@ export function createMockApi(): ApiClient {
       row.status = "CANCELLED";
       row.cancellationReason = "لغو توسط کاربر";
       row.completedAt = new Date().toISOString();
-      return row;
+      return structuredClone(row);
     },
     forceSendRequest: async (id) => {
       const row = requests.find((r) => r.id === id);
@@ -228,7 +233,7 @@ export function createMockApi(): ApiClient {
       row.status = "DONE";
       row.outgoingMessageId = 1;
       row.completedAt = new Date().toISOString();
-      return row;
+      return structuredClone(row);
     },
   };
 }

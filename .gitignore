@@ -16,6 +16,7 @@ build
 # Generated files
 .graphify_*.json
 .playwright-cli/
+graphify-out/cache
 apps/web/src/routeTree.gen.ts
 local.db
 local.db-*

@@ -1,8 +1,9 @@
 import {
   AppError,
   workerCommandSchema,
+  telegramSessionStatusSchema,
   type Identity,
-  type TelegramSessionStatus,
+  type TelegramSessionStatusV2,
   type WorkerCommand,
   type RequestDetail,
   type CreateRequestInput,
@@ -17,10 +18,21 @@ const mockIdentity: Identity = {
   username: "zarbit_dev",
 };
 
-function initialSession(): TelegramSessionStatus {
+function initialSession(): TelegramSessionStatusV2 {
   return {
+    kind: "ACTIVE",
     state: "ACTIVE",
     connection: "CONNECTED",
+    reasonCode: "NONE",
+    observedAt: new Date().toISOString(),
+    stateChangedAt: new Date().toISOString(),
+    retryAt: null,
+    capabilities: {
+      canLogin: false,
+      canCreateRequest: true,
+      canCheckMembership: true,
+      canRevoke: true,
+    },
     groupId: -1001234567890,
     quoteSenderId: "123456789",
     connectedTelegramUserId: mockIdentity.telegramUserId,
@@ -30,8 +42,13 @@ function initialSession(): TelegramSessionStatus {
   };
 }
 
-function copySession(session: TelegramSessionStatus): TelegramSessionStatus {
-  return { ...session, login: session.login ? { ...session.login } : null };
+function copySession(
+  session: TelegramSessionStatusV2,
+): TelegramSessionStatusV2 {
+  return telegramSessionStatusSchema.parse({
+    ...session,
+    login: session.login ? { ...session.login } : null,
+  });
 }
 
 function seedRequests(): RequestDetail[] {
@@ -44,6 +61,15 @@ function seedRequests(): RequestDetail[] {
     ...input,
     id: crypto.randomUUID(),
     status,
+    executionPhase: status === "ACTIVE" ? "WAITING_QUOTE" : status,
+    outcomeCode: status === "FAILED" ? "DELIVERY_FAILED" : null,
+    deliveryStartedAt:
+      status === "DONE" || status === "UNKNOWN"
+        ? new Date(now - 14 * 60_000).toISOString()
+        : null,
+    unknownReason:
+      status === "UNKNOWN" ? "نتیجه تحویل از تلگرام مشخص نیست." : null,
+    resolutionState: status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
     executing: status === "ACTIVE" && input.action === "BUY",
     triggeredQuote: status === "ACTIVE" ? null : input.targetPrice + 120,
     triggeredMessageId: status === "ACTIVE" ? null : 1842,
@@ -121,8 +147,19 @@ export function createMockApi(): LegacyApi {
       if (input.type === "login") {
         const now = Date.now();
         session = {
-          state: "PENDING_OTP",
+          kind: "LOGIN_PENDING",
+          state: "LOGIN_PENDING",
           connection: "CONNECTING",
+          reasonCode: "NONE",
+          observedAt: new Date().toISOString(),
+          stateChangedAt: new Date().toISOString(),
+          retryAt: null,
+          capabilities: {
+            canLogin: false,
+            canCreateRequest: false,
+            canCheckMembership: false,
+            canRevoke: false,
+          },
           groupId: -1001234567890,
           quoteSenderId: "123456789",
           connectedTelegramUserId: null,
@@ -138,6 +175,7 @@ export function createMockApi(): LegacyApi {
             maskedPhone: input.phone.replace(/.(?=.{4})/g, "•"),
             error: null,
           },
+          phase: "CODE",
         };
       } else if (input.type === "code" || input.type === "password") {
         if (!session.login || session.login.id !== input.id)
@@ -157,8 +195,19 @@ export function createMockApi(): LegacyApi {
         if (!session.login || session.login.id !== input.id)
           throw new AppError("INVALID_LOGIN", "ورود معتبر نیست.", 400);
         session = {
+          kind: "DISCONNECTED",
           state: "DISCONNECTED",
           connection: "OFFLINE",
+          reasonCode: "LOGIN_REQUIRED",
+          observedAt: new Date().toISOString(),
+          stateChangedAt: new Date().toISOString(),
+          retryAt: null,
+          capabilities: {
+            canLogin: true,
+            canCreateRequest: false,
+            canCheckMembership: false,
+            canRevoke: false,
+          },
           groupId: -1001234567890,
           quoteSenderId: "123456789",
           connectedTelegramUserId: null,
@@ -170,8 +219,19 @@ export function createMockApi(): LegacyApi {
         session = { ...session, membershipCheckedAt: new Date().toISOString() };
       } else if (input.type === "revoke") {
         session = {
+          kind: "REVOKED",
           state: "REVOKED",
           connection: "OFFLINE",
+          reasonCode: "TELEGRAM_LOGGED_OUT",
+          observedAt: new Date().toISOString(),
+          stateChangedAt: new Date().toISOString(),
+          retryAt: null,
+          capabilities: {
+            canLogin: true,
+            canCreateRequest: false,
+            canCheckMembership: false,
+            canRevoke: false,
+          },
           groupId: -1001234567890,
           quoteSenderId: "123456789",
           connectedTelegramUserId: null,
@@ -200,6 +260,11 @@ export function createMockApi(): LegacyApi {
         ...input,
         id: crypto.randomUUID(),
         status: "ACTIVE" as const,
+        executionPhase: "WAITING_QUOTE" as const,
+        outcomeCode: null,
+        deliveryStartedAt: null,
+        unknownReason: null,
+        resolutionState: "NOT_APPLICABLE" as const,
         executing: false,
         triggeredQuote: null,
         triggeredMessageId: null,

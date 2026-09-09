@@ -90,6 +90,10 @@ export function createStore(
           connectedTelegramUserId: null,
           revision: { increment: 1 },
           runtimeReady: false,
+          connectionState: "OFFLINE",
+          reasonCode: "LOGIN_REQUIRED",
+          lastErrorCode: null,
+          revokedAt: null,
           membershipCheckedAt: null,
           lastError: null,
           stateChangedAt: new Date(),
@@ -100,7 +104,10 @@ export function createStore(
       revision: number,
       data: Prisma.TelegramSessionUpdateManyMutationInput,
     ) =>
-      prisma.telegramSession.updateMany({ where: { userId, revision }, data }),
+      prisma.telegramSession.updateMany({
+        where: { userId, revision },
+        data: { ...data, lastObservedAt: new Date() },
+      }),
     activateSession: (
       userId: string,
       revision: number,
@@ -112,13 +119,14 @@ export function createStore(
           revision,
           state: { in: ["ACTIVE", "PENDING_OTP", "NOT_IN_GROUP"] },
         },
-        data,
+        data: { ...data, lastObservedAt: new Date() },
       }),
     disableSession: (
       userId: string,
       state: "NOT_IN_GROUP" | "REVOKING" | "REVOKED" | "ERROR",
       error: string,
       revision?: number,
+      reasonCode?: string,
     ) =>
       prisma.telegramSession
         .updateMany({
@@ -132,18 +140,38 @@ export function createStore(
           data: {
             state,
             runtimeReady: false,
+            connectionState: "OFFLINE",
             lastError: error,
+            reasonCode: reasonCode ?? null,
+            lastErrorCode: reasonCode ?? null,
+            ...(state === "REVOKED" ? { revokedAt: new Date() } : {}),
             stateChangedAt: new Date(),
           },
         })
         .then((changed) => changed.count === 1),
     recover: async () => {
       await prisma.telegramSession.updateMany({
-        data: { runtimeReady: false, runtimeCheckedAt: null },
+        data: {
+          runtimeReady: false,
+          runtimeCheckedAt: null,
+          connectionState: "OFFLINE",
+        },
+      });
+      await prisma.telegramSession.updateMany({
+        where: { state: "ACTIVE" },
+        data: {
+          connectionState: "DEGRADED",
+          reasonCode: "NETWORK_UNAVAILABLE",
+        },
       });
       await prisma.telegramSession.updateMany({
         where: { state: "PENDING_OTP", connectedTelegramUserId: { not: null } },
-        data: { state: "ACTIVE", lastError: null },
+        data: {
+          state: "ACTIVE",
+          connectionState: "DEGRADED",
+          reasonCode: "NETWORK_UNAVAILABLE",
+          lastError: null,
+        },
       });
       await prisma.telegramSession.updateMany({
         where: { state: "PENDING_OTP", connectedTelegramUserId: null },

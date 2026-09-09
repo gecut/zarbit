@@ -42,6 +42,7 @@ services:
     expose: ["3000"]
     environment:
       NODE_ENV: production
+      RELEASE_ID: ${IMAGE_TAG:?Set an immutable IMAGE_TAG}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}

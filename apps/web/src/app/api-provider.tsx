@@ -25,10 +25,6 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       }
       if (!env.VITE_SERVER_URL)
         throw new Error("نشانی سرویس برای این محیط تنظیم نشده است.");
-      if (env.VITE_RPC_TRANSPORT === "legacy") {
-        const { createLegacyApi } = await import("../shared/api/legacy-api");
-        return adaptLegacyApi(createLegacyApi());
-      }
       return createRpcClient(
         new URL("/rpc", env.VITE_SERVER_URL).href,
         telegramInitData,

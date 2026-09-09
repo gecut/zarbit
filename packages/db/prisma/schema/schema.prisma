@@ -18,6 +18,28 @@ enum TelegramSessionState {
   ERROR
 }
 
+enum TelegramConnectionState {
+  CONNECTED
+  CONNECTING
+  OFFLINE
+  DEGRADED
+}
+
+enum RequestExecutionPhase {
+  WAITING_QUOTE
+  CLAIMED
+  SENDING
+  DONE
+  FAILED
+  CANCELLED
+  UNKNOWN
+}
+
+enum RequestResolutionState {
+  NOT_APPLICABLE
+  UNRESOLVED
+}
+
 model TelegramUser {
   id              String           @id @default(cuid())
   telegramUserId  String           @unique
@@ -35,6 +57,11 @@ model TelegramSession {
   storageKey              String?              @unique
   connectedTelegramUserId String?              @unique
   state                   TelegramSessionState @default(PENDING_OTP)
+  connectionState         TelegramConnectionState @default(OFFLINE)
+  reasonCode              String?
+  lastObservedAt          DateTime             @default(now())
+  lastErrorCode           String?
+  revokedAt               DateTime?
   revision                Int                  @default(0)
   runtimeReady            Boolean              @default(false)
   runtimeCheckedAt        DateTime?
@@ -46,6 +73,7 @@ model TelegramSession {
   user                    TelegramUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([state, updatedAt])
+  @@index([state, connectionState])
 }
 
 model LoginRateLimit {
@@ -82,6 +110,11 @@ model Request {
   targetPrice        Int
   units              Int?
   status             RequestStatus    @default(ACTIVE)
+  executionPhase     RequestExecutionPhase @default(WAITING_QUOTE)
+  outcomeCode        String?
+  deliveryStartedAt  DateTime?
+  unknownReason      String?
+  resolutionState    RequestResolutionState @default(NOT_APPLICABLE)
   claimToken         String?          @unique
   triggeredQuote     Int?
   triggeredMessageId Int?

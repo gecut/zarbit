@@ -3,7 +3,7 @@ import {
   AppError,
   type QuoteDashboard,
   type RequestDetail,
-  type TelegramSessionStatus,
+  telegramSessionStatusSchema,
 } from "@zarbit/contracts";
 import { rpcContract } from "@zarbit/contracts/rpc";
 import { requestView } from "@zarbit/db/requests";
@@ -13,12 +13,17 @@ import { ReadCapacity, RpcRateLimit } from "./rpc-capacity";
 import { RpcMetrics } from "./rpc-metrics";
 import { serverLog } from "./logger";
 
-export function rpcError(error: unknown) {
+export function rpcError(error: unknown, requestId = "unknown") {
   if (error instanceof ORPCError) {
     if (error.code === "BAD_REQUEST")
       return new ORPCError("BAD_REQUEST", {
         message: "اطلاعات ارسالی را بررسی کنید.",
-        data: { appCode: "INVALID_INPUT" },
+        data: {
+          appCode: "INVALID_INPUT",
+          reasonCode: "INVALID_INPUT",
+          messageKey: "INVALID_INPUT",
+          requestId,
+        },
       });
     return error;
   }
@@ -43,6 +48,9 @@ export function rpcError(error: unknown) {
     message: safe.message,
     data: {
       appCode: safe.code,
+      reasonCode: safe.code,
+      messageKey: safe.code,
+      requestId,
       retryAt: safe.retryAt,
       retryAfter: safe.retryAt
         ? Math.max(0, Math.ceil((Date.parse(safe.retryAt) - Date.now()) / 1000))
@@ -76,7 +84,9 @@ export function createOrpcRouter(deps: AppDependencies) {
     maxEntries: 100,
     observe: observe("requests"),
   });
-  const sessions = new ResponseCache<TelegramSessionStatus>({
+  const sessions = new ResponseCache<
+    ReturnType<typeof telegramSessionStatusSchema.parse>
+  >({
     ttlMs: 1000,
     maxEntries: 100,
     observe: observe("session"),
@@ -107,12 +117,59 @@ export function createOrpcRouter(deps: AppDependencies) {
     );
   const requireSession = async (id: string) => {
     const status = await deps.command(id, { type: "status" });
-    if (status.state !== "ACTIVE" || status.connection !== "CONNECTED")
-      throw new AppError(
-        "SESSION_REQUIRED",
-        "ابتدا اتصال تلگرام را برقرار کنید.",
-      );
+    const ready =
+      "capabilities" in status
+        ? (status.capabilities?.canCreateRequest ?? false)
+        : status.state === "ACTIVE" && status.connection === "CONNECTED";
+    if (!ready) {
+      const detail =
+        "kind" in status && status.kind
+          ? (
+              {
+                DISCONNECTED: [
+                  "SESSION_DISCONNECTED",
+                  "ابتدا اتصال تلگرام را برقرار کنید.",
+                ],
+                LOGIN_PENDING: [
+                  "LOGIN_PENDING",
+                  "مراحل ورود تلگرام را کامل کنید.",
+                ],
+                NOT_IN_GROUP: [
+                  "GROUP_MEMBERSHIP_REQUIRED",
+                  "این حساب عضو گروه هدف نیست.",
+                ],
+                DEGRADED: [
+                  "SESSION_DEGRADED",
+                  "ارتباط تلگرام ناپایدار است؛ کمی بعد دوباره تلاش کنید.",
+                ],
+                REVOKED: [
+                  "SESSION_REVOKED",
+                  "اتصال تلگرام توسط تلگرام قطع شده است؛ دوباره وارد شوید.",
+                ],
+                REVOKING: ["SESSION_REVOKING", "قطع اتصال در حال انجام است."],
+                ERROR: [
+                  "SESSION_ERROR",
+                  "اتصال تلگرام با خطا روبه‌رو شده است.",
+                ],
+                ACTIVE: [
+                  "SESSION_REQUIRED",
+                  "ابتدا اتصال تلگرام را برقرار کنید.",
+                ],
+              } as const
+            )[status.kind]
+          : ([
+              "SESSION_REQUIRED",
+              "ابتدا اتصال تلگرام را برقرار کنید.",
+            ] as const);
+      throw new AppError(detail[0], detail[1]);
+    }
   };
+  const readStatus = async (
+    id: string,
+  ): Promise<ReturnType<typeof telegramSessionStatusSchema.parse>> =>
+    (await deps.command(id, { type: "status" })) as unknown as ReturnType<
+      typeof telegramSessionStatusSchema.parse
+    >;
   const changeRequest = async <T>(id: string, action: () => Promise<T>) => {
     active.invalidate(id);
     try {
@@ -164,7 +221,7 @@ export function createOrpcRouter(deps: AppDependencies) {
               ),
             );
           }
-          serverLog.debug(
+          serverLog.warn(
             {
               event: "rpc.failed",
               requestId: context.requestId,
@@ -173,10 +230,12 @@ export function createOrpcRouter(deps: AppDependencies) {
                 error instanceof AppError || error instanceof ORPCError
                   ? error.code
                   : "UNAVAILABLE",
+              reasonCode:
+                error instanceof AppError ? error.code : "UNAVAILABLE",
             },
             "rpc.failed",
           );
-          throw rpcError(error);
+          throw rpcError(error, context.requestId);
         }
       });
     });
@@ -194,9 +253,7 @@ export function createOrpcRouter(deps: AppDependencies) {
     telegram: {
       status: os.telegram.status.handler(({ context }) =>
         sessions.get(context.user.id, () =>
-          workerCapacity.run(() =>
-            deps.command(context.user.id, { type: "status" }),
-          ),
+          workerCapacity.run(() => readStatus(context.user.id)),
         ),
       ),
       command: os.telegram.command.handler(async ({ context, input }) => {
@@ -210,7 +267,9 @@ export function createOrpcRouter(deps: AppDependencies) {
               "REVOKING",
               "قطع اتصال درخواست شده؛ وضعیت درخواست‌های خود را بررسی کنید.",
             );
-          return await deps.command(id, input);
+          return (await deps.command(id, input)) as unknown as ReturnType<
+            typeof telegramSessionStatusSchema.parse
+          >;
         } finally {
           sessions.invalidate(id);
           active.invalidate(id);

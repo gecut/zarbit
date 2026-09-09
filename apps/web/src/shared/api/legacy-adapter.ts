@@ -1,4 +1,9 @@
 import type { RpcClient } from "@zarbit/contracts/rpc";
+import type {
+  CreateRequestInput,
+  UpdateRequestInput,
+  WorkerCommand,
+} from "@zarbit/contracts";
 import type { LegacyApi } from "./legacy-api";
 
 /** Compatibility seam for the rollback transport and existing development scenarios. */
@@ -11,16 +16,19 @@ export function adaptLegacyApi(api: LegacyApi): RpcClient {
     },
     telegram: {
       status: () => api.getTelegramSession(),
-      command: (input) => api.sessionCommand(input),
+      command: (input: Exclude<WorkerCommand, { type: "status" }>) =>
+        api.sessionCommand(input),
     },
     requests: {
       active: () => api.getActiveRequests(),
-      history: (input) => api.getRequestHistory(input.cursor),
-      detail: ({ id }) => api.getRequest(id),
-      create: (input) => api.createRequest(input),
-      update: ({ id, data }) => api.updateRequest(id, data),
-      cancel: ({ id }) => api.cancelRequest(id),
-      forceSend: ({ id }) => api.forceSendRequest(id),
+      history: (input: { cursor?: string }) =>
+        api.getRequestHistory(input.cursor),
+      detail: ({ id }: { id: string }) => api.getRequest(id),
+      create: (input: CreateRequestInput) => api.createRequest(input),
+      update: ({ id, data }: { id: string; data: UpdateRequestInput }) =>
+        api.updateRequest(id, data),
+      cancel: ({ id }: { id: string }) => api.cancelRequest(id),
+      forceSend: ({ id }: { id: string }) => api.forceSendRequest(id),
     },
-  };
+  } as unknown as RpcClient;
 }

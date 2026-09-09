@@ -6,7 +6,36 @@ import {
 import type { PrismaClient, Prisma } from "../prisma/generated/client";
 import type { Request as RequestRecord } from "../prisma/generated/client";
 
-export function requestView(row: RequestRecord): RequestDetail {
+type RequestViewRow = Omit<
+  RequestRecord,
+  | "executionPhase"
+  | "outcomeCode"
+  | "deliveryStartedAt"
+  | "unknownReason"
+  | "resolutionState"
+> &
+  Partial<
+    Pick<
+      RequestRecord,
+      | "executionPhase"
+      | "outcomeCode"
+      | "deliveryStartedAt"
+      | "unknownReason"
+      | "resolutionState"
+    >
+  >;
+export function requestView(row: RequestViewRow): RequestDetail {
+  const executionPhase =
+    row.executionPhase ??
+    (
+      {
+        ACTIVE: "WAITING_QUOTE",
+        DONE: "DONE",
+        FAILED: "FAILED",
+        CANCELLED: "CANCELLED",
+        UNKNOWN: "UNKNOWN",
+      } as const
+    )[row.status];
   return {
     id: row.id,
     condition: row.condition,
@@ -14,7 +43,14 @@ export function requestView(row: RequestRecord): RequestDetail {
     targetPrice: row.targetPrice,
     units: row.units,
     status: row.status,
-    executing: row.claimToken !== null && row.status === "ACTIVE",
+    executing: executionPhase === "CLAIMED" || executionPhase === "SENDING",
+    executionPhase,
+    outcomeCode: row.outcomeCode ?? null,
+    deliveryStartedAt: row.deliveryStartedAt?.toISOString() ?? null,
+    unknownReason: row.unknownReason ?? null,
+    resolutionState:
+      row.resolutionState ??
+      (row.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE"),
     triggeredQuote: row.triggeredQuote,
     triggeredMessageId: row.triggeredMessageId,
     outgoingMessageId: row.outgoingMessageId,
@@ -135,6 +171,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
           where: { id, userId, status: "ACTIVE", claimToken: null },
           data: {
             status: "CANCELLED",
+            executionPhase: "CANCELLED",
             completedAt: now(),
             cancellationReason: "لغو توسط کاربر",
           },
@@ -183,6 +220,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         },
         data: {
           claimToken: token,
+          executionPhase: "CLAIMED",
           triggeredQuote: quote?.compactQuote,
           triggeredMessageId: quote?.sourceMessageId,
         },
@@ -202,13 +240,28 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
     ) =>
       db.request.updateMany({
         where: { id, claimToken, status: "ACTIVE" },
-        data: { ...result, completedAt: now() },
+        data: {
+          ...result,
+          executionPhase: result.status,
+          resolutionState:
+            result.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
+          unknownReason:
+            result.status === "UNKNOWN" ? result.failureReason : null,
+          completedAt: now(),
+        },
+      }),
+    markSending: (id: string, claimToken: string, startedAt = now()) =>
+      db.request.updateMany({
+        where: { id, claimToken, status: "ACTIVE" },
+        data: { executionPhase: "SENDING", deliveryStartedAt: startedAt },
       }),
     recoverRequests: () =>
       db.request.updateManyAndReturn({
         where: { status: "ACTIVE", claimToken: { not: null } },
         data: {
           status: "UNKNOWN",
+          executionPhase: "UNKNOWN",
+          resolutionState: "UNRESOLVED",
           completedAt: now(),
           failureReason: "سرویس هنگام اجرا متوقف شد؛ نتیجه ارسال مشخص نیست.",
         },

@@ -5,14 +5,11 @@ import {
   BatchHandlerPlugin,
   ResponseHeadersPlugin,
 } from "@orpc/server/plugins";
-import { registerRequestRoutes } from "./request-routes";
 import { Hono } from "hono";
 
 import { registerApiErrorHandlers } from "./api-error-handlers";
 import { registerApiMiddleware } from "./api-middleware";
 import type { AppDependencies, AppEnv } from "./app-types";
-import { registerQuoteRoutes } from "./quote-routes";
-import { registerTelegramSessionRoutes } from "./telegram-session-routes";
 import { RPCHandler } from "@orpc/server/fetch";
 import { createOrpcRouter, rpcError } from "./orpc-router";
 
@@ -30,11 +27,11 @@ export function createApp(deps: AppDependencies) {
       new ResponseHeadersPlugin(),
     ],
     interceptors: [
-      async ({ next }) => {
+      async ({ next, context }) => {
         try {
           return await next();
         } catch (error) {
-          throw rpcError(error);
+          throw rpcError(error, context.requestId);
         }
       },
     ],
@@ -86,14 +83,6 @@ export function createApp(deps: AppDependencies) {
     return c.text("OK");
   });
 
-  app.post("/api/auth/telegram", (c) => {
-    const { id: _, ...identity } = c.get("user");
-    return c.json({ data: identity });
-  });
-
-  registerQuoteRoutes(app, deps);
-  registerRequestRoutes(app, deps);
-  registerTelegramSessionRoutes(app, deps);
   registerApiErrorHandlers(app);
 
   return app;

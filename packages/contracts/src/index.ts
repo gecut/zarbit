@@ -40,16 +40,49 @@ export const quoteDashboardSchema = z
   })
   .strict();
 export type QuoteDashboard = z.infer<typeof quoteDashboardSchema>;
-export const telegramSessionStateSchema = z.enum([
+export const telegramSessionKindSchema = z.enum([
   "DISCONNECTED",
-  "PENDING_OTP",
+  "LOGIN_PENDING",
   "ACTIVE",
+  "DEGRADED",
   "NOT_IN_GROUP",
   "REVOKING",
   "REVOKED",
   "ERROR",
 ]);
-export type TelegramSessionState = z.infer<typeof telegramSessionStateSchema>;
+export type TelegramSessionKind = z.infer<typeof telegramSessionKindSchema>;
+/** @deprecated Use TelegramSessionKind and the discriminated status union. */
+export type TelegramSessionState = TelegramSessionKind | "PENDING_OTP";
+export const telegramSessionReasonCodeSchema = z.enum([
+  "NONE",
+  "LOGIN_REQUIRED",
+  "LOGIN_EXPIRED",
+  "TELEGRAM_LOGGED_OUT",
+  "SESSION_EXPIRED",
+  "AUTH_KEY_UNREGISTERED",
+  "AUTH_KEY_DUPLICATED",
+  "SESSION_REVOKED",
+  "USER_DEACTIVATED",
+  "USER_DEACTIVATED_BAN",
+  "NETWORK_UNAVAILABLE",
+  "GROUP_MEMBERSHIP_REQUIRED",
+  "IDENTITY_MISMATCH",
+  "WORKER_UNAVAILABLE",
+  "RATE_LIMITED",
+  "UNKNOWN_FAILURE",
+]);
+export type TelegramSessionReasonCode = z.infer<
+  typeof telegramSessionReasonCodeSchema
+>;
+export const sessionCapabilitiesSchema = z
+  .object({
+    canLogin: z.boolean(),
+    canCreateRequest: z.boolean(),
+    canCheckMembership: z.boolean(),
+    canRevoke: z.boolean(),
+  })
+  .strict();
+export type SessionCapabilities = z.infer<typeof sessionCapabilitiesSchema>;
 export const loginStatusSchema = z.object({
   id: z.string().uuid(),
   step: z.enum(["CODE", "PASSWORD", "VERIFYING"]),
@@ -61,17 +94,103 @@ export const loginStatusSchema = z.object({
   error: z.string().nullable(),
 });
 export type LoginStatus = z.infer<typeof loginStatusSchema>;
-export const telegramSessionStatusSchema = z.object({
-  state: telegramSessionStateSchema,
-  connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE", "DEGRADED"]),
-  groupId: z.number().int().safe().nullable(),
-  quoteSenderId: z.string().nullable(),
-  connectedTelegramUserId: z.string().nullable(),
-  membershipCheckedAt: z.string().nullable(),
-  error: z.string().nullable(),
-  login: loginStatusSchema.nullable(),
-});
-export type TelegramSessionStatus = z.infer<typeof telegramSessionStatusSchema>;
+const sessionCommon = z
+  .object({
+    reasonCode: telegramSessionReasonCodeSchema,
+    observedAt: z.string().datetime(),
+    stateChangedAt: z.string().datetime(),
+    retryAt: z.string().datetime().nullable(),
+    capabilities: sessionCapabilitiesSchema,
+    groupId: z.number().int().safe().nullable(),
+    quoteSenderId: z.string().nullable(),
+    connectedTelegramUserId: z.string().nullable(),
+    membershipCheckedAt: z.string().datetime().nullable(),
+    login: loginStatusSchema.nullable(),
+    state: telegramSessionKindSchema.optional(),
+    error: z.string().nullable().optional(),
+  })
+  .strict();
+export const telegramSessionStatusSchema = z.discriminatedUnion("kind", [
+  sessionCommon.extend({
+    kind: z.literal("DISCONNECTED"),
+    connection: z.literal("OFFLINE"),
+    reasonCode: z.enum(["LOGIN_REQUIRED", "LOGIN_EXPIRED"]),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("LOGIN_PENDING"),
+    connection: z.literal("CONNECTING"),
+    phase: z.enum(["VERIFYING", "CODE", "PASSWORD"]),
+    login: loginStatusSchema,
+  }),
+  sessionCommon.extend({
+    kind: z.literal("ACTIVE"),
+    connection: z.literal("CONNECTED"),
+    reasonCode: z.literal("NONE"),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("DEGRADED"),
+    connection: z.enum(["OFFLINE", "CONNECTING"]),
+    reasonCode: z.enum(["NETWORK_UNAVAILABLE", "WORKER_UNAVAILABLE"]),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("NOT_IN_GROUP"),
+    connection: z.enum(["CONNECTED", "OFFLINE"]),
+    reasonCode: z.literal("GROUP_MEMBERSHIP_REQUIRED"),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("REVOKING"),
+    connection: z.enum(["CONNECTED", "OFFLINE"]),
+    reasonCode: z.literal("NONE"),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("REVOKED"),
+    connection: z.literal("OFFLINE"),
+    reasonCode: z.enum([
+      "TELEGRAM_LOGGED_OUT",
+      "SESSION_EXPIRED",
+      "AUTH_KEY_UNREGISTERED",
+      "AUTH_KEY_DUPLICATED",
+      "SESSION_REVOKED",
+      "USER_DEACTIVATED",
+      "USER_DEACTIVATED_BAN",
+      "IDENTITY_MISMATCH",
+    ]),
+    login: z.null(),
+  }),
+  sessionCommon.extend({
+    kind: z.literal("ERROR"),
+    connection: z.enum(["OFFLINE", "CONNECTING"]),
+    reasonCode: z.enum(["UNKNOWN_FAILURE", "RATE_LIMITED"]),
+    login: z.null(),
+  }),
+]);
+export type TelegramSessionStatusV2 = z.infer<
+  typeof telegramSessionStatusSchema
+>;
+/** @deprecated Accepted only at TypeScript integration seams while clients roll forward. */
+type LegacyTelegramSessionStatus = {
+  state: TelegramSessionKind | "PENDING_OTP";
+  connection: "CONNECTED" | "CONNECTING" | "OFFLINE" | "DEGRADED";
+  groupId: number | null;
+  quoteSenderId: string | null;
+  connectedTelegramUserId: string | null;
+  membershipCheckedAt: string | null;
+  error: string | null;
+  login: LoginStatus | null;
+  kind?: TelegramSessionKind;
+  phase?: "VERIFYING" | "CODE" | "PASSWORD";
+  observedAt?: string;
+  stateChangedAt?: string;
+  retryAt?: string | null;
+  capabilities?: SessionCapabilities;
+};
+export type TelegramSessionStatus =
+  z.infer<typeof telegramSessionStatusSchema> | LegacyTelegramSessionStatus;
 export interface Identity {
   telegramUserId: string;
   firstName?: string;
@@ -127,6 +246,19 @@ export const requestStatusSchema = z.enum([
   "FAILED",
   "UNKNOWN",
 ]);
+export const requestExecutionPhaseSchema = z.enum([
+  "WAITING_QUOTE",
+  "CLAIMED",
+  "SENDING",
+  "DONE",
+  "FAILED",
+  "CANCELLED",
+  "UNKNOWN",
+]);
+export const requestResolutionStateSchema = z.enum([
+  "NOT_APPLICABLE",
+  "UNRESOLVED",
+]);
 const requestFields = z
   .object({
     condition: requestConditionSchema,
@@ -151,6 +283,11 @@ export const requestSchema = requestFields.extend({
   id: z.string(),
   status: requestStatusSchema,
   executing: z.boolean(),
+  executionPhase: requestExecutionPhaseSchema.optional(),
+  outcomeCode: z.string().nullable().optional(),
+  deliveryStartedAt: z.string().datetime().nullable().optional(),
+  unknownReason: z.string().nullable().optional(),
+  resolutionState: requestResolutionStateSchema.optional(),
   triggeredQuote: requestInteger.nullable(),
   triggeredMessageId: z.number().int().nullable(),
   outgoingMessageId: z.number().int().nullable(),

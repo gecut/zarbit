@@ -13,6 +13,15 @@ const labels = {
   FAILED: "ناموفق",
   UNKNOWN: "نامشخص",
 } as const;
+export const executionPhaseLabels = {
+  WAITING_QUOTE: "در انتظار مظنه",
+  CLAIMED: "در صف اجرا",
+  SENDING: "در حال ارسال",
+  DONE: "ارسال شد",
+  FAILED: "ناموفق",
+  CANCELLED: "لغو شد",
+  UNKNOWN: "نتیجه نامشخص؛ گروه را بررسی کنید",
+} as const;
 
 export const actionLabels = {
   ALERT: "هشدار",

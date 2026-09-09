@@ -2,7 +2,10 @@ import { createHash, timingSafeEqual, randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
-import { WORKER_DIAGNOSTIC_USER_ID, workerCommandSchema } from "@zarbit/contracts";
+import {
+  WORKER_DIAGNOSTIC_USER_ID,
+  workerCommandSchema,
+} from "@zarbit/contracts";
 import { safeError } from "./errors";
 import { sessionRef, workerLog } from "./logger";
 import type { Sessions } from "./sessions";
@@ -15,7 +18,12 @@ export function createWorkerApp(
   const app = new Hono<{ Variables: { requestId: string } }>();
   app.use("*", async (c, next) => {
     const incoming = c.req.header("X-Request-Id") ?? "";
-    const requestId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(incoming) ? incoming : randomUUID();
+    const requestId =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        incoming,
+      )
+        ? incoming
+        : randomUUID();
     c.set("requestId", requestId);
     c.header("X-Request-Id", requestId);
     await next();
@@ -24,7 +32,7 @@ export function createWorkerApp(
     const startedAt = Date.now();
     try {
       const result = {
-        ...await health(),
+        ...(await health()),
         ...sessions.runtimeHealth(),
         uptimeSeconds: Math.floor(process.uptime()),
         releaseId: process.env.RELEASE_ID ?? null,
@@ -84,7 +92,8 @@ export function createWorkerApp(
         400,
       );
     }
-    const logCommand = input.data.command.type === "status" ? workerLog.debug : workerLog.info;
+    const logCommand =
+      input.data.command.type === "status" ? workerLog.debug : workerLog.info;
     logCommand("worker.command.started", {
       requestId: c.get("requestId"),
       command: input.data.command.type,
@@ -93,7 +102,10 @@ export function createWorkerApp(
     try {
       const diagnostic = input.data.userId === WORKER_DIAGNOSTIC_USER_ID;
       if (diagnostic && input.data.command.type !== "status") {
-        return c.json({ error: { code: "FORBIDDEN", message: "دسترسی مجاز نیست." } }, 403);
+        return c.json(
+          { error: { code: "FORBIDDEN", message: "دسترسی مجاز نیست." } },
+          403,
+        );
       }
       if (diagnostic) await health();
       const data = diagnostic
@@ -121,6 +133,9 @@ export function createWorkerApp(
         {
           error: {
             code: safe.code,
+            reasonCode: safe.code,
+            messageKey: safe.code,
+            requestId: c.get("requestId"),
             message: safe.message,
             retryAt: safe.retryAt,
           },

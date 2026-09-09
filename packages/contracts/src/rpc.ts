@@ -11,11 +11,16 @@ import {
   sessionCommandSchema,
 } from "./index";
 
-export const rpcErrorDataSchema = z.object({
-  appCode: z.string(),
-  retryAt: z.string().optional(),
-  retryAfter: z.number().nonnegative().optional(),
-});
+export const rpcErrorDataSchema = z
+  .object({
+    appCode: z.string(),
+    reasonCode: z.string(),
+    messageKey: z.string(),
+    requestId: z.string().min(1),
+    retryAt: z.string().optional(),
+    retryAfter: z.number().nonnegative().optional(),
+  })
+  .strict();
 const base = oc.errors({
   BAD_REQUEST: { status: 400, data: rpcErrorDataSchema },
   UNAUTHORIZED: { status: 401, data: rpcErrorDataSchema },

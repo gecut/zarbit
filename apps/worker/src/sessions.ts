@@ -5,6 +5,7 @@ import {
   AppError,
   type LoginStatus,
   type TelegramSessionStatus,
+  type TelegramSessionStatusV2,
   type WorkerCommand,
 } from "@zarbit/contracts";
 import { safeError, rpcCode, isRevoked } from "./errors";
@@ -18,6 +19,32 @@ import type {
   QuoteEvent,
   TelegramLifecycleEvent,
 } from "./transport";
+
+const sessionReason = (
+  value: string | null | undefined,
+  fallback: TelegramSessionStatusV2["reasonCode"],
+): TelegramSessionStatusV2["reasonCode"] =>
+  value &&
+  [
+    "NONE",
+    "LOGIN_REQUIRED",
+    "LOGIN_EXPIRED",
+    "TELEGRAM_LOGGED_OUT",
+    "SESSION_EXPIRED",
+    "AUTH_KEY_UNREGISTERED",
+    "AUTH_KEY_DUPLICATED",
+    "SESSION_REVOKED",
+    "USER_DEACTIVATED",
+    "USER_DEACTIVATED_BAN",
+    "NETWORK_UNAVAILABLE",
+    "GROUP_MEMBERSHIP_REQUIRED",
+    "IDENTITY_MISMATCH",
+    "WORKER_UNAVAILABLE",
+    "RATE_LIMITED",
+    "UNKNOWN_FAILURE",
+  ].includes(value)
+    ? (value as TelegramSessionStatusV2["reasonCode"])
+    : fallback;
 
 const LOGIN_TTL = 600_000;
 const supportedDeliveries = new Set([
@@ -33,7 +60,8 @@ const expiredLoginCodes = new Set([
   "PHONE_CODE_HASH_INVALID",
   "LOGIN_EXPIRED",
 ]);
-type SessionState = Exclude<TelegramSessionStatus["state"], "DISCONNECTED">;
+type SessionState =
+  "PENDING_OTP" | "ACTIVE" | "NOT_IN_GROUP" | "REVOKING" | "REVOKED" | "ERROR";
 interface SessionOwner {
   telegramUserId: string;
 }
@@ -47,6 +75,12 @@ interface SessionRecord {
   runtimeCheckedAt: Date | null;
   membershipCheckedAt: Date | null;
   lastError: string | null;
+  stateChangedAt?: Date;
+  lastObservedAt?: Date;
+  reasonCode?: string | null;
+  lastErrorCode?: string | null;
+  revokedAt?: Date | null;
+  connectionState?: "CONNECTED" | "CONNECTING" | "OFFLINE" | "DEGRADED";
 }
 interface StoredSession extends SessionRecord {
   user: SessionOwner;
@@ -59,6 +93,10 @@ interface SessionUpdate {
   runtimeReady?: boolean;
   state?: SessionState;
   storageKey?: string | null;
+  reasonCode?: string | null;
+  lastErrorCode?: string | null;
+  revokedAt?: Date | null;
+  connectionState?: "CONNECTED" | "CONNECTING" | "OFFLINE" | "DEGRADED";
 }
 interface Runtime {
   userId: string;
@@ -118,6 +156,7 @@ export interface SessionStore {
     state: "NOT_IN_GROUP" | "REVOKING" | "REVOKED" | "ERROR",
     error: string,
     revision?: number,
+    reasonCode?: string,
   ): Promise<boolean>;
   owner(userId: string): Promise<SessionOwner | null>;
   recover(): Promise<void>;
@@ -252,20 +291,31 @@ export class Sessions {
       sessionRef: sessionRef(userId),
     };
     if (event.type === "connection_state") {
-      workerLog.info("telegram.connection.state_changed", {
+      workerLog.debug("telegram.connection.state_changed", {
         ...context,
         state: event.state,
       });
     } else if (event.type === "connection_dc") {
-      workerLog.info("telegram.connection.dc_selected", {
+      workerLog.debug("telegram.connection.dc_selected", {
         ...context,
         dcId: event.dcId,
       });
-    } else
+    } else {
       workerLog.failure("telegram.client.error", event.error, {
         ...context,
         source: event.source,
       });
+      if (rt)
+        void this.serial(userId, async () => {
+          if (this.runtimes.get(userId) !== rt || rt.abort.signal.aborted)
+            return;
+          await this.runtimeFailure(rt, event.error);
+        }).catch((error) =>
+          workerLog.failure("telegram.session.lifecycle_failed", error, {
+            sessionRef: sessionRef(userId),
+          }),
+        );
+    }
   }
   private async close(rt: Runtime, reason = "normal") {
     const startedAt = this.now();
@@ -349,7 +399,10 @@ export class Sessions {
       rt.operation = previousOperation;
     }
   }
-  private async announce(userId: string, event: SessionNotification): Promise<boolean> {
+  private async announce(
+    userId: string,
+    event: SessionNotification,
+  ): Promise<boolean> {
     const startedAt = this.now();
     try {
       if (!this.options.notify) return false;
@@ -391,7 +444,9 @@ export class Sessions {
   }
   runtimeHealth() {
     return {
-      activeSessions: [...this.runtimes.values()].filter((runtime) => runtime.online).length,
+      activeSessions: [...this.runtimes.values()].filter(
+        (runtime) => runtime.online,
+      ).length,
       reservedSessions: this.runtimes.size,
       remainingCapacity: Math.max(0, this.options.max - this.runtimes.size),
     };
@@ -400,16 +455,129 @@ export class Sessions {
     const record = await this.store.session(userId);
     const rt = this.runtimes.get(userId);
     const challenge = this.challenges.get(userId);
-    return {
-      state: record?.state ?? "DISCONNECTED",
-      connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : !record || record.state === "REVOKED" ? "CONNECTED" : "OFFLINE",
+    const observedAt = new Date(this.now()).toISOString();
+    const stateChangedAt = record?.stateChangedAt?.toISOString() ?? observedAt;
+    const retryAt = this.retry.get(userId)?.at
+      ? new Date(this.retry.get(userId)!.at).toISOString()
+      : null;
+    const common = {
       groupId: this.options.groupId,
       quoteSenderId: this.options.quoteSenderId,
       connectedTelegramUserId: record?.connectedTelegramUserId ?? null,
       membershipCheckedAt: record?.membershipCheckedAt?.toISOString() ?? null,
+      observedAt,
+      stateChangedAt,
+      retryAt,
+      capabilities: {
+        canLogin: !challenge,
+        canCreateRequest: record?.state === "ACTIVE" && Boolean(rt?.online),
+        canCheckMembership: Boolean(record?.connectedTelegramUserId),
+        canRevoke:
+          Boolean(record?.connectedTelegramUserId) &&
+          record?.state !== "REVOKED",
+      },
+      state:
+        record?.state === "PENDING_OTP"
+          ? "LOGIN_PENDING"
+          : (record?.state ?? "DISCONNECTED"),
       error: record?.lastError ?? null,
-      login:
-        challenge && challenge.expires > this.now() ? challenge.public : null,
+    };
+    if (challenge && challenge.expires > this.now())
+      return {
+        ...common,
+        kind: "LOGIN_PENDING",
+        state: "LOGIN_PENDING",
+        connection: "CONNECTING",
+        phase: challenge.public.step,
+        reasonCode: "LOGIN_REQUIRED",
+        login: challenge.public,
+      };
+    if (!record)
+      return {
+        ...common,
+        kind: "DISCONNECTED",
+        state: "DISCONNECTED",
+        connection: "OFFLINE",
+        reasonCode: "LOGIN_REQUIRED",
+        login: null,
+      };
+    if (record.state === "REVOKED") {
+      const persistedReason = sessionReason(
+        record.reasonCode,
+        "TELEGRAM_LOGGED_OUT",
+      );
+      const reasonCode = [
+        "TELEGRAM_LOGGED_OUT",
+        "SESSION_EXPIRED",
+        "AUTH_KEY_UNREGISTERED",
+        "AUTH_KEY_DUPLICATED",
+        "SESSION_REVOKED",
+        "USER_DEACTIVATED",
+        "USER_DEACTIVATED_BAN",
+        "IDENTITY_MISMATCH",
+      ].includes(persistedReason)
+        ? (persistedReason as
+            | "TELEGRAM_LOGGED_OUT"
+            | "SESSION_EXPIRED"
+            | "AUTH_KEY_UNREGISTERED"
+            | "AUTH_KEY_DUPLICATED"
+            | "SESSION_REVOKED"
+            | "USER_DEACTIVATED"
+            | "USER_DEACTIVATED_BAN"
+            | "IDENTITY_MISMATCH")
+        : "TELEGRAM_LOGGED_OUT";
+      return {
+        ...common,
+        kind: "REVOKED",
+        state: "REVOKED",
+        connection: "OFFLINE",
+        reasonCode,
+        login: null,
+      };
+    }
+    if (record.state === "NOT_IN_GROUP")
+      return {
+        ...common,
+        kind: "NOT_IN_GROUP",
+        state: "NOT_IN_GROUP",
+        connection: rt?.online ? "CONNECTED" : "OFFLINE",
+        reasonCode: "GROUP_MEMBERSHIP_REQUIRED",
+        login: null,
+      };
+    if (record.state === "REVOKING")
+      return {
+        ...common,
+        kind: "REVOKING",
+        state: "REVOKING",
+        connection: rt?.online ? "CONNECTED" : "OFFLINE",
+        reasonCode: "NONE",
+        login: null,
+      };
+    if (record.state === "ERROR")
+      return {
+        ...common,
+        kind: "ERROR",
+        state: "ERROR",
+        connection: rt ? "CONNECTING" : "OFFLINE",
+        reasonCode: "UNKNOWN_FAILURE",
+        login: null,
+      };
+    if (record.state === "ACTIVE" && rt?.online && record.runtimeReady)
+      return {
+        ...common,
+        kind: "ACTIVE",
+        state: "ACTIVE",
+        connection: "CONNECTED",
+        reasonCode: "NONE",
+        login: null,
+      };
+    return {
+      ...common,
+      kind: "DEGRADED",
+      state: "DEGRADED",
+      connection: rt ? "CONNECTING" : "OFFLINE",
+      reasonCode: "NETWORK_UNAVAILABLE",
+      login: null,
     };
   }
   private async discard(challenge: Challenge, message: string) {
@@ -513,10 +681,7 @@ export class Sessions {
     this.challenges.delete(rt.userId);
     if (!activated.count) return;
     await this.setMembership(rt, member);
-    void this.announce(
-      rt.userId,
-      { type: "connected", member },
-    );
+    void this.announce(rt.userId, { type: "connected", member });
   }
   private async setMembership(rt: Runtime, member: boolean) {
     workerLog.info("telegram.membership.checked", {
@@ -531,16 +696,15 @@ export class Sessions {
         "NOT_IN_GROUP",
         "عضویت در گروه معامله تأیید نشد؛ وضعیت درخواست‌های خود را بررسی کنید.",
         rt.revision,
+        "GROUP_MEMBERSHIP_REQUIRED",
       );
       await this.store.updateSession(rt.userId, rt.revision, {
         membershipCheckedAt: new Date(this.now()),
+        connectionState: "OFFLINE",
+        reasonCode: "GROUP_MEMBERSHIP_REQUIRED",
       });
       await this.close(rt, "not_in_group");
-      if (wasActive)
-        void this.announce(
-          rt.userId,
-          { type: "membership_lost" },
-        );
+      if (wasActive) void this.announce(rt.userId, { type: "membership_lost" });
       return false;
     }
     const record = await this.store.session(rt.userId);
@@ -567,6 +731,8 @@ export class Sessions {
       runtimeReady: true,
       runtimeCheckedAt: new Date(this.now()),
       membershipCheckedAt: new Date(this.now()),
+      connectionState: "CONNECTED",
+      reasonCode: null,
       lastError: null,
     });
     if (!activated.count) {
@@ -575,8 +741,13 @@ export class Sessions {
       return false;
     }
     rt.online = true;
-    if (this.outages.connected(rt.userId, rt.revision))
+    if (this.outages.connected(rt.userId, rt.revision)) {
+      workerLog.info("telegram.session.recovered", {
+        reasonCode: "NONE",
+        sessionRef: sessionRef(rt.userId),
+      });
       await this.announce(rt.userId, { type: "recovered" });
+    }
     workerLog.info("telegram.session.active", {
       revision: rt.revision,
       sessionRef: sessionRef(rt.userId),
@@ -619,24 +790,29 @@ export class Sessions {
         "REVOKED",
         "اعتبار اتصال تلگرام پایان یافته است؛ دوباره وارد شوید.",
         rt.revision,
+        rpcCode(error) ?? "TELEGRAM_LOGGED_OUT",
       );
       await this.close(rt, "session_revoked");
       await this.options.files.remove(rt.key);
       await this.store.updateSession(rt.userId, rt.revision, {
         storageKey: null,
+        reasonCode: rpcCode(error) ?? "TELEGRAM_LOGGED_OUT",
+        lastErrorCode: rpcCode(error),
+        revokedAt: new Date(this.now()),
+        connectionState: "OFFLINE",
       });
       workerLog.failure("telegram.session.revoked", error, {
         sessionRef: sessionRef(rt.userId),
       });
-      void this.announce(
-        rt.userId,
-        { type: "revoked" },
-      );
+      void this.announce(rt.userId, { type: "revoked" });
     } else {
       this.outages.failed(rt.userId, rt.revision, this.now());
       await this.store.updateSession(rt.userId, rt.revision, {
         runtimeReady: false,
         lastError: safeError(error).message,
+        reasonCode: "NETWORK_UNAVAILABLE",
+        lastErrorCode: rpcCode(error),
+        connectionState: "DEGRADED",
       });
       await this.close(rt, "runtime_failure");
       const count = (this.retry.get(rt.userId)?.count ?? 0) + 1;
@@ -650,6 +826,13 @@ export class Sessions {
           0,
           (this.retry.get(rt.userId)?.at ?? 0) - this.now(),
         ),
+        sessionRef: sessionRef(rt.userId),
+      });
+      workerLog.warn("telegram.session.degraded", {
+        reasonCode: "NETWORK_UNAVAILABLE",
+        retryAt: this.retry.get(rt.userId)?.at
+          ? new Date(this.retry.get(rt.userId)!.at).toISOString()
+          : null,
         sessionRef: sessionRef(rt.userId),
       });
     }
@@ -994,8 +1177,11 @@ export class Sessions {
               this.outages.clear(record.userId);
               return;
             }
-            await this.outages.check(record.userId, current.revision, this.now(), () =>
-              this.announce(record.userId, { type: "outage" }),
+            await this.outages.check(
+              record.userId,
+              current.revision,
+              this.now(),
+              () => this.announce(record.userId, { type: "outage" }),
             );
             if ((this.retry.get(record.userId)?.at ?? 0) > this.now()) return;
             const rt = this.runtimes.get(record.userId);

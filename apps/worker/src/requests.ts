@@ -2,21 +2,35 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@zarbit/contracts";
 import type { Store } from "@zarbit/db";
 import { formatGroupMessage } from "@zarbit/domain";
-import { formatAlertMessage, formatRequestResultMessage, requestFailureText, type RequestFailure, type MessageLinks } from "@zarbit/messages";
+import {
+  formatAlertMessage,
+  formatRequestResultMessage,
+  requestFailureText,
+  type RequestFailure,
+  type MessageLinks,
+} from "@zarbit/messages";
 import { rpcCode } from "./errors";
 import { workerLog } from "./logger";
 
 type RequestStore = Pick<
   Store,
   "requestCandidates" | "claimRequest" | "completeRequest" | "owner"
->;
-type Quote = { compactQuote: number; sourceMessageId: number; announcedAt: Date };
+> & { markSending?: (id: string, claimToken: string) => Promise<unknown> };
+type Quote = {
+  compactQuote: number;
+  sourceMessageId: number;
+  announcedAt: Date;
+};
 export function createRequestExecutor(
   store: RequestStore,
   delivery: {
     ready(userId: string): Promise<void>;
     group(userId: string, text: string): Promise<number>;
-    private(telegramUserId: string, text: string, links?: MessageLinks): Promise<number>;
+    private(
+      telegramUserId: string,
+      text: string,
+      links?: MessageLinks,
+    ): Promise<number>;
   },
   timeoutMs = 15_000,
 ) {
@@ -44,6 +58,7 @@ export function createRequestExecutor(
       await delivery.ready(userId);
       if (!owner) throw new AppError("NOT_FOUND", "صاحب درخواست پیدا نشد.");
       sending = true;
+      await store.markSending?.(id, token);
       const price = row.targetPrice;
       const send =
         row.action === "ALERT"
@@ -85,13 +100,28 @@ export function createRequestExecutor(
           "error_code" in error &&
           [400, 403].includes(Number(error.error_code)));
       status = definitive ? "FAILED" : "UNKNOWN";
-      failure = error instanceof AppError && error.code === "SESSION_REQUIRED"
-        || ["AUTH_KEY_UNREGISTERED", "SESSION_REVOKED", "USER_DEACTIVATED"].includes(code ?? "")
-        ? "connection"
-        : ["CHAT_WRITE_FORBIDDEN", "USER_BANNED_IN_CHANNEL", "CHANNEL_PRIVATE", "CHAT_ADMIN_REQUIRED"].includes(code ?? "")
-          ? "group_permission"
-          : row.action === "ALERT" && typeof error === "object" && error !== null && "error_code" in error && error.error_code === 403
-            ? "private_permission" : "unknown";
+      failure =
+        (error instanceof AppError && error.code === "SESSION_REQUIRED") ||
+        [
+          "AUTH_KEY_UNREGISTERED",
+          "SESSION_REVOKED",
+          "USER_DEACTIVATED",
+        ].includes(code ?? "")
+          ? "connection"
+          : [
+                "CHAT_WRITE_FORBIDDEN",
+                "USER_BANNED_IN_CHANNEL",
+                "CHANNEL_PRIVATE",
+                "CHAT_ADMIN_REQUIRED",
+              ].includes(code ?? "")
+            ? "group_permission"
+            : row.action === "ALERT" &&
+                typeof error === "object" &&
+                error !== null &&
+                "error_code" in error &&
+                error.error_code === 403
+              ? "private_permission"
+              : "unknown";
       failureReason = requestFailureText(row.action, status, failure);
       workerLog.failure("request.execution.failed", error, {
         requestId: id,
@@ -106,15 +136,34 @@ export function createRequestExecutor(
       outgoingMessageId,
       failureReason,
     });
-    if (completed.count && owner && !(row.action === "ALERT" && status === "DONE")) {
+    if (
+      completed.count &&
+      owner &&
+      !(row.action === "ALERT" && status === "DONE")
+    ) {
       try {
         await delivery.private(
           owner.telegramUserId,
           formatRequestResultMessage({
-            ...row, status, failure, manual: !quote,
-            groupText: row.action === "ALERT" ? undefined : formatGroupMessage(row.action, row.units!, row.targetPrice),
+            ...row,
+            status,
+            failure,
+            manual: !quote,
+            groupText:
+              row.action === "ALERT"
+                ? undefined
+                : formatGroupMessage(row.action, row.units!, row.targetPrice),
           }),
-          { requestId: id, connection: status === "FAILED" && (failure === "connection" || failure === "group_permission"), groupMessageId: row.action !== "ALERT" && status === "DONE" ? outgoingMessageId : undefined },
+          {
+            requestId: id,
+            connection:
+              status === "FAILED" &&
+              (failure === "connection" || failure === "group_permission"),
+            groupMessageId:
+              row.action !== "ALERT" && status === "DONE"
+                ? outgoingMessageId
+                : undefined,
+          },
         );
       } catch (error) {
         workerLog.failure("request.notification.failed", error, {

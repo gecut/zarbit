@@ -48,7 +48,12 @@ export function useTelegramConnection() {
 
   const runCommand = async (command: SessionCommand): Promise<void> => {
     if (
-      session?.connection === "OFFLINE" ||
+      (session &&
+        "kind" in session &&
+        command.type !== "login" &&
+        !session.capabilities.canCheckMembership &&
+        !session.capabilities.canRevoke) ||
+      (!session && command.type !== "login") ||
       mutation.isPending ||
       isCommandRunningRef.current
     ) {
@@ -78,7 +83,11 @@ export function useTelegramConnection() {
   };
 
   const submitLogin = (): void => {
-    if (mutation.isPending || session?.connection === "OFFLINE") return;
+    if (
+      mutation.isPending ||
+      (session && "kind" in session && !session.capabilities.canLogin && !login)
+    )
+      return;
 
     const command: SessionCommand = !login
       ? { type: "login", phone }

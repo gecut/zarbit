@@ -48,6 +48,7 @@ export function createLogger(
     {
       level: config.level ?? "info",
       base: {
+        schemaVersion: 1,
         service: config.service,
         processId: process.pid,
         ...(config.releaseId ? { releaseId: config.releaseId } : {}),

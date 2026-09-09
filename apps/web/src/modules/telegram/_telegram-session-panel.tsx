@@ -21,6 +21,44 @@ function formatDate(value: string): string {
 }
 
 function SessionAlert({ session }: { session: TelegramSessionStatus }) {
+  if ("kind" in session) {
+    if (session.kind === "REVOKED")
+      return (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>اتصال تلگرام قطع شد</Alert.Title>
+            <Alert.Description>
+              اتصال تلگرام توسط تلگرام قطع شده است؛ دوباره وارد شوید.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      );
+    if (session.kind === "LOGIN_PENDING")
+      return (
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>ورود در حال تکمیل است</Alert.Title>
+            <Alert.Description>
+              کد یا رمز دومرحله‌ای تلگرام را وارد کنید.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      );
+    if (session.kind === "ERROR")
+      return (
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>خطا در اتصال</Alert.Title>
+            <Alert.Description>
+              اتصال با خطا روبه‌رو شد؛ دوباره تلاش کنید.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      );
+  }
   if (session.connection === "OFFLINE" || session.connection === "DEGRADED") {
     return (
       <Alert status="warning">

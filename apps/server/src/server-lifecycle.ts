@@ -12,6 +12,15 @@ export function startApplicationServer(app: Hono<AppEnv>) {
   if (!env.TELEGRAM_BOT_TOKEN)
     throw new Error("TELEGRAM_BOT_TOKEN is required.");
 
+  serverLog.info(
+    {
+      event: "server.starting",
+      logLevel: env.LOG_LEVEL,
+      releaseId: process.env.RELEASE_ID ?? null,
+    },
+    "server.starting",
+  );
+
   const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
 
   void bot
@@ -25,7 +34,11 @@ export function startApplicationServer(app: Hono<AppEnv>) {
 
   const server = serve({ fetch: app.fetch, port: 3000 });
   void checkWorkerAtStartup().then((health) => {
-    if (!stopping) serverLog.info({ event: "server.ready", port: 3000, ...health }, "server.ready");
+    if (!stopping)
+      serverLog.info(
+        { event: "server.ready", port: 3000, ...health },
+        "server.ready",
+      );
   });
   let stopping = false;
 

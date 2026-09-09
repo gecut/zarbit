@@ -63,7 +63,7 @@ export const loginStatusSchema = z.object({
 export type LoginStatus = z.infer<typeof loginStatusSchema>;
 export const telegramSessionStatusSchema = z.object({
   state: telegramSessionStateSchema,
-  connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE"]),
+  connection: z.enum(["CONNECTED", "CONNECTING", "OFFLINE", "DEGRADED"]),
   groupId: z.number().int().safe().nullable(),
   quoteSenderId: z.string().nullable(),
   connectedTelegramUserId: z.string().nullable(),
@@ -172,3 +172,6 @@ export const requestHistoryPageSchema = z
   })
   .strict();
 export type RequestHistoryPage = z.infer<typeof requestHistoryPageSchema>;
+
+// Reserved for authenticated, read-only service diagnostics.
+export const WORKER_DIAGNOSTIC_USER_ID = "__zarbit_worker_diagnostic__";

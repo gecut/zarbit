@@ -436,3 +436,16 @@ test("manual revocation clears pending outage without claiming cancellation", as
   await sessions.synchronize();
   assert.deepEqual(events.map((e) => e.type), ["connected"]);
 });
+
+
+test("an empty worker permits first login and reports available capacity", async (t) => {
+  const { directory, sessions } = await createSessions(baseTransport({}));
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+  const status = await sessions.command(userId, { type: "status" });
+  assert.equal(status.state, "DISCONNECTED");
+  assert.equal(status.connection, "CONNECTED");
+  assert.deepEqual(sessions.runtimeHealth(), { activeSessions: 0, reservedSessions: 0, remainingCapacity: 1 });
+  const login = await sessions.command(userId, { type: "login", phone: "+989121234567" });
+  assert.equal(login.login?.step, "CODE");
+  assert.equal(sessions.runtimeHealth().remainingCapacity, 0);
+});

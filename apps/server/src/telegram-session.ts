@@ -1,45 +1,17 @@
 import {
   AppError,
-  telegramSessionStatusSchema,
   type WorkerCommand,
   type TelegramSessionStatus,
 } from "@zarbit/contracts";
 import { env } from "@zarbit/env/server";
 import { store } from "@zarbit/db";
 import { serverLog } from "./logger";
+import { sendWorkerCommand, probeWorker, type WorkerDiagnostic, type WorkerTransportDependencies } from "./worker-transport";
 
-type WorkerFailure =
-  | "unconfigured"
-  | "network"
-  | "invalid-response"
-  | "unauthorized-worker"
-  | "upstream-error"
-  | "fallback-storage";
-
-type WorkerErrorBody = {
-  code: string;
-  message: string;
-  retryAt?: string;
-};
-
-type WorkerResponse =
-  | { kind: "success"; data: TelegramSessionStatus }
-  | { kind: "error"; error: WorkerErrorBody; status: number }
-  | { kind: "invalid"; status: number };
-
-export interface WorkerCommandDependencies {
-  fetch: typeof globalThis.fetch;
-  log: (
-    event: "worker.command.failed",
-    details: {
-      command: WorkerCommand["type"];
-      failure: WorkerFailure;
-      upstreamStatus?: number;
-    },
-  ) => void;
+export interface WorkerCommandDependencies extends WorkerTransportDependencies {
+  log: (event: "worker.command.failed", details: WorkerDiagnostic & { failure: NonNullable<WorkerDiagnostic["failure"]> }) => void;
+  observe?: (event: string, details: WorkerDiagnostic) => void;
   store: SessionReader;
-  workerInternalToken?: string;
-  workerInternalUrl: string;
 }
 
 export interface SessionReader {
@@ -55,48 +27,6 @@ const unavailableMessage =
 const offlineMessage =
   "سرویس اتصال موقتاً در دسترس نیست؛ وضعیت ذخیره‌شده نمایش داده می‌شود.";
 
-function isWorkerError(value: unknown): value is WorkerErrorBody {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  const error = value as Record<string, unknown>;
-  return (
-    typeof error.code === "string" &&
-    typeof error.message === "string" &&
-    (error.retryAt === undefined || typeof error.retryAt === "string")
-  );
-}
-
-function isExpectedWorkerStatus(status: number) {
-  return [400, 404, 409, 429, 503].includes(status);
-}
-
-async function readWorkerResponse(response: Response): Promise<WorkerResponse> {
-  const status = response.status;
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (!contentType.toLowerCase().includes("application/json"))
-    return { kind: "invalid", status };
-
-  const body = (await response.json().catch(() => null)) as {
-    data?: unknown;
-    error?: unknown;
-  } | null;
-
-  if (!body || typeof body !== "object" || Array.isArray(body))
-    return { kind: "invalid", status };
-
-  if (response.ok) {
-    const parsed = telegramSessionStatusSchema.safeParse(body.data);
-    return parsed.success
-      ? { kind: "success", data: parsed.data }
-      : { kind: "invalid", status };
-  }
-
-  return isWorkerError(body.error)
-    ? { kind: "error", error: body.error, status }
-    : { kind: "invalid", status };
-}
-
 function unavailableError() {
   return new AppError("WORKER_UNAVAILABLE", unavailableMessage, 503);
 }
@@ -104,12 +34,14 @@ function unavailableError() {
 async function offlineStatus(
   userId: string,
   dependencies: WorkerCommandDependencies,
+  diagnostic: WorkerDiagnostic,
+  degraded: boolean,
 ): Promise<TelegramSessionStatus> {
   try {
     const session = await dependencies.store.session(userId);
     return {
       state: session?.state ?? "DISCONNECTED",
-      connection: "OFFLINE",
+      connection: degraded ? "DEGRADED" : "OFFLINE",
       groupId: null,
       quoteSenderId: null,
       connectedTelegramUserId: session?.connectedTelegramUserId ?? null,
@@ -117,10 +49,13 @@ async function offlineStatus(
       login: null,
       error: offlineMessage,
     };
-  } catch {
+  } catch (err) {
     dependencies.log("worker.command.failed", {
+      ...diagnostic,
       command: "status",
       failure: "fallback-storage",
+      stage: "storage",
+      err,
     });
     throw unavailableError();
   }
@@ -128,104 +63,41 @@ async function offlineStatus(
 
 export function createWorkerCommand(dependencies: WorkerCommandDependencies) {
   let lastStatusFailure: { key: string; at: number } | undefined;
-
-  return async function workerCommand(
-    userId: string,
-    command: WorkerCommand,
-  ): Promise<TelegramSessionStatus> {
-    const fallback = (failure: WorkerFailure, upstreamStatus?: number) => {
-      const key = `${failure}:${upstreamStatus ?? ""}`;
-      const now = Date.now();
-      if (
-        lastStatusFailure?.key !== key ||
-        now - lastStatusFailure.at >= 60_000
-      ) {
-        dependencies.log("worker.command.failed", {
-          command: "status",
-          failure,
-          ...(upstreamStatus === undefined ? {} : { upstreamStatus }),
-        });
-        lastStatusFailure = { key, at: now };
-      }
-      return offlineStatus(userId, dependencies);
-    };
-    const unavailable = (failure: WorkerFailure, upstreamStatus?: number) => {
-      dependencies.log("worker.command.failed", {
-        command: command.type,
-        failure,
-        ...(upstreamStatus === undefined ? {} : { upstreamStatus }),
-      });
-      return unavailableError();
-    };
-
-    if (!dependencies.workerInternalToken) {
-      if (command.type === "status") return fallback("unconfigured");
-      throw unavailable("unconfigured");
+  return async (userId: string, command: WorkerCommand): Promise<TelegramSessionStatus> => {
+    const result = await sendWorkerCommand(dependencies, userId, command);
+    if (result.ok) {
+      if (command.type === "status" && lastStatusFailure) dependencies.observe?.("worker.connection.recovered", result.diagnostic);
+      if (command.type === "status") lastStatusFailure = undefined;
+      dependencies.observe?.("worker.command.completed", result.diagnostic);
+      return result.data;
     }
-
-    let response: Response;
-
-    try {
-      response = await dependencies.fetch(
-        new URL("/internal/command", dependencies.workerInternalUrl),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${dependencies.workerInternalToken}`,
-          },
-          body: JSON.stringify({ userId, command }),
-          signal: AbortSignal.timeout(
-            command.type === "status" ? 2500 : 25_000,
-          ),
-          cache: "no-store",
-        },
-      );
-    } catch {
-      if (command.type === "status") return fallback("network");
-      throw unavailable("network");
+    const { diagnostic } = result;
+    const failure = diagnostic.failure ?? "invalid_response";
+    const key = `${failure}:${diagnostic.stage}:${diagnostic.httpStatus}:${diagnostic.responseCode}`;
+    const now = Date.now();
+    if (command.type !== "status" || lastStatusFailure?.key !== key || now - lastStatusFailure.at >= 60_000) {
+      dependencies.log("worker.command.failed", { ...diagnostic, failure });
+      if (command.type === "status") lastStatusFailure = { key, at: now };
     }
-
-    const parsed = await readWorkerResponse(response);
-
-    if (parsed.kind === "success") {
-      lastStatusFailure = undefined;
-      return parsed.data;
+    if (command.type === "status") return offlineStatus(userId, dependencies, diagnostic, failure === "worker_error");
+    if ("error" in result && result.error && [400, 404, 409, 429, 503].includes(diagnostic.httpStatus ?? 0)) {
+      throw new AppError(result.error.code, result.error.message, diagnostic.httpStatus!, result.error.retryAt);
     }
-
-    if (command.type === "status")
-      return fallback(
-        parsed.kind === "error"
-          ? parsed.status === 403
-            ? "unauthorized-worker"
-            : "upstream-error"
-          : "invalid-response",
-        parsed.status,
-      );
-
-    if (parsed.kind === "error") {
-      if (parsed.status === 403)
-        throw unavailable("unauthorized-worker", parsed.status);
-
-      if (isExpectedWorkerStatus(parsed.status))
-        throw new AppError(
-          parsed.error.code,
-          parsed.error.message,
-          parsed.status,
-          parsed.error.retryAt,
-        );
-
-      throw unavailable("upstream-error", parsed.status);
-    }
-
-    throw unavailable("invalid-response", parsed.status);
+    throw unavailableError();
   };
 }
 
-export const workerCommand = createWorkerCommand({
-  fetch,
-  log: (event, details) => serverLog.error({ event, ...details }, event),
-  store: { session: async (userId) => store.session(userId) },
+const transport = {
+  fetch: globalThis.fetch,
   workerInternalToken: env.WORKER_INTERNAL_TOKEN,
   workerInternalUrl: env.WORKER_INTERNAL_URL,
+};
+export const workerCommand = createWorkerCommand({
+  ...transport,
+  log: (event, details) => serverLog.error({ event, ...details }, event),
+  observe: (event, details) => serverLog[event === "worker.connection.recovered" ? "info" : "debug"]({ event, ...details }, event),
+  store: { session: async (userId) => store.session(userId) },
+});
+export const checkWorkerAtStartup = () => probeWorker(transport, (event, details) => {
+  serverLog[event.endsWith("failed") ? "error" : "info"]({ event, ...details }, event);
 });

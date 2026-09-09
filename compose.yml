@@ -28,6 +28,7 @@ services:
     command: ["node", "/app/deploy/migrate.mjs"]
     environment:
       NODE_ENV: production
+      RELEASE_ID: ${IMAGE_TAG:?Set an immutable IMAGE_TAG}
       MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set MIGRATION_DATABASE_URL}
     volumes:
       - zarbit-telegram-sessions-postgres:/sessions

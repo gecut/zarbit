@@ -1,8 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual, randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
-import { workerCommandSchema } from "@zarbit/contracts";
+import { WORKER_DIAGNOSTIC_USER_ID, workerCommandSchema } from "@zarbit/contracts";
 import { safeError } from "./errors";
 import { sessionRef, workerLog } from "./logger";
 import type { Sessions } from "./sessions";
@@ -12,19 +12,34 @@ export function createWorkerApp(
   token: string,
   health: () => Promise<Record<string, number>>,
 ) {
-  const app = new Hono();
+  const app = new Hono<{ Variables: { requestId: string } }>();
+  app.use("*", async (c, next) => {
+    const incoming = c.req.header("X-Request-Id") ?? "";
+    const requestId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(incoming) ? incoming : randomUUID();
+    c.set("requestId", requestId);
+    c.header("X-Request-Id", requestId);
+    await next();
+  });
   app.get("/health", async (c) => {
     const startedAt = Date.now();
     try {
-      const result = await health();
+      const result = {
+        ...await health(),
+        ...sessions.runtimeHealth(),
+        uptimeSeconds: Math.floor(process.uptime()),
+        releaseId: process.env.RELEASE_ID ?? null,
+        httpReady: true,
+      };
       workerLog.debug("worker.health.completed", {
         durationMs: Date.now() - startedAt,
+        requestId: c.get("requestId"),
         ...result,
       });
       return c.json({ ok: true, ...result });
     } catch (error) {
       workerLog.failure("database.health.failed", error, {
         durationMs: Date.now() - startedAt,
+        requestId: c.get("requestId"),
       });
       return c.json({ ok: false }, 503);
     }
@@ -35,6 +50,7 @@ export function createWorkerApp(
     const hash = (v: string) => createHash("sha256").update(v).digest();
     if (!timingSafeEqual(hash(value), hash(`Bearer ${token}`))) {
       workerLog.warn("worker.internal.unauthorized", {
+        requestId: c.get("requestId"),
         method: c.req.method,
         path: c.req.path,
         status: 403,
@@ -58,6 +74,7 @@ export function createWorkerApp(
       .safeParse(await c.req.json().catch(() => null));
     if (!input.success) {
       workerLog.warn("worker.command.invalid", {
+        requestId: c.get("requestId"),
         method: c.req.method,
         path: c.req.path,
         status: 400,
@@ -67,26 +84,37 @@ export function createWorkerApp(
         400,
       );
     }
-    workerLog.info("worker.command.started", {
+    const logCommand = input.data.command.type === "status" ? workerLog.debug : workerLog.info;
+    logCommand("worker.command.started", {
+      requestId: c.get("requestId"),
       command: input.data.command.type,
       sessionRef: sessionRef(input.data.userId),
     });
     try {
-      const data = await sessions.command(
-        input.data.userId,
-        input.data.command,
-      );
-      workerLog.info("worker.command.completed", {
+      const diagnostic = input.data.userId === WORKER_DIAGNOSTIC_USER_ID;
+      if (diagnostic && input.data.command.type !== "status") {
+        return c.json({ error: { code: "FORBIDDEN", message: "دسترسی مجاز نیست." } }, 403);
+      }
+      if (diagnostic) await health();
+      const data = diagnostic
+        ? await sessions.status(WORKER_DIAGNOSTIC_USER_ID)
+        : await sessions.command(input.data.userId, input.data.command);
+      logCommand("worker.command.completed", {
         command: input.data.command.type,
         durationMs: Date.now() - startedAt,
+        requestId: c.get("requestId"),
         sessionRef: sessionRef(input.data.userId),
       });
       return c.json({ data });
     } catch (error) {
       const safe = safeError(error);
       workerLog.failure("worker.command.failed", error, {
+        stage: "worker",
+        httpStatus: safe.status,
+        responseCode: safe.code,
         command: input.data.command.type,
         durationMs: Date.now() - startedAt,
+        requestId: c.get("requestId"),
         sessionRef: sessionRef(input.data.userId),
       });
       return c.json(

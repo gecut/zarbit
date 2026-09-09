@@ -21,7 +21,7 @@ function formatDate(value: string): string {
 }
 
 function SessionAlert({ session }: { session: TelegramSessionStatus }) {
-  if (session.connection === "OFFLINE") {
+  if (session.connection === "OFFLINE" || session.connection === "DEGRADED") {
     return (
       <Alert status="warning">
         <Alert.Indicator />

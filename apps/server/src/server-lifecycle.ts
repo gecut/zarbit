@@ -6,6 +6,7 @@ import type { Hono } from "hono";
 import type { AppEnv } from "./app-types";
 import { createTelegramBot } from "./telegram";
 import { serverLog } from "./logger";
+import { checkWorkerAtStartup } from "./telegram-session";
 
 export function startApplicationServer(app: Hono<AppEnv>) {
   if (!env.TELEGRAM_BOT_TOKEN)
@@ -23,7 +24,9 @@ export function startApplicationServer(app: Hono<AppEnv>) {
     );
 
   const server = serve({ fetch: app.fetch, port: 3000 });
-  serverLog.info({ event: "server.ready", port: 3000 }, "server.ready");
+  void checkWorkerAtStartup().then((health) => {
+    if (!stopping) serverLog.info({ event: "server.ready", port: 3000, ...health }, "server.ready");
+  });
   let stopping = false;
 
   const stop = async () => {

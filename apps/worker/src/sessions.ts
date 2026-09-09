@@ -389,13 +389,20 @@ export class Sessions {
     );
     // Recovery is scheduled independently; HTTP status is available immediately.
   }
+  runtimeHealth() {
+    return {
+      activeSessions: [...this.runtimes.values()].filter((runtime) => runtime.online).length,
+      reservedSessions: this.runtimes.size,
+      remainingCapacity: Math.max(0, this.options.max - this.runtimes.size),
+    };
+  }
   async status(userId: string): Promise<TelegramSessionStatus> {
     const record = await this.store.session(userId);
     const rt = this.runtimes.get(userId);
     const challenge = this.challenges.get(userId);
     return {
       state: record?.state ?? "DISCONNECTED",
-      connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : "OFFLINE",
+      connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : record?.state === "DISCONNECTED" || record?.state === "REVOKED" || !record ? "CONNECTED" : "OFFLINE",
       groupId: this.options.groupId,
       quoteSenderId: this.options.quoteSenderId,
       connectedTelegramUserId: record?.connectedTelegramUserId ?? null,

@@ -38,7 +38,7 @@ function resolveChip(session: TelegramSessionStatus): ConnectionChip {
     return { color: "warning", label: stateLabels[session.state] };
   }
 
-  if (session.connection === "CONNECTED") {
+  if (session.state === "ACTIVE" && session.connection === "CONNECTED") {
     return { color: "success", label: "دریافت مظنه فعال" };
   }
 
@@ -66,7 +66,7 @@ export function resolveTelegramSessionPresentation(
 ): TelegramSessionPresentation {
   const showConnectionActions =
     session.state === "ACTIVE" || session.state === "NOT_IN_GROUP";
-  const isUnavailable = session.connection === "OFFLINE";
+  const isUnavailable = session.connection === "OFFLINE" || session.connection === "DEGRADED";
 
   return {
     canManageConnection:

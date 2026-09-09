@@ -402,7 +402,7 @@ export class Sessions {
     const challenge = this.challenges.get(userId);
     return {
       state: record?.state ?? "DISCONNECTED",
-      connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : record?.state === "DISCONNECTED" || record?.state === "REVOKED" || !record ? "CONNECTED" : "OFFLINE",
+      connection: rt?.online ? "CONNECTED" : rt ? "CONNECTING" : !record || record.state === "REVOKED" ? "CONNECTED" : "OFFLINE",
       groupId: this.options.groupId,
       quoteSenderId: this.options.quoteSenderId,
       connectedTelegramUserId: record?.connectedTelegramUserId ?? null,

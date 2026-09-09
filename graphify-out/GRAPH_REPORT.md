@@ -1,16 +1,16 @@
-# Graph Report - zarbit  (2026-09-08)
+# Graph Report - zarbit  (2026-09-09)
 
 ## Corpus Check
-- 373 files · ~164,531 words
+- 395 files · ~169,961 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3160 nodes · 3821 edges · 333 communities (208 shown, 125 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 82 edges (avg confidence: 0.73)
+- 3273 nodes · 4057 edges · 341 communities (213 shown, 128 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 88 edges (avg confidence: 0.73)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `cb7d4a84`
+- Built from commit: `130c2d16`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -23,11 +23,11 @@
 - devDependencies
 - db/src/index.ts
 - get-constructor.js
-- app-runtime.tsx
+- harness.tsx
 - dependencies
 - scripts
 - app.ts
-- worker/src/logger.ts
+- errors.ts
 - devDependencies
 - compilerOptions
 - _telegram-session-panel.tsx
@@ -35,42 +35,42 @@
 - server/src/index.ts
 - dependencies
 - brandkit/SKILL.md
-- _use-telegram-connection.ts
+- request.ts
 - get-class.js
 - dependencies
 - get-method.js
 - env/package.json
-- @zarbit/domain
+- messages/package.json
 - compilerOptions
 - scripts
 - logger/package.json
 - telegram-session.ts
-- sessions.test.ts
+- SessionFiles
 - sessions.ts
 - contracts/package.json
 - scripts
 - typescript
 - quote-dashboard-card.tsx
-- @t3-oss/env-core
-- AppError
+- RequestList
+- Critical Rules
 - Other Commands
 - domain/package.json
-- quote.ts
+- worker/src/requests.ts
 - devDependencies
 - app-shell.tsx
-- worker/package.json
+- devDependencies
 - context7
 - Nexload CTO Review
 - Nexload Code
 - get_component_docs.mjs
 - get_theme.mjs
-- @zarbit/contracts
+- SessionOutages
 - worker/src/index.ts
 - get_docs.mjs
 - Nexload Design Engineering
 - Nexload React Engineering
 - list_components.mjs
-- @prisma/adapter-pg
+- session.ts
 - @prisma/client
 - migrate.mjs
 - config/package.json
@@ -80,7 +80,7 @@
 - vendor-map.tsx
 - Creating Internal Packages
 - Model Queries
-- orpc-router.ts
+- AppError
 - Global Options Reference
 - mtcute — TypeScript MTProto Library
 - Dependency Management
@@ -104,7 +104,7 @@
 - Agent Skill: Principal UI/UX Architect & Motion Choreographer (Awwwards-Tier)
 - prisma db seed
 - Debugging Cache Issues
-- _request-details-drawer.tsx
+- auth.tsx
 - prisma db pull
 - prisma init
 - prisma migrate deploy
@@ -113,7 +113,7 @@
 - Task Configuration Reference
 - Other Filter Types
 - React Composition Patterns
-- _request-form-drawer.tsx
+- _request-details-drawer.tsx
 - HeroUI v3 React Development Guide
 - Configuration Gotchas
 - 5. Re-render Optimization
@@ -166,8 +166,9 @@
 - React Composition Patterns
 - React Best Practices
 - Sections
-- logger/src/index.ts
+- worker/src/logger.ts
 - prisma migrate status
+- shadcn/SKILL.md
 - Registry Authoring and Addresses
 - Base vs Radix
 - Chat & Messaging
@@ -205,8 +206,8 @@
 - 12. THE BLOCK LIBRARY (Contract - Implementations Land Here Iteratively)
 - 5. CONTEXT-AWARE PROACTIVITY
 - 8. DARK MODE PROTOCOL
-- shadcn CLI Reference
-- Icons
+- worker/package.json
+- messages/tsconfig.json
 - 8. Advanced Patterns
 - Web Interface Guidelines
 - web/package.json
@@ -309,20 +310,20 @@
 - server-serialization.md
 - vercel-react-best-practices/rules/_template.md
 - hono
-- @hono/node-server
-- @orpc/openapi
+- dotenv
+- pg
 - @zarbit/contracts
 - @zarbit/db
 - @zarbit/env
-- zod
-- @base-ui/react
-- @orpc/client
+- pino
+- @prisma/adapter-pg
+- @zarbit/logger
 - recharts
 - @solar-icons/react
-- @tanstack/react-query
-- workbox-window
-- dotenv
-- grammy
+- @zarbit/messages
+- @fontsource-variable/vazirmatn
+- @tanstack/react-router
+- @zarbit/domain
 - hono
 - @hono/node-server
 - @mtcute/dispatcher
@@ -333,18 +334,24 @@
 - eslint-plugin-react-refresh
 - husky
 - prettier
+- @zarbit/env
+- playwright.config.ts
+- @t3-oss/env-core
+- @zarbit/domain
+- @zarbit/logger
+- @zarbit/messages
 
 ## God Nodes (most connected - your core abstractions)
 1. `Sessions` - 31 edges
-2. `AppError` - 23 edges
-3. `scripts` - 22 edges
-4. `sessionRef` - 21 edges
+2. `AppError` - 25 edges
+3. `sessionRef` - 23 edges
+4. `scripts` - 22 edges
 5. `Critical Anti-Patterns` - 20 edges
 6. `TelegramSessionStatus` - 19 edges
 7. `compilerOptions` - 18 edges
 8. `useApi()` - 17 edges
-9. `tasteskill: Anti-Slop Frontend Skill` - 16 edges
-10. `Configuration Gotchas` - 16 edges
+9. `AppDependencies` - 16 edges
+10. `useIdentity()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `createOrpcRouter()` --indirect_call--> `requestView()`  [INFERRED]
@@ -353,23 +360,23 @@
   apps/server/src/request-routes.ts → packages/db/src/requests.ts
 - `registerApiErrorHandlers()` --calls--> `databasePoolStats()`  [EXTRACTED]
   apps/server/src/api-error-handlers.ts → packages/db/src/index.ts
-- `AppDependencies` --references--> `TelegramSessionStatus`  [EXTRACTED]
+- `AppDependencies` --references--> `Identity`  [EXTRACTED]
   apps/server/src/app-types.ts → packages/contracts/src/index.ts
-- `AppDependencies` --references--> `WorkerCommand`  [EXTRACTED]
+- `AppDependencies` --references--> `TelegramSessionStatus`  [EXTRACTED]
   apps/server/src/app-types.ts → packages/contracts/src/index.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (333 total, 125 thin omitted)
+## Communities (341 total, 128 thin omitted)
 
 ### Community 0 - "contracts/src/index.ts"
 Cohesion: 0.09
-Nodes (28): baseRow, requestApp(), requestRow(), codeSchema, CreateRequestInput, createRequestInputSchema, loginSchema, loginStatusSchema (+20 more)
+Nodes (27): baseRow, requestApp(), requestRow(), codeSchema, CreateRequestInput, createRequestInputSchema, loginSchema, loginStatusSchema (+19 more)
 
 ### Community 1 - "Sessions"
-Cohesion: 0.19
-Nodes (4): challengeRef, sessionRef, Sessions, SessionStore
+Cohesion: 0.18
+Nodes (5): isRevoked(), challengeRef, sessionRef, Sessions, SessionStore
 
 ### Community 2 - "tasks"
 Cohesion: 0.05
@@ -384,36 +391,36 @@ Cohesion: 0.09
 Nodes (22): scripts, build, check-types, db:generate, db:migrate, db:push, db:studio, dev (+14 more)
 
 ### Community 5 - "devDependencies"
-Cohesion: 0.08
-Nodes (25): devDependencies, postcss, tailwindcss, @tanstack/router-plugin, tsx, @types/node, @types/react, @types/react-dom (+17 more)
+Cohesion: 0.07
+Nodes (27): devDependencies, @playwright/test, postcss, tailwindcss, @tanstack/router-plugin, tsx, @types/node, @types/react (+19 more)
 
 ### Community 6 - "db/src/index.ts"
-Cohesion: 0.15
-Nodes (15): createPrismaClient(), createStore(), databasePool, databasePoolOptions, prisma, SessionRecord, conflict(), createRequestStore() (+7 more)
+Cohesion: 0.14
+Nodes (16): Identity, createPrismaClient(), createStore(), databasePool, databasePoolOptions, prisma, SessionRecord, conflict() (+8 more)
 
 ### Community 7 - "get-constructor.js"
 Cohesion: 0.13
 Nodes (19): entryFullTypeName(), expandWorkspaceGlobs(), findMatches(), findPackageRoot(), fullTypeName(), generateTypescriptDefinitionsForTlEntry(), getWorkspacePackageDirs(), indent() (+11 more)
 
-### Community 8 - "app-runtime.tsx"
-Cohesion: 0.13
-Nodes (16): AppRuntime(), AppRuntimeProps, queryClient, rootElement, themeOptions, ThemePicker(), AppRouter, Register (+8 more)
+### Community 8 - "harness.tsx"
+Cohesion: 0.07
+Nodes (30): Harness(), Identity(), params, root, router, AppErrorBoundary, AppErrorFallback(), AppRuntime() (+22 more)
 
 ### Community 9 - "dependencies"
-Cohesion: 0.09
-Nodes (23): dependencies, @fontsource-variable/vazirmatn, @heroui/react, @heroui/styles, @orpc/tanstack-query, react, react-dom, @tailwindcss/vite (+15 more)
+Cohesion: 0.08
+Nodes (25): dependencies, @base-ui/react, @heroui/react, @heroui/styles, @orpc/client, @orpc/tanstack-query, react, react-dom (+17 more)
 
 ### Community 10 - "scripts"
 Cohesion: 0.05
 Nodes (43): dependencies, dotenv, pg, @prisma/adapter-pg, @prisma/client, @zarbit/contracts, @zarbit/domain, @zarbit/env (+35 more)
 
 ### Community 11 - "app.ts"
-Cohesion: 0.14
-Nodes (24): registerApiErrorHandlers(), initDataFromBody(), registerApiMiddleware(), createApp(), AppDependencies, AppEnv, generateOpenApi(), rpcError() (+16 more)
+Cohesion: 0.18
+Nodes (18): registerApiErrorHandlers(), initDataFromBody(), registerApiMiddleware(), createApp(), AppDependencies, AppEnv, generateOpenApi(), rpcError() (+10 more)
 
-### Community 12 - "worker/src/logger.ts"
-Cohesion: 0.20
-Nodes (15): errorDetails, FailureCategory, isNetworkCode(), isRevoked(), nativeCode(), rpcCode(), safeCode(), safeError() (+7 more)
+### Community 12 - "errors.ts"
+Cohesion: 0.42
+Nodes (9): errorDetails, FailureCategory, isNetworkCode(), nativeCode(), rpcCode(), safeCode(), safeError(), stringProperty() (+1 more)
 
 ### Community 13 - "devDependencies"
 Cohesion: 0.10
@@ -424,28 +431,28 @@ Cohesion: 0.09
 Nodes (21): compilerOptions, allowSyntheticDefaultImports, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution (+13 more)
 
 ### Community 15 - "_telegram-session-panel.tsx"
-Cohesion: 0.14
-Nodes (12): ConfirmAction(), ConfirmActionProps, ConnectionChip, resolveChip(), resolveDescription(), resolveTelegramSessionPresentation(), stateLabels, TelegramSessionPresentation (+4 more)
+Cohesion: 0.08
+Nodes (24): ConfirmAction(), ConfirmActionProps, ConnectionChip, resolveChip(), resolveDescription(), resolveTelegramSessionPresentation(), stateLabels, TelegramSessionPresentation (+16 more)
 
 ### Community 16 - "mtcute.ts"
 Cohesion: 0.19
 Nodes (9): add(), mtcuteFactory(), MtcuteLifecycleClient, observeMtcuteClient(), remove(), ZARBIT_CONNECTION_IDENTITY, TelegramConnectionState, TelegramLifecycleEvent (+1 more)
 
 ### Community 17 - "server/src/index.ts"
-Cohesion: 0.19
+Cohesion: 0.20
 Nodes (11): authenticateTelegramRequest(), invalidInitData(), TelegramIdentity, verifyTelegramInitData(), app, startServer(), serverLog, startApplicationServer() (+3 more)
 
 ### Community 18 - "dependencies"
 Cohesion: 0.13
-Nodes (15): dependencies, pg, pino, @t3-oss/env-core, @zarbit/db, @zarbit/domain, @zarbit/logger, zod (+7 more)
+Nodes (15): dependencies, dotenv, grammy, pg, pino, @prisma/adapter-pg, @zarbit/db, zod (+7 more)
 
 ### Community 19 - "brandkit/SKILL.md"
 Cohesion: 0.05
 Nodes (43): 1. Logo Cover, 1. Monogram + Meaning, 2 × 3 REFERENCE-STYLE LAYOUT, 2. Logo Construction, 2. Product Action, 3. Digital Application, 3. Metaphor Fusion, 4. Brand Essence (+35 more)
 
-### Community 20 - "_use-telegram-connection.ts"
+### Community 20 - "request.ts"
 Cohesion: 0.16
-Nodes (15): deliveryLabels, LoginCredentialField(), LoginCredentialFieldProps, TelegramLoginForm(), TelegramLoginFormProps, TelegramPage(), secondsUntil(), SessionCommand (+7 more)
+Nodes (24): createTelegramBot(), createPrivateNotifier(), notifyRecoveredRequests(), buildMessageButtons(), groupMessageUrl(), MessageButton, MessageLinks, bold() (+16 more)
 
 ### Community 21 - "get-class.js"
 Cohesion: 0.18
@@ -453,7 +460,7 @@ Nodes (10): dedent(), expandWorkspaceGlobs(), extractDescription(), findPackageR
 
 ### Community 22 - "dependencies"
 Cohesion: 0.12
-Nodes (17): dependencies, dotenv, grammy, @orpc/server, @orpc/zod, pg, pino, @prisma/adapter-pg (+9 more)
+Nodes (17): dependencies, grammy, @hono/node-server, @orpc/openapi, @orpc/server, @orpc/zod, @t3-oss/env-core, @zarbit/domain (+9 more)
 
 ### Community 23 - "get-method.js"
 Cohesion: 0.20
@@ -462,6 +469,10 @@ Nodes (10): dedent(), expandWorkspaceGlobs(), extractDescription(), findPackageR
 ### Community 24 - "env/package.json"
 Cohesion: 0.07
 Nodes (29): dependencies, dotenv, @t3-oss/env-core, zod, devDependencies, @types/node, typescript, @zarbit/config (+21 more)
+
+### Community 25 - "messages/package.json"
+Cohesion: 0.09
+Nodes (21): dependencies, @zarbit/contracts, devDependencies, tsx, @types/node, typescript, @zarbit/config, exports (+13 more)
 
 ### Community 26 - "compilerOptions"
 Cohesion: 0.13
@@ -476,16 +487,16 @@ Cohesion: 0.08
 Nodes (23): dependencies, pino, devDependencies, tsx, @types/node, typescript, @zarbit/config, exports (+15 more)
 
 ### Community 29 - "telegram-session.ts"
-Cohesion: 0.20
-Nodes (14): createWorkerCommand(), isExpectedWorkerStatus(), isWorkerError(), offlineStatus(), readWorkerResponse(), SessionReader, unavailableError(), workerCommand (+6 more)
+Cohesion: 0.15
+Nodes (18): createWorkerCommand(), isExpectedWorkerStatus(), isWorkerError(), offlineStatus(), readWorkerResponse(), SessionReader, unavailableError(), workerCommand (+10 more)
 
-### Community 30 - "sessions.test.ts"
-Cohesion: 0.14
-Nodes (11): fetchApi(), fetchGithubFallback(), main(), fetchApi(), fetchGithubFallback(), main(), SessionFiles, createSessions() (+3 more)
+### Community 30 - "SessionFiles"
+Cohesion: 0.18
+Nodes (7): fetchApi(), fetchGithubFallback(), main(), fetchApi(), fetchGithubFallback(), main(), SessionFiles
 
 ### Community 31 - "sessions.ts"
-Cohesion: 0.08
-Nodes (20): Challenge, expiredLoginCodes, LoginPhase, Runtime, SessionOptions, SessionOwner, SessionRecord, SessionState (+12 more)
+Cohesion: 0.07
+Nodes (25): Challenge, expiredLoginCodes, LoginPhase, Runtime, SessionOptions, SessionOwner, SessionRecord, SessionState (+17 more)
 
 ### Community 32 - "contracts/package.json"
 Cohesion: 0.09
@@ -496,12 +507,16 @@ Cohesion: 0.22
 Nodes (9): scripts, build, check-types, dev, format, format:check, lint, start (+1 more)
 
 ### Community 35 - "quote-dashboard-card.tsx"
-Cohesion: 0.16
-Nodes (10): formatAxisDate(), formatDate(), formatQuote(), QuoteDashboardCard(), relativeFormatter, timeFormatter, RequestList(), Route (+2 more)
+Cohesion: 0.26
+Nodes (8): formatAxisDate(), formatDate(), formatQuote(), QuoteDashboardCard(), relativeFormatter, timeFormatter, useQuoteDashboard(), TomanIcon()
 
-### Community 37 - "AppError"
+### Community 36 - "RequestList"
 Cohesion: 0.25
-Nodes (7): RpcUtils, createQueryClient(), fastQuery, retryDelay(), retryQuery(), slowQuery, AppError
+Nodes (4): parseRequestSearch(), RequestList(), Route, Route
+
+### Community 37 - "Critical Rules"
+Cohesion: 0.25
+Nodes (8): Chat & Messaging → [chat.md](./rules/chat.md), CLI, Component Structure → [composition.md](./rules/composition.md), Critical Rules, Forms & Inputs → [forms.md](./rules/forms.md), Icons → [icons.md](./rules/icons.md), Styling & Tailwind → [styling.md](./rules/styling.md), Use Components, Not Custom Markup → [composition.md](./rules/composition.md)
 
 ### Community 38 - "Other Commands"
 Cohesion: 0.05
@@ -511,9 +526,9 @@ Nodes (41): `--affected`, Basic Usage, `--cache`, Cache Control, CI Integration 
 Cohesion: 0.10
 Nodes (20): devDependencies, tsx, @types/node, typescript, @zarbit/config, exports, tsx, @types/node (+12 more)
 
-### Community 40 - "quote.ts"
-Cohesion: 0.36
-Nodes (5): createQuoteRecorder(), compactQuoteMultiplier, compactQuoteToDisplayPrice(), isFreshQuote(), parseQuoteMessage()
+### Community 40 - "worker/src/requests.ts"
+Cohesion: 0.14
+Nodes (15): createQuoteRecorder(), createRequestExecutor(), Quote, RequestStore, example, ExecutorStore, RequestRow, setup() (+7 more)
 
 ### Community 41 - "devDependencies"
 Cohesion: 0.15
@@ -523,9 +538,9 @@ Nodes (13): devDependencies, @orpc/client, tsdown, tsx, @types/node, typescript,
 Cohesion: 0.28
 Nodes (5): AppShell(), navigationItems, PwaUpdate(), Route, RouterAppContext
 
-### Community 43 - "worker/package.json"
-Cohesion: 0.13
-Nodes (14): devDependencies, tsdown, tsx, typescript, @zarbit/config, tsdown, tsx, typescript (+6 more)
+### Community 43 - "devDependencies"
+Cohesion: 0.22
+Nodes (9): devDependencies, tsdown, tsx, typescript, @zarbit/config, tsdown, tsx, typescript (+1 more)
 
 ### Community 44 - "context7"
 Cohesion: 0.33
@@ -548,8 +563,8 @@ Cohesion: 0.60
 Nodes (4): FALLBACK_THEME, fetchApi(), formatVariables(), main()
 
 ### Community 50 - "worker/src/index.ts"
-Cohesion: 0.19
-Nodes (12): createWorkerApp(), startWorker(), workerLog, acquireWorkerOwnership(), sessions, token, workerCommandSchema, checkDatabaseHealth() (+4 more)
+Cohesion: 0.23
+Nodes (10): createWorkerApp(), startWorker(), workerLog, acquireWorkerOwnership(), sessions, token, checkDatabaseHealth(), databasePoolStats() (+2 more)
 
 ### Community 51 - "get_docs.mjs"
 Cohesion: 0.83
@@ -567,13 +582,17 @@ Nodes (29): Component contracts and locality, File ownership, Primary sources, P
 Cohesion: 0.83
 Nodes (3): fetchApi(), fetchFallback(), main()
 
+### Community 55 - "session.ts"
+Cohesion: 0.61
+Nodes (7): formatConnectedMessage(), formatMembershipLostMessage(), formatOutageMessage(), formatRecoveredMessage(), formatRevokedMessage(), formatSessionMessage(), message()
+
 ### Community 58 - "config/package.json"
 Cohesion: 0.50
 Nodes (3): name, private, version
 
 ### Community 59 - "legacy-api.ts"
-Cohesion: 0.13
-Nodes (18): ApiProvider(), ApiContext, adaptLegacyApi(), createLegacyApi(), LegacyApi, request(), serverUrl(), createRpcClient() (+10 more)
+Cohesion: 0.12
+Nodes (20): ApiProvider(), ApiContext, adaptLegacyApi(), createLegacyApi(), LegacyApi, request(), serverUrl(), createRpcClient() (+12 more)
 
 ### Community 75 - "Creating Internal Packages"
 Cohesion: 0.07
@@ -583,9 +602,9 @@ Nodes (28): Add to Consuming Package, Avoid Mega-Packages, Avoid TypeScript Proj
 Cohesion: 0.07
 Nodes (27): aggregate, Aggregation Operations, Atomic operations, count, create, Create Operations, createMany, createManyAndReturn (+19 more)
 
-### Community 77 - "orpc-router.ts"
-Cohesion: 0.13
-Nodes (9): createOrpcRouter(), CacheOptions, ResponseCache, Value, busyError(), ReadCapacity, RpcRateLimit, RpcMetrics (+1 more)
+### Community 77 - "AppError"
+Cohesion: 0.12
+Nodes (10): createOrpcRouter(), CacheOptions, ResponseCache, Value, busyError(), ReadCapacity, RpcRateLimit, RpcMetrics (+2 more)
 
 ### Community 78 - "Global Options Reference"
 Cohesion: 0.08
@@ -664,8 +683,8 @@ Cohesion: 0.11
 Nodes (18): After schema changes, Command, Common Patterns, Create and apply migration, Create without applying, Examples, Follow-up Commands, Full workflow (+10 more)
 
 ### Community 97 - "shadcn/ui"
-Cohesion: 0.11
-Nodes (19): Chat & Messaging → [chat.md](./rules/chat.md), CLI, Component Docs, Examples, and Usage, Component Selection, Component Structure → [composition.md](./rules/composition.md), Critical Rules, Current Project Context, Detailed References (+11 more)
+Cohesion: 0.18
+Nodes (11): Component Docs, Examples, and Usage, Component Selection, Current Project Context, Detailed References, Key Fields, Key Patterns, Principles, Quick Reference (+3 more)
 
 ### Community 98 - "Agent Skill: Principal UI/UX Architect & Motion Choreographer (Awwwards-Tier)"
 Cohesion: 0.11
@@ -679,9 +698,9 @@ Nodes (17): Best Practices, Command, Common Patterns, Common seed commands, Cond
 Cohesion: 0.11
 Nodes (17): Debugging Cache Issues, Debugging with `globalConfiguration` Enabled, Diagnostic Tools, `--dry` / `--dry=json`, .env File Changed, Environment Variable Changed, `--force`, Incorrect Cache Hits (+9 more)
 
-### Community 101 - "_request-details-drawer.tsx"
-Cohesion: 0.32
-Nodes (11): useQuoteDashboard(), RequestDetailsDrawer(), RequestFormDrawer(), formatDate(), userMessage(), useRequestActions(), useApi(), createRpcUtils() (+3 more)
+### Community 101 - "auth.tsx"
+Cohesion: 0.28
+Nodes (12): compactPriceFormatOptions, RequestFormDrawer(), useRequestActions(), useSessionCommand(), useTelegramSession(), useApi(), createRpcUtils(), sessionInterval() (+4 more)
 
 ### Community 102 - "prisma db pull"
 Cohesion: 0.12
@@ -715,9 +734,9 @@ Nodes (16): Basic Syntax, By Dependencies/Dependents, By Directory, By Package N
 Cohesion: 0.12
 Nodes (16): 1.1 Avoid Boolean Prop Proliferation, 1.2 Use Compound Components, 1. Component Architecture, 2.1 Decouple State Management from UI, 2.2 Define Generic Context Interfaces for Dependency Injection, 2.3 Lift State into Provider Components, 2. State Management, 3.1 Create Explicit Component Variants (+8 more)
 
-### Community 110 - "_request-form-drawer.tsx"
+### Community 110 - "_request-details-drawer.tsx"
 Cohesion: 0.21
-Nodes (14): actionColorClassName(), cardFromColorClassName(), cardToColorClassName(), RequestCard(), compactPriceFormatOptions, actionIcons, actionLabels, conditionLabels (+6 more)
+Nodes (16): actionColorClassName(), cardFromColorClassName(), cardToColorClassName(), RequestCard(), RequestDetailsDrawer(), actionIcons, actionLabels, conditionLabels (+8 more)
 
 ### Community 111 - "HeroUI v3 React Development Guide"
 Cohesion: 0.12
@@ -816,8 +835,8 @@ Cohesion: 0.17
 Nodes (11): 1. Schema Configuration, 2. Config Configuration, 3. Environment Variable, Common Issues, Connection String Format, "Database file not found", Driver Adapter, Limitations (+3 more)
 
 ### Community 135 - "Commands"
-Cohesion: 0.17
-Nodes (12): `add` — Add components, `apply` — Apply a preset to an existing project, `build` — Build a custom registry, Commands, `diff` — Check for updates, `docs` — Get component documentation URLs, Dry-Run Mode, `info` — Project information (+4 more)
+Cohesion: 0.12
+Nodes (17): `add` — Add components, `apply` — Apply a preset to an existing project, `build` — Build a custom registry, Commands, Contents, `diff` — Check for updates, `docs` — Get component documentation URLs, Dry-Run Mode (+9 more)
 
 ### Community 136 - "Tools"
 Cohesion: 0.17
@@ -872,8 +891,8 @@ Cohesion: 0.18
 Nodes (10): Acknowledgments, Contributing, Creating a New Rule, File Naming Convention, Getting Started, Impact Levels, React Best Practices, Rule File Structure (+2 more)
 
 ### Community 149 - "scripts"
-Cohesion: 0.18
-Nodes (11): scripts, build, check-types, dev, format, format:check, generate-pwa-assets, lint (+3 more)
+Cohesion: 0.17
+Nodes (12): scripts, build, check-types, dev, format, format:check, generate-pwa-assets, lint (+4 more)
 
 ### Community 150 - "10. REFERENCE VOCABULARY (Pattern Names the Agent Should Know)"
 Cohesion: 0.20
@@ -927,13 +946,17 @@ Nodes (9): 4.1 Deduplicate Global Event Listeners, 4.2 Use Passive Event Listene
 Cohesion: 0.20
 Nodes (9): 1. Eliminating Waterfalls (async), 2. Bundle Size Optimization (bundle), 3. Server-Side Performance (server), 4. Client-Side Data Fetching (client), 5. Re-render Optimization (rerender), 6. Rendering Performance (rendering), 7. JavaScript Performance (js), 8. Advanced Patterns (advanced) (+1 more)
 
-### Community 164 - "logger/src/index.ts"
-Cohesion: 0.29
-Nodes (7): correlationRef(), createLogger(), LogContext, LoggerConfig, LogLevel, safeErrorCode(), serializeError()
+### Community 164 - "worker/src/logger.ts"
+Cohesion: 0.24
+Nodes (8): logger, correlationRef(), createLogger(), LogContext, LoggerConfig, LogLevel, safeErrorCode(), serializeError()
 
 ### Community 165 - "prisma migrate status"
 Cohesion: 0.22
 Nodes (8): Check status, Command, Examples, Exit Codes, Options, prisma migrate status, What It Does, When to Use
+
+### Community 166 - "shadcn/SKILL.md"
+Cohesion: 0.21
+Nodes (4): Icons, Icons in Button use data-icon attribute, No sizing classes on icons inside components, Pass icons as component objects, not string keys
 
 ### Community 167 - "Registry Authoring and Addresses"
 Cohesion: 0.22
@@ -1040,8 +1063,8 @@ Cohesion: 0.29
 Nodes (7): 2.1 Avoid Barrel File Imports, 2.2 Conditional Module Loading, 2.3 Defer Non-Critical Third-Party Libraries, 2.4 Dynamic Imports for Heavy Components, 2.5 Prefer Statically Analyzable Paths, 2.6 Preload Based on User Intent, 2. Bundle Size Optimization
 
 ### Community 193 - "Web/server RPC"
-Cohesion: 0.29
-Nodes (6): Capacity and observability, Freshness, Procedures and transport, Rollout and rollback, Sources and validation, Web/server RPC
+Cohesion: 0.25
+Nodes (7): Browser startup regression, Capacity and observability, Freshness, Procedures and transport, Rollout and rollback, Sources and validation, Web/server RPC
 
 ### Community 194 - "Zarbit — Telegram Integration"
 Cohesion: 0.29
@@ -1083,13 +1106,13 @@ Nodes (5): 5.A Sticky-Stack - Canonical Skeleton, 5.B Horizontal-Pan - Canonical
 Cohesion: 0.40
 Nodes (5): 8.A Token Strategy (pick one, stick to it), 8.B Do Not Prescribe Specific Colors Here, 8.C Default Mode, 8.D Test in Both Modes Before Finishing, 8. DARK MODE PROTOCOL
 
-### Community 204 - "shadcn CLI Reference"
-Cohesion: 0.40
-Nodes (5): Contents, Presets, shadcn CLI Reference, Switching Presets, Templates
+### Community 204 - "worker/package.json"
+Cohesion: 0.33
+Nodes (5): main, name, private, type, version
 
-### Community 205 - "Icons"
-Cohesion: 0.40
-Nodes (4): Icons, Icons in Button use data-icon attribute, No sizing classes on icons inside components, Pass icons as component objects, not string keys
+### Community 205 - "messages/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): extends, include, src, test, @zarbit/config/tsconfig.base.json
 
 ### Community 206 - "8. Advanced Patterns"
 Cohesion: 0.40
@@ -1136,24 +1159,24 @@ Cohesion: 0.50
 Nodes (3): main, name, type
 
 ## Knowledge Gaps
-- **1873 isolated node(s):** `FALLBACK_THEME`, `CartItem`, `Product`, `Window`, `pnpm` (+1868 more)
+- **1911 isolated node(s):** `FALLBACK_THEME`, `CartItem`, `Product`, `Window`, `pnpm` (+1906 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **125 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **128 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Turborepo Skill` connect `Turborepo Skill` to `Reference Index`, `Quick Decision Trees`, `turborepo/SKILL.md`, `Critical Anti-Patterns`?**
+  _High betweenness centrality (0.005) - this node is a cross-community bridge._
+- **Why does `Monorepo Best Practices` connect `Monorepo Best Practices` to `turborepo/SKILL.md`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **What connects `FALLBACK_THEME`, `CartItem`, `Product` to the rest of the system?**
-  _1873 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1911 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `contracts/src/index.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.08669354838709678 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09032258064516129 - nodes in this community are weakly interconnected._
 - **Should `tasks` be split into smaller, more focused modules?**
   _Cohesion score 0.04541062801932367 - nodes in this community are weakly interconnected._
 - **Should `scripts` be split into smaller, more focused modules?**
   _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
 - **Should `devDependencies` be split into smaller, more focused modules?**
-  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
-- **Should `db/src/index.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.14736842105263157 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._

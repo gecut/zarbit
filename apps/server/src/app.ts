@@ -39,14 +39,18 @@ export function createApp(deps: AppDependencies) {
       },
     ],
   });
+
   app.use("/rpc/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
+
     const result = await rpc.handle(c.req.raw, {
       prefix: "/rpc",
       context: { headers: c.req.raw.headers, requestId: crypto.randomUUID() },
     });
+
     if (result.matched && result.response)
       return c.newResponse(result.response.body, result.response);
+
     return next();
   });
 
@@ -56,6 +60,7 @@ export function createApp(deps: AppDependencies) {
       new ResponseHeadersPlugin(),
     ],
   });
+
   app.use("/openapi/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
     const result = await openapi.handle(c.req.raw, {
@@ -66,6 +71,7 @@ export function createApp(deps: AppDependencies) {
       return c.newResponse(result.response.body, result.response);
     return next();
   });
+
   let spec: ReturnType<typeof generateOpenApi> | undefined;
   app.get("/api/openapi.json", async (c) => {
     spec ??= generateOpenApi().catch((error: unknown) => {

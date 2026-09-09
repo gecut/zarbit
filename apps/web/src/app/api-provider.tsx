@@ -36,7 +36,8 @@ export function ApiProvider({ children }: { children: ReactNode }) {
     };
     void load()
       .then((api) => {
-        if (active) setClient(api);
+        // oRPC clients are callable proxies; never pass one as a state updater.
+        if (active) setClient(() => api);
       })
       .catch(() => {
         if (active)

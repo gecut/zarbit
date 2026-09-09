@@ -1,9 +1,10 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Button } from "@heroui/react";
-import type { Identity } from "@zarbit/contracts";
+import { AppError, type Identity } from "@zarbit/contracts";
 import { useApi } from "../api/api-context";
 import { telegramInitData } from "../telegram/telegram";
+import { authErrorMessage } from "./auth-error-message";
 const IdentityContext = createContext<Identity | null>(null);
 export function useIdentity() {
   const user = useContext(IdentityContext);
@@ -13,13 +14,17 @@ export function useIdentity() {
 export function AuthGate({ children }: { children: ReactNode }) {
   const api = useApi();
   const query = useQuery(api.auth.identity.queryOptions({ retry: false }));
+  const unauthorized =
+    query.error instanceof AppError && query.error.status === 401;
   if (query.isPending)
     return (
       <p
         className="border-border text-muted rounded-[var(--radius-2xl)] border border-dashed px-4 py-7 text-center text-sm leading-7"
         role="status"
       >
-        در حال بررسی دسترسی…
+        {query.fetchStatus === "paused"
+          ? "اتصال اینترنت قطع است؛ پس از اتصال، دسترسی دوباره بررسی می‌شود."
+          : "در حال بررسی دسترسی…"}
       </p>
     );
   if (query.error || !query.data)
@@ -30,17 +35,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
         status="danger"
       >
         <h1>ورود به زربیت</h1>
-        <p>{query.error?.message}</p>
+        <p>{authErrorMessage(query.error)}</p>
         {!telegramInitData() ? (
           <p>برنامه را از بات زربیت در تلگرام باز کنید.</p>
         ) : null}
-        <Button
-          onPress={() => {
-            void query.refetch();
-          }}
-        >
-          تلاش دوباره
-        </Button>
+        {!unauthorized && (
+          <Button
+            onPress={() => {
+              void query.refetch();
+            }}
+          >
+            تلاش دوباره
+          </Button>
+        )}
       </Alert>
     );
   return <IdentityContext value={query.data}>{children}</IdentityContext>;

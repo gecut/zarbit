@@ -60,3 +60,26 @@ Legacy HTTP parsing is isolated in the rollback adapter. It has the same query p
 - [TanStack polling](https://tanstack.com/query/latest/docs/framework/react/guides/polling)
 
 Run server/web tests, contracts/server typechecks, direct web TypeScript, focused ESLint and production builds. Server tests using fixture stores can use a dummy PostgreSQL URL solely to satisfy module configuration; those tests do not establish PostgreSQL connectivity or database load capacity.
+
+## Browser startup regression
+
+The oRPC client is a callable proxy at runtime. `ApiProvider` must store it with
+`setClient(() => api)`. Passing it directly invokes it as a React state updater,
+issues a call with an empty procedure path (`/rpc/`), and stores the resulting
+Promise. Query utilities then lack `auth`, causing the identity render crash.
+A 404 on an empty procedure is not evidence that Hono's `/rpc/*` mount is broken.
+Do not add duplicate routes or disable batching to mask this startup failure.
+
+`pnpm --filter web test:browser` builds a production bundle with a test API origin
+and exercises the real provider in Chromium, including StrictMode/remount, RPC,
+legacy and mock transports, Persian fallbacks, offline recovery and HTTP failures.
+Install the test browser once with `pnpm --filter web exec playwright install chromium`.
+The development harness is not included in the production bundle. HTTP is mocked;
+these checks do not establish live Telegram or PostgreSQL acceptance.
+
+Authentication failures never display raw exceptions. A 401 closes the gate and
+asks the user to reopen the Mini App; transient failures offer an explicit retry.
+Render boundaries provide a Persian reload action without logging credentials.
+After release, verify the PWA update prompt loads the new bundle and test a newly
+allowlisted account inside Telegram. Production rollout and real-account checks
+remain separate from local automated verification.

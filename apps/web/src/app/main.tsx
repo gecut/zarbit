@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import "../index.css";
 import { AppRuntime } from "./app-runtime";
 import { router } from "../routing/router";
+import { AppErrorBoundary } from "./app-error-boundary";
 
 const queryClient = createQueryClient();
 
@@ -15,5 +16,9 @@ if (!rootElement) {
 
 if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
-  root.render(<AppRuntime queryClient={queryClient} router={router} />);
+  root.render(
+    <AppErrorBoundary>
+      <AppRuntime queryClient={queryClient} router={router} />
+    </AppErrorBoundary>,
+  );
 }

@@ -1,9 +1,12 @@
+import { createMarketDataStore } from "./market-data";
 import { createRequestStore } from "./requests";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
 import { Pool } from "pg";
 import { AppError, type Identity } from "@zarbit/contracts";
 import { PrismaClient, Prisma } from "../prisma/generated/client";
+
+export * from "./market-data";
 
 export const databasePoolOptions = {
   max: databasePoolMax,
@@ -27,6 +30,7 @@ export function createStore(
   return {
     db: prisma,
     ...createRequestStore(prisma, now),
+    ...createMarketDataStore(prisma, now),
     user: (identity: Identity) =>
       prisma.telegramUser.upsert({
         where: { telegramUserId: identity.telegramUserId },
@@ -195,6 +199,7 @@ export function createStore(
       announcedAt: Date;
       receivedAt: Date;
       sourceMessageId: number;
+      chatId?: bigint | number;
     }) =>
       prisma.$transaction(async (tx) => {
         const cutoff = new Date(now().getTime() - 7 * 24 * 60 * 60 * 1_000);
@@ -202,7 +207,15 @@ export function createStore(
           where: { announcedAt: { lt: cutoff } },
         });
         const history = await tx.quoteHistory.createMany({
-          data: input,
+          data: {
+            compactQuote: input.compactQuote,
+            announcedAt: input.announcedAt,
+            receivedAt: input.receivedAt,
+            sourceMessageId: input.sourceMessageId,
+            ...(input.chatId !== undefined
+              ? { chatId: BigInt(input.chatId) }
+              : {}),
+          },
           skipDuplicates: true,
         });
         return { historyRecorded: history.count === 1 };

@@ -132,6 +132,7 @@ model Request {
 
 model QuoteHistory {
   id              Int      @id @default(autoincrement())
+  chatId          BigInt?
   compactQuote    Int
   announcedAt     DateTime
   receivedAt      DateTime
@@ -139,4 +140,99 @@ model QuoteHistory {
   createdAt       DateTime @default(now())
 
   @@index([announcedAt])
+  @@index([announcedAt, sourceMessageId])
 }
+
+enum ParticipantResolutionStatus {
+  UNRESOLVED
+  CANDIDATE
+  VERIFIED
+  CONFLICT
+  CONFLICT_FLAGGED
+}
+
+model Participant {
+  id                String                      @id
+  telegramUserId    String?
+  resolutionStatus  ParticipantResolutionStatus @default(UNRESOLVED)
+  confirmationCount Int                         @default(0)
+  lastConfirmedAt   DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  actions           TradingAction[]
+  buyerTrades       Trade[]                     @relation("BuyerTrades")
+  sellerTrades      Trade[]                     @relation("SellerTrades")
+
+  @@index([telegramUserId])
+}
+
+enum TradingActionType {
+  ORDER_BUY
+  ORDER_SELL
+  TAKE_ALL
+  TAKE_QUANTITY
+  CANCEL
+}
+
+enum TradingActionStatus {
+  OBSERVED
+  CONFIRMED_BY_BOT
+  REJECTED_BY_BOT
+  AMBIGUOUS
+  UNRESOLVED_TARGET
+}
+
+model TradingAction {
+  id                   String              @id @default(cuid())
+  chatId               BigInt
+  sourceMessageId      Int
+  senderId             String
+  actionType           TradingActionType
+  rawText              String
+  quantity             Int?
+  compactPrice         Int?
+  replyToMessageId     Int?
+  replyToSenderId      String?
+  targetOrderMessageId Int?
+  status               TradingActionStatus @default(OBSERVED)
+  confirmedByMessageId Int?
+  participantId        String?
+  observedAt           DateTime
+  createdAt            DateTime            @default(now())
+
+  participant          Participant?        @relation(fields: [participantId], references: [id], onDelete: SetNull)
+
+  @@unique([chatId, sourceMessageId])
+  @@index([sourceMessageId])
+  @@index([senderId, observedAt])
+  @@index([participantId, observedAt])
+  @@index([targetOrderMessageId])
+  @@index([observedAt, sourceMessageId])
+}
+
+model Trade {
+  id                  String      @id @default(cuid())
+  chatId              BigInt
+  sourceMessageId     Int
+  referenceNumber     String?
+  buyerParticipantId  String
+  sellerParticipantId String
+  quantity            Int
+  compactPrice        Int
+  rawPrice            BigInt
+  receiptTimeText     String?
+  announcedAt         DateTime
+  createdAt           DateTime    @default(now())
+
+  buyerParticipant    Participant @relation("BuyerTrades", fields: [buyerParticipantId], references: [id])
+  sellerParticipant   Participant @relation("SellerTrades", fields: [sellerParticipantId], references: [id])
+
+  @@unique([chatId, sourceMessageId])
+  @@index([sourceMessageId])
+  @@index([announcedAt, sourceMessageId])
+  @@index([buyerParticipantId, announcedAt])
+  @@index([sellerParticipantId, announcedAt])
+  @@index([referenceNumber])
+}
+

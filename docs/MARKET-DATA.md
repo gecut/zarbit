@@ -241,7 +241,7 @@ stateDiagram-v2
 
     UNRESOLVED --> CANDIDATE: 1 Valid Confirmation (Level 1 or 2)
     CANDIDATE --> CANDIDATE: 2nd Valid Confirmation (Same User)
-    CANDIDATE --> VERIFIED: >= 3 Valid Confirmations across Distinct Sessions
+    CANDIDATE --> VERIFIED: >= 5 distinct exact confirmations, zero conflicts
 
     UNRESOLVED --> CONFLICT: Contradictory Observation (User A != User B)
     CANDIDATE --> CONFLICT: Contradictory Observation (User A != User B)
@@ -255,7 +255,7 @@ stateDiagram-v2
     end note
 ```
 
-1. **Threshold Requirement:** At least **3 distinct confirmations** ($K \ge 3$) recorded across different timestamps/sessions with **zero contradictions** are required to transition from `UNRESOLVED` to `VERIFIED`.
+1. **Threshold Requirement:** At least **5 distinct exact confirmations** ($K \ge 5$), each backed by a unique human-action/canonical-order message pair, with **zero contradictions** are required to transition from `UNRESOLVED` to `VERIFIED`. Duplicate observations of the same Telegram message do not add a confirmation.
 2. **Conflict Resolution:** If alias $A$ is associated with user $U_1$, and subsequent valid evidence links alias $A$ to user $U_2$ ($U_1 \ne U_2$):
    - If in `UNRESOLVED` or `CANDIDATE`: The mapping immediately transitions to `CONFLICT`. It is locked from further automated transitions.
    - If already `VERIFIED`: The existing mapping is **NEVER overwritten**. The status transitions to `CONFLICT_FLAGGED` and requires manual review.

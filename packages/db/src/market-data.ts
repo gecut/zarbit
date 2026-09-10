@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Prisma } from "../prisma/generated/client";
 import type {
   Participant,
   ParticipantResolutionStatus,
@@ -8,6 +9,8 @@ import type {
   TradingActionStatus,
   TradingActionType,
 } from "../prisma/generated/client";
+
+export type { TradingAction, TradingActionStatus, TradingActionType };
 
 export interface RecordTradeInput {
   chatId: bigint | number;
@@ -46,6 +49,26 @@ export interface UpsertParticipantInput {
   confirmationCount?: number;
   lastConfirmedAt?: Date | null;
 }
+
+export interface ConfirmParticipantIdentityInput {
+  chatId: bigint | number;
+  sourceMessageId: number;
+  canonicalMessageId: number;
+  participantId: string;
+  senderId: string;
+  actionType: "ORDER_BUY" | "ORDER_SELL";
+  quantity: number;
+  compactPrice: number;
+  confirmedAt: Date;
+}
+
+export type ParticipantIdentityConfirmationResult =
+  | { outcome: "confirmed"; confirmationCount: number; verified: boolean }
+  | { outcome: "conflict"; resolutionStatus: ParticipantResolutionStatus }
+  | { outcome: "duplicate" }
+  | { outcome: "rejected" };
+
+const participantIdentityConfirmationThreshold = 5;
 
 export function createMarketDataStore(
   db: PrismaClient,
@@ -250,5 +273,179 @@ export function createMarketDataStore(
         orderBy: [{ observedAt: "desc" }, { sourceMessageId: "desc" }],
         ...(options?.limit !== undefined ? { take: options.limit } : {}),
       }),
+
+    findTradingActionForIdentityCorrelation: (
+      chatId: bigint | number,
+      sourceMessageId: number,
+    ): Promise<TradingAction | null> =>
+      db.tradingAction.findUnique({
+        where: {
+          chatId_sourceMessageId: {
+            chatId: BigInt(chatId),
+            sourceMessageId,
+          },
+        },
+      }),
+
+    confirmParticipantIdentity: async (
+      input: ConfirmParticipantIdentityInput,
+    ): Promise<ParticipantIdentityConfirmationResult> => {
+      const chatId = BigInt(input.chatId);
+
+      try {
+        return await db.$transaction(async (tx) => {
+          const action = await tx.tradingAction.findUnique({
+            where: {
+              chatId_sourceMessageId: {
+                chatId,
+                sourceMessageId: input.sourceMessageId,
+              },
+            },
+          });
+
+          if (
+            !action ||
+            action.senderId !== input.senderId ||
+            action.actionType !== input.actionType ||
+            action.quantity !== input.quantity ||
+            action.compactPrice !== input.compactPrice
+          ) {
+            return { outcome: "rejected" };
+          }
+
+          if (action.confirmedByMessageId !== null) {
+            return action.confirmedByMessageId === input.canonicalMessageId
+              ? { outcome: "duplicate" }
+              : { outcome: "rejected" };
+          }
+
+          if (action.status !== "OBSERVED" || action.participantId !== null) {
+            return { outcome: "rejected" };
+          }
+
+          const participant = await tx.participant.upsert({
+            where: { id: input.participantId },
+            create: { id: input.participantId },
+            update: {},
+          });
+          const participantWithSameTelegramId = await tx.participant.findFirst({
+            where: {
+              telegramUserId: input.senderId,
+              id: { not: input.participantId },
+            },
+          });
+          const participantActionWithDifferentSender =
+            await tx.tradingAction.findFirst({
+              where: {
+                participantId: input.participantId,
+                senderId: { not: input.senderId },
+                confirmedByMessageId: { not: null },
+              },
+            });
+          const differentParticipantActionWithSameSender =
+            await tx.tradingAction.findFirst({
+              where: {
+                participantId: { not: input.participantId },
+                senderId: input.senderId,
+                confirmedByMessageId: { not: null },
+              },
+            });
+          const participantWithSameTelegramEvidence =
+            differentParticipantActionWithSameSender?.participantId == null
+              ? null
+              : await tx.participant.findUnique({
+                  where: {
+                    id: differentParticipantActionWithSameSender.participantId,
+                  },
+                });
+          const hasAliasConflict =
+            (participant.telegramUserId !== null &&
+              participant.telegramUserId !== input.senderId) ||
+            participantActionWithDifferentSender !== null;
+          const conflictingParticipant =
+            participantWithSameTelegramId ??
+            participantWithSameTelegramEvidence;
+          const hasTelegramConflict = conflictingParticipant !== null;
+
+          const actionUpdated = await tx.tradingAction.updateMany({
+            where: {
+              id: action.id,
+              status: "OBSERVED",
+              participantId: null,
+              confirmedByMessageId: null,
+            },
+            data: {
+              status: "CONFIRMED_BY_BOT",
+              participantId: input.participantId,
+              confirmedByMessageId: input.canonicalMessageId,
+            },
+          });
+
+          if (actionUpdated.count !== 1) {
+            return { outcome: "duplicate" };
+          }
+
+          if (hasAliasConflict || hasTelegramConflict) {
+            const resolutionStatus =
+              participant.resolutionStatus === "VERIFIED"
+                ? "CONFLICT_FLAGGED"
+                : "CONFLICT";
+            await tx.participant.update({
+              where: { id: input.participantId },
+              data: { resolutionStatus },
+            });
+
+            if (conflictingParticipant) {
+              await tx.participant.update({
+                where: { id: conflictingParticipant.id },
+                data: {
+                  resolutionStatus:
+                    conflictingParticipant.resolutionStatus === "VERIFIED"
+                      ? "CONFLICT_FLAGGED"
+                      : "CONFLICT",
+                },
+              });
+            }
+
+            return { outcome: "conflict", resolutionStatus };
+          }
+
+          if (
+            participant.resolutionStatus === "CONFLICT" ||
+            participant.resolutionStatus === "CONFLICT_FLAGGED"
+          ) {
+            return {
+              outcome: "conflict",
+              resolutionStatus: participant.resolutionStatus,
+            };
+          }
+
+          const confirmationCount = participant.confirmationCount + 1;
+          const verified =
+            confirmationCount >= participantIdentityConfirmationThreshold;
+          await tx.participant.update({
+            where: { id: input.participantId },
+            data: {
+              telegramUserId: verified
+                ? input.senderId
+                : participant.telegramUserId,
+              confirmationCount,
+              lastConfirmedAt: input.confirmedAt,
+              resolutionStatus: verified ? "VERIFIED" : "CANDIDATE",
+            },
+          });
+
+          return { outcome: "confirmed", confirmationCount, verified };
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          return { outcome: "duplicate" };
+        }
+        throw error;
+      }
+    },
   };
 }

@@ -209,6 +209,7 @@ model TradingAction {
   @@index([participantId, observedAt])
   @@index([targetOrderMessageId])
   @@index([observedAt, sourceMessageId])
+  @@unique([chatId, confirmedByMessageId])
 }
 
 model Trade {
@@ -235,4 +236,3 @@ model Trade {
   @@index([sellerParticipantId, announcedAt])
   @@index([referenceNumber])
 }
-

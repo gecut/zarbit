@@ -15,6 +15,8 @@ export interface QuoteEvent {
   messageId: number;
   text: string;
   date: Date;
+  replyToMessageId?: number | null;
+  replyToSenderId?: string | null;
 }
 export type TelegramConnectionState =
   "offline" | "connecting" | "updating" | "connected";

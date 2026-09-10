@@ -168,12 +168,31 @@ export function mtcuteFactory(config: {
             senderId: String(message.sender.id),
             messageId: message.id,
           });
+          const replyToMsgId =
+            message.replyToMessage?.id ??
+            (message.raw._ === "message" &&
+            message.raw.replyTo?._ === "messageReplyHeader"
+              ? message.raw.replyTo.replyToMsgId ?? null
+              : null);
+
+          let replyToSenderId: string | null = null;
+          const replySender = message.replyToMessage?.sender;
+          if (
+            replySender &&
+            "id" in replySender &&
+            replySender.id !== undefined
+          ) {
+            replyToSenderId = String(replySender.id);
+          }
+
           handler({
             chatId: message.chat.id,
             senderId: String(message.sender.id),
             messageId: message.id,
             text: message.text,
             date: message.date,
+            replyToMessageId: replyToMsgId ?? null,
+            replyToSenderId,
           });
         });
         try {

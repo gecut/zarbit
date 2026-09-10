@@ -8,9 +8,15 @@ import type {
   TradingAction,
   TradingActionStatus,
   TradingActionType,
+  TradingSide,
 } from "../prisma/generated/client";
 
-export type { TradingAction, TradingActionStatus, TradingActionType };
+export type {
+  TradingAction,
+  TradingActionStatus,
+  TradingActionType,
+  TradingSide,
+};
 
 export interface RecordTradeInput {
   chatId: bigint | number;
@@ -30,6 +36,7 @@ export interface RecordTradingActionInput {
   sourceMessageId: number;
   senderId: string;
   actionType: TradingActionType;
+  side?: TradingSide | null;
   rawText: string;
   quantity?: number | null;
   compactPrice?: number | null;
@@ -229,6 +236,7 @@ export function createMarketDataStore(
             sourceMessageId: input.sourceMessageId,
             senderId: input.senderId,
             actionType: input.actionType,
+            side: input.side ?? null,
             rawText: input.rawText,
             quantity: input.quantity ?? null,
             compactPrice: input.compactPrice ?? null,
@@ -285,6 +293,29 @@ export function createMarketDataStore(
             sourceMessageId,
           },
         },
+      }),
+
+    findCandidateActionsForIdentityCorrelation: (
+      chatId: bigint | number,
+      windowStart: Date,
+      windowEnd: Date,
+      maxMessageId: number,
+    ): Promise<TradingAction[]> =>
+      db.tradingAction.findMany({
+        where: {
+          chatId: BigInt(chatId),
+          observedAt: {
+            gte: windowStart,
+            lte: windowEnd,
+          },
+          sourceMessageId: {
+            lt: maxMessageId,
+          },
+          actionType: {
+            in: ["ORDER_BUY", "ORDER_SELL"],
+          },
+        },
+        orderBy: [{ observedAt: "asc" }, { sourceMessageId: "asc" }],
       }),
 
     confirmParticipantIdentity: async (
@@ -367,25 +398,26 @@ export function createMarketDataStore(
             participantWithSameTelegramEvidence;
           const hasTelegramConflict = conflictingParticipant !== null;
 
-          const actionUpdated = await tx.tradingAction.updateMany({
-            where: {
-              id: action.id,
-              status: "OBSERVED",
-              participantId: null,
-              confirmedByMessageId: null,
-            },
-            data: {
-              status: "CONFIRMED_BY_BOT",
-              participantId: input.participantId,
-              confirmedByMessageId: input.canonicalMessageId,
-            },
-          });
+          if (
+            hasAliasConflict ||
+            hasTelegramConflict ||
+            participant.resolutionStatus === "CONFLICT" ||
+            participant.resolutionStatus === "CONFLICT_FLAGGED"
+          ) {
+            await tx.tradingAction.updateMany({
+              where: {
+                id: action.id,
+                status: "OBSERVED",
+                participantId: null,
+                confirmedByMessageId: null,
+              },
+              data: {
+                status: "AMBIGUOUS",
+                participantId: null,
+                confirmedByMessageId: null,
+              },
+            });
 
-          if (actionUpdated.count !== 1) {
-            return { outcome: "duplicate" };
-          }
-
-          if (hasAliasConflict || hasTelegramConflict) {
             const resolutionStatus =
               participant.resolutionStatus === "VERIFIED"
                 ? "CONFLICT_FLAGGED"
@@ -410,14 +442,22 @@ export function createMarketDataStore(
             return { outcome: "conflict", resolutionStatus };
           }
 
-          if (
-            participant.resolutionStatus === "CONFLICT" ||
-            participant.resolutionStatus === "CONFLICT_FLAGGED"
-          ) {
-            return {
-              outcome: "conflict",
-              resolutionStatus: participant.resolutionStatus,
-            };
+          const actionUpdated = await tx.tradingAction.updateMany({
+            where: {
+              id: action.id,
+              status: "OBSERVED",
+              participantId: null,
+              confirmedByMessageId: null,
+            },
+            data: {
+              status: "CONFIRMED_BY_BOT",
+              participantId: input.participantId,
+              confirmedByMessageId: input.canonicalMessageId,
+            },
+          });
+
+          if (actionUpdated.count !== 1) {
+            return { outcome: "duplicate" };
           }
 
           const confirmationCount = participant.confirmationCount + 1;
@@ -442,6 +482,10 @@ export function createMarketDataStore(
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
         ) {
+          const target = String(error.meta?.target ?? "");
+          if (target.includes("telegramUserId")) {
+            return { outcome: "conflict", resolutionStatus: "CONFLICT" };
+          }
           return { outcome: "duplicate" };
         }
         throw error;

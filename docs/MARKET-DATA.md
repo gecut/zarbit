@@ -316,4 +316,6 @@ A strict distinction is maintained between **database retention** and **analytic
 
 ### 6.3 QuoteHistory Retention
 
-- `QuoteHistory` may retain a rolling window (e.g. 7 to 30 days) to prevent table bloat while supporting the 3-day dashboard chart. Pruning logic in `recordQuote` applies strictly to `QuoteHistory`, never to `Trade`.
+- **Policy:** **PERMANENT RETENTION**.
+- **Rule:** Historical `QuoteHistory` records are **NEVER deleted or pruned**.
+- **Rationale:** Canonical quote history is retained permanently alongside `Trade` to preserve the complete tick-by-tick market price record. Query filtering (e.g. the 3-day dashboard chart) is applied strictly at query time without database pruning.

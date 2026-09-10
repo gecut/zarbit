@@ -172,7 +172,7 @@ export function mtcuteFactory(config: {
             message.replyToMessage?.id ??
             (message.raw._ === "message" &&
             message.raw.replyTo?._ === "messageReplyHeader"
-              ? message.raw.replyTo.replyToMsgId ?? null
+              ? (message.raw.replyTo.replyToMsgId ?? null)
               : null);
 
           let replyToSenderId: string | null = null;

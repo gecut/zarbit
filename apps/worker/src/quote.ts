@@ -2,7 +2,7 @@ import type {
   Store,
   TradingActionStatus,
   TradingActionType,
-  TradingAction,
+  TradingSide,
 } from "@zarbit/db";
 import {
   isFreshQuote,
@@ -48,7 +48,11 @@ export class BoundedMessageDeduplicator {
 export class BoundedOrderCache {
   private readonly orders = new Map<
     number,
-    CanonicalBotOrder & { botMessageId: number; observedAt: Date }
+    CanonicalBotOrder & {
+      botMessageId: number;
+      observedAt: Date;
+      replyToMessageId?: number | null;
+    }
   >();
   private readonly maxSize: number;
 
@@ -56,15 +60,22 @@ export class BoundedOrderCache {
     this.maxSize = maxSize;
   }
 
-  get(
-    messageId: number,
-  ):
-    | (CanonicalBotOrder & { botMessageId: number; observedAt: Date })
+  get(messageId: number):
+    | (CanonicalBotOrder & {
+        botMessageId: number;
+        observedAt: Date;
+        replyToMessageId?: number | null;
+      })
     | undefined {
     return this.orders.get(messageId);
   }
 
-  set(messageId: number, order: CanonicalBotOrder, observedAt: Date): void {
+  set(
+    messageId: number,
+    order: CanonicalBotOrder,
+    observedAt: Date,
+    replyToMessageId?: number | null,
+  ): void {
     if (this.orders.size >= this.maxSize) {
       const oldestKey = this.orders.keys().next().value;
       if (oldestKey !== undefined) {
@@ -75,7 +86,33 @@ export class BoundedOrderCache {
       ...order,
       botMessageId: messageId,
       observedAt,
+      replyToMessageId: replyToMessageId ?? null,
     });
+  }
+
+  findRecent(
+    windowStart: Date,
+    windowEnd: Date,
+  ): Array<
+    CanonicalBotOrder & {
+      botMessageId: number;
+      observedAt: Date;
+      replyToMessageId?: number | null;
+    }
+  > {
+    const result: Array<
+      CanonicalBotOrder & {
+        botMessageId: number;
+        observedAt: Date;
+        replyToMessageId?: number | null;
+      }
+    > = [];
+    for (const order of this.orders.values()) {
+      if (order.observedAt >= windowStart && order.observedAt <= windowEnd) {
+        result.push(order);
+      }
+    }
+    return result;
   }
 }
 
@@ -85,7 +122,9 @@ export type MarketDataStore = Pick<Store, "recordQuote"> &
   Partial<
     Pick<
       Store,
-      "confirmParticipantIdentity" | "findTradingActionForIdentityCorrelation"
+      | "confirmParticipantIdentity"
+      | "findTradingActionForIdentityCorrelation"
+      | "findCandidateActionsForIdentityCorrelation"
     >
   > &
   Partial<Pick<Store, "latestQuote">>;
@@ -116,18 +155,25 @@ export function createQuoteRecorder(
       });
   }
 
-  const resolveIdentity = async (
-    action: TradingAction,
-    canonical: CanonicalOrderObservation,
-  ) => {
-    const confirmParticipantIdentity = store.confirmParticipantIdentity;
-    if (!confirmParticipantIdentity) return;
+  const resolveIdentity = async (canonical: CanonicalOrderObservation) => {
+    if (
+      !store.confirmParticipantIdentity ||
+      !store.findCandidateActionsForIdentityCorrelation
+    ) {
+      return;
+    }
 
     try {
       const result = await resolveParticipantIdentity(
-        { confirmParticipantIdentity },
-        action,
+        {
+          confirmParticipantIdentity: store.confirmParticipantIdentity,
+          findTradingActionForIdentityCorrelation:
+            store.findTradingActionForIdentityCorrelation ?? (async () => null),
+          findCandidateActionsForIdentityCorrelation:
+            store.findCandidateActionsForIdentityCorrelation,
+        },
         canonical,
+        config.senderId,
       );
 
       if (!result || result.outcome === "rejected") {
@@ -137,10 +183,17 @@ export function createQuoteRecorder(
             canonicalMessageId: canonical.messageId,
             chatId: canonical.chatId,
             participantAlias: canonical.order.participantAlias,
-            senderId: action.senderId,
-            sourceMessageId: action.sourceMessageId,
           },
         );
+        return;
+      }
+
+      if (result.outcome === "duplicate") {
+        workerLog.debug("telegram.participant_identity.duplicate", {
+          canonicalMessageId: canonical.messageId,
+          chatId: canonical.chatId,
+          participantAlias: canonical.order.participantAlias,
+        });
         return;
       }
 
@@ -150,8 +203,6 @@ export function createQuoteRecorder(
           chatId: canonical.chatId,
           confirmationCount: result.confirmationCount,
           participantAlias: canonical.order.participantAlias,
-          senderId: action.senderId,
-          sourceMessageId: action.sourceMessageId,
           verified: result.verified,
         });
         if (result.verified) {
@@ -162,8 +213,6 @@ export function createQuoteRecorder(
               chatId: canonical.chatId,
               confirmationCount: result.confirmationCount,
               participantAlias: canonical.order.participantAlias,
-              senderId: action.senderId,
-              sourceMessageId: action.sourceMessageId,
             },
           );
         }
@@ -176,8 +225,6 @@ export function createQuoteRecorder(
           chatId: canonical.chatId,
           participantAlias: canonical.order.participantAlias,
           resolutionStatus: result.resolutionStatus,
-          senderId: action.senderId,
-          sourceMessageId: action.sourceMessageId,
         });
         return;
       }
@@ -186,39 +233,6 @@ export function createQuoteRecorder(
         canonicalMessageId: canonical.messageId,
         chatId: canonical.chatId,
         participantAlias: canonical.order.participantAlias,
-        sourceMessageId: action.sourceMessageId,
-      });
-    }
-  };
-
-  const correlateActionAndCanonical = async (
-    chatId: number,
-    actionMessageId: number,
-    canonical: CanonicalOrderObservation,
-  ) => {
-    if (
-      !store.findTradingActionForIdentityCorrelation ||
-      !store.confirmParticipantIdentity
-    ) {
-      return;
-    }
-    try {
-      const action = await store.findTradingActionForIdentityCorrelation(
-        chatId,
-        actionMessageId,
-      );
-      if (
-        action &&
-        (action.actionType === "ORDER_BUY" ||
-          action.actionType === "ORDER_SELL")
-      ) {
-        await resolveIdentity(action, canonical);
-      }
-    } catch (error) {
-      workerLog.failure("telegram.participant_identity.failed", error, {
-        canonicalMessageId: canonical.messageId,
-        chatId,
-        sourceMessageId: actionMessageId,
       });
     }
   };
@@ -369,12 +383,18 @@ export function createQuoteRecorder(
       // 1.3 Authoritative canonical bot active order
       const orderResult = parseCanonicalBotOrder(event.text);
       if (orderResult.status === "parsed") {
-        activeOrders.set(event.messageId, orderResult.data, event.date);
-        await correlateActionAndCanonical(event.chatId, event.messageId - 1, {
+        activeOrders.set(
+          event.messageId,
+          orderResult.data,
+          event.date,
+          event.replyToMessageId ?? null,
+        );
+        await resolveIdentity({
           chatId: event.chatId,
           messageId: event.messageId,
           observedAt: event.date,
           order: orderResult.data,
+          replyToMessageId: event.replyToMessageId ?? null,
         });
         workerLog.debug("telegram.order.observed", {
           chatId: event.chatId,
@@ -415,6 +435,7 @@ export function createQuoteRecorder(
 
     const recordAction = async (input: {
       actionType: TradingActionType;
+      side?: TradingSide | null;
       quantity: number | null;
       compactPrice: number | null;
       replyToMessageId: number | null;
@@ -427,6 +448,7 @@ export function createQuoteRecorder(
         sourceMessageId: event.messageId,
         senderId: event.senderId,
         actionType: input.actionType,
+        side: input.side ?? null,
         rawText: event.text,
         quantity: input.quantity,
         compactPrice: input.compactPrice,
@@ -444,6 +466,7 @@ export function createQuoteRecorder(
       if (recorded.actionRecorded) {
         workerLog.info("telegram.action.recorded", {
           actionType: input.actionType,
+          side: input.side ?? null,
           chatId: event.chatId,
           compactPrice: input.compactPrice,
           messageId: event.messageId,
@@ -479,6 +502,7 @@ export function createQuoteRecorder(
 
       const actionRecorded = await recordAction({
         actionType,
+        side,
         quantity,
         compactPrice: resolvedCompactPrice,
         replyToMessageId: event.replyToMessageId ?? null,
@@ -486,14 +510,22 @@ export function createQuoteRecorder(
         targetOrderMessageId: null,
         status,
       });
-      const canonical = activeOrders.get(event.messageId + 1);
-      if (actionRecorded && canonical) {
-        await correlateActionAndCanonical(event.chatId, event.messageId, {
-          chatId: event.chatId,
-          messageId: canonical.botMessageId,
-          observedAt: canonical.observedAt,
-          order: canonical,
-        });
+      if (actionRecorded) {
+        const recentCanonicals = activeOrders.findRecent(
+          event.date,
+          new Date(event.date.getTime() + 1_500),
+        );
+        for (const canonical of recentCanonicals) {
+          if (canonical.botMessageId > event.messageId) {
+            await resolveIdentity({
+              chatId: event.chatId,
+              messageId: canonical.botMessageId,
+              observedAt: canonical.observedAt,
+              order: canonical,
+              replyToMessageId: canonical.replyToMessageId ?? null,
+            });
+          }
+        }
       }
       return;
     }
@@ -502,9 +534,11 @@ export function createQuoteRecorder(
       const normalized = normalizeProtocolText(event.text);
       const isBuy = normalized.includes("خ");
       const actionType: TradingActionType = isBuy ? "ORDER_BUY" : "ORDER_SELL";
+      const side: TradingSide = isBuy ? "BUY" : "SELL";
 
       const actionRecorded = await recordAction({
         actionType,
+        side,
         quantity: null,
         compactPrice: null,
         replyToMessageId: event.replyToMessageId ?? null,
@@ -512,14 +546,22 @@ export function createQuoteRecorder(
         targetOrderMessageId: null,
         status: "AMBIGUOUS",
       });
-      const canonical = activeOrders.get(event.messageId + 1);
-      if (actionRecorded && canonical) {
-        await correlateActionAndCanonical(event.chatId, event.messageId, {
-          chatId: event.chatId,
-          messageId: canonical.botMessageId,
-          observedAt: canonical.observedAt,
-          order: canonical,
-        });
+      if (actionRecorded) {
+        const recentCanonicals = activeOrders.findRecent(
+          event.date,
+          new Date(event.date.getTime() + 1_500),
+        );
+        for (const canonical of recentCanonicals) {
+          if (canonical.botMessageId > event.messageId) {
+            await resolveIdentity({
+              chatId: event.chatId,
+              messageId: canonical.botMessageId,
+              observedAt: canonical.observedAt,
+              order: canonical,
+              replyToMessageId: canonical.replyToMessageId ?? null,
+            });
+          }
+        }
       }
       return;
     }
@@ -544,11 +586,13 @@ export function createQuoteRecorder(
       let compactPrice: number | null = null;
       let status: TradingActionStatus = "UNRESOLVED_TARGET";
       let targetOrderMessageId: number | null = null;
+      let side: TradingSide | null = null;
 
       if (hasActiveRepliedOrder && targetOrder) {
         quantity = targetOrder.remaining;
         compactPrice = targetOrder.compactPrice;
         targetOrderMessageId = targetOrder.botMessageId;
+        side = targetOrder.side === "SELL" ? "BUY" : "SELL";
         status = "OBSERVED";
       } else if (repliedOrderId !== null) {
         targetOrderMessageId = repliedOrderId;
@@ -557,6 +601,7 @@ export function createQuoteRecorder(
 
       await recordAction({
         actionType: "TAKE_ALL",
+        side,
         quantity,
         compactPrice,
         replyToMessageId: repliedOrderId,
@@ -586,6 +631,7 @@ export function createQuoteRecorder(
 
       await recordAction({
         actionType: "CANCEL",
+        side: null,
         quantity,
         compactPrice,
         replyToMessageId: repliedOrderId,
@@ -607,9 +653,11 @@ export function createQuoteRecorder(
         let compactPrice: number | null = null;
         let status: TradingActionStatus = "UNRESOLVED_TARGET";
         const targetOrderMessageId: number = repliedOrderId;
+        let side: TradingSide | null = null;
 
         if (hasActiveRepliedOrder && targetOrder) {
           compactPrice = targetOrder.compactPrice;
+          side = targetOrder.side === "SELL" ? "BUY" : "SELL";
           if (value <= targetOrder.remaining) {
             status = "OBSERVED";
           } else {
@@ -619,6 +667,7 @@ export function createQuoteRecorder(
 
         await recordAction({
           actionType: "TAKE_QUANTITY",
+          side,
           quantity: value,
           compactPrice,
           replyToMessageId: repliedOrderId,
@@ -634,6 +683,7 @@ export function createQuoteRecorder(
       if (compact === "1") {
         await recordAction({
           actionType: "TAKE_QUANTITY",
+          side: null,
           quantity: 1,
           compactPrice: null,
           replyToMessageId: null,

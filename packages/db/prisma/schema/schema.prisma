@@ -153,7 +153,7 @@ enum ParticipantResolutionStatus {
 
 model Participant {
   id                String                      @id
-  telegramUserId    String?
+  telegramUserId    String?                     @unique
   resolutionStatus  ParticipantResolutionStatus @default(UNRESOLVED)
   confirmationCount Int                         @default(0)
   lastConfirmedAt   DateTime?
@@ -163,8 +163,11 @@ model Participant {
   actions           TradingAction[]
   buyerTrades       Trade[]                     @relation("BuyerTrades")
   sellerTrades      Trade[]                     @relation("SellerTrades")
+}
 
-  @@index([telegramUserId])
+enum TradingSide {
+  BUY
+  SELL
 }
 
 enum TradingActionType {
@@ -189,6 +192,7 @@ model TradingAction {
   sourceMessageId      Int
   senderId             String
   actionType           TradingActionType
+  side                 TradingSide?
   rawText              String
   quantity             Int?
   compactPrice         Int?

@@ -202,30 +202,22 @@ export function createStore(
       chatId?: bigint | number;
     }) =>
       prisma.$transaction(async (tx) => {
-        const cutoff = new Date(now().getTime() - 7 * 24 * 60 * 60 * 1_000);
-        await tx.quoteHistory.deleteMany({
-          where: { announcedAt: { lt: cutoff } },
-        });
         const currentLatest = await tx.quoteHistory.findFirst({
           orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
         });
-        const shouldRetainHistory = input.announcedAt >= cutoff;
-        let historyRecorded = false;
-        if (shouldRetainHistory) {
-          const history = await tx.quoteHistory.createMany({
-            data: {
-              compactQuote: input.compactQuote,
-              announcedAt: input.announcedAt,
-              receivedAt: input.receivedAt,
-              sourceMessageId: input.sourceMessageId,
-              ...(input.chatId !== undefined
-                ? { chatId: BigInt(input.chatId) }
-                : {}),
-            },
-            skipDuplicates: true,
-          });
-          historyRecorded = history.count === 1;
-        }
+        const history = await tx.quoteHistory.createMany({
+          data: {
+            compactQuote: input.compactQuote,
+            announcedAt: input.announcedAt,
+            receivedAt: input.receivedAt,
+            sourceMessageId: input.sourceMessageId,
+            ...(input.chatId !== undefined
+              ? { chatId: BigInt(input.chatId) }
+              : {}),
+          },
+          skipDuplicates: true,
+        });
+        const historyRecorded = history.count === 1;
         const isNewer =
           !currentLatest ||
           input.announcedAt > currentLatest.announcedAt ||

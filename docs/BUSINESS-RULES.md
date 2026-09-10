@@ -12,7 +12,7 @@ Trades exist strictly upon observing authoritative bot receipts (`حواله`). 
 
 Mini App signature and allowlist authorize API access. MTProto login must connect the same account as the Mini App identity. Connected, group-member accounts observe group events; each observation is deduplicated at the data layer.
 
-Participant aliases emitted by the group bot serve as canonical participant identifiers. Alias-to-Telegram-identity resolution requires deterministic platform evidence and multiple confirmations ($K \ge 3$); unresolved state is always preferred over false mapping, and conflicts never overwrite verified records.
+Participant aliases emitted by the group bot serve as canonical participant identifiers. Alias-to-Telegram-identity resolution requires deterministic platform evidence and multiple confirmations ($K \ge 5$); unresolved state is always preferred over false mapping, and conflicts never overwrite verified records.
 
 ## Product limits
 

@@ -56,7 +56,7 @@ Phase 1 establishes a rock-solid, tamper-proof structured data pipeline. No part
 - **Identity Resolver:**
   - Conservative, deterministic-only alias → Telegram identity resolver.
   - No fuzzy matching, no LLM inference, no display-name guessing, no ambiguous correlation.
-  - Requires $\ge 3$ distinct confirmations with zero contradictions to reach `VERIFIED`.
+  - Requires $\ge 5$ distinct confirmations with zero contradictions to reach `VERIFIED`.
   - Conflicts freeze mappings and never overwrite verified records. Unresolved is always preferred to false mappings.
 - **Data Retention:**
   - `Trade` records are permanently retained. No pruning.

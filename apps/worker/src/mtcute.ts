@@ -167,7 +167,6 @@ export function mtcuteFactory(config: {
             chatId: message.chat.id,
             senderId: String(message.sender.id),
             messageId: message.id,
-            textPreview: message.text.slice(0, 200),
           });
           handler({
             chatId: message.chat.id,

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   Participant,
   ParticipantResolutionStatus,
@@ -105,14 +106,17 @@ export function createMarketDataStore(
           update: {},
         });
 
-        await tx.participant.upsert({
-          where: { id: input.sellerAlias },
-          create: { id: input.sellerAlias },
-          update: {},
-        });
+        if (input.sellerAlias !== input.buyerAlias) {
+          await tx.participant.upsert({
+            where: { id: input.sellerAlias },
+            create: { id: input.sellerAlias },
+            update: {},
+          });
+        }
 
         const result = await tx.trade.createMany({
           data: {
+            id: randomUUID(),
             chatId,
             sourceMessageId: input.sourceMessageId,
             referenceNumber: input.referenceNumber ?? null,

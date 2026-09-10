@@ -1,3 +1,36 @@
+export {
+  normalizeArabicPersianLetters,
+  normalizeCompactText,
+  normalizeProtocolText,
+  stripBidiAndControlChars,
+  toAsciiDigits,
+} from "./normalize";
+export { parseCanonicalBotOrder } from "./parse-canonical-bot-order";
+export { parseCanonicalBotQuote } from "./parse-canonical-bot-quote";
+export { parseContextCommand } from "./parse-context-command";
+export {
+  parseHumanOrder,
+  type ParseHumanOrderOptions,
+} from "./parse-human-order";
+export { parseTradeReceipt } from "./parse-trade-receipt";
+export { resolvePriceAgainstQuote } from "./price-resolver";
+export { classifyProtocolMessage } from "./classify-message";
+export type {
+  CanonicalBotOrder,
+  CanonicalBotQuote,
+  ClassifiedProtocolMessage,
+  CommandContext,
+  ContextCommandIntent,
+  HumanOrderIntent,
+  ParseResult,
+  ParseResultStatus,
+  PriceResolution,
+  TradeReceipt,
+  TradingSide,
+} from "./types";
+
+// --- Legacy Domain Utilities ---
+
 export const compactQuoteMultiplier = 1_000;
 
 export function compactQuoteToDisplayPrice(compactQuote: number): number {
@@ -38,10 +71,12 @@ export function matchesRequest(
 ): boolean {
   return condition === "GTE" ? quote >= targetPrice : quote <= targetPrice;
 }
+
 export function isFreshQuote(announcedAt: Date, receivedAt: Date): boolean {
   const age = receivedAt.getTime() - announcedAt.getTime();
   return age >= 0 && age <= 60_000;
 }
+
 export function formatGroupMessage(
   action: "BUY" | "SELL",
   units: number,

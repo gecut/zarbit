@@ -200,9 +200,9 @@
     "semantic_hash": "b9e9422555eef3fb90fbae2878b7f8cc"
   },
   "apps/worker/src/mtcute.ts": {
-    "mtime": 1788855461.510784,
-    "ast_hash": "d58fa6eacaa6c433ab1cd2613b37269e",
-    "semantic_hash": "d58fa6eacaa6c433ab1cd2613b37269e"
+    "mtime": 1789057985.6483853,
+    "ast_hash": "d3233366a0a51529a94de899adf95f92",
+    "semantic_hash": "d3233366a0a51529a94de899adf95f92"
   },
   "apps/worker/src/ownership.ts": {
     "mtime": 1788611787.7342398,
@@ -210,9 +210,9 @@
     "semantic_hash": "fef72fdddb3bb8525cc9e83b4f6d4741"
   },
   "apps/worker/src/quote.ts": {
-    "mtime": 1788895965.8515084,
-    "ast_hash": "3c0eb14f7c205480f4239928bae4eabb",
-    "semantic_hash": "3c0eb14f7c205480f4239928bae4eabb"
+    "mtime": 1789058015.6388676,
+    "ast_hash": "86afe0b500b5076f220200f27c57ec9f",
+    "semantic_hash": "86afe0b500b5076f220200f27c57ec9f"
   },
   "apps/worker/src/requests.ts": {
     "mtime": 1788987512.2454226,
@@ -325,9 +325,9 @@
     "semantic_hash": "0701cbb133e92c1ae8785c4e10559be0"
   },
   "packages/db/src/index.ts": {
-    "mtime": 1789056918.6495836,
-    "ast_hash": "699a472fd848ab3cc9909f559f13f5ce",
-    "semantic_hash": ""
+    "mtime": 1789058061.7612295,
+    "ast_hash": "f96c694ab8ca3b49bb986ed82af23ab7",
+    "semantic_hash": "f96c694ab8ca3b49bb986ed82af23ab7"
   },
   "packages/db/src/requests.ts": {
     "mtime": 1788987512.216915,
@@ -350,9 +350,9 @@
     "semantic_hash": "3ac7a0e52968a26c2c4b87c9b1d0bb7b"
   },
   "packages/domain/src/index.ts": {
-    "mtime": 1788855540.8913887,
-    "ast_hash": "1862b775feb20db88d20489a641c8d89",
-    "semantic_hash": "1862b775feb20db88d20489a641c8d89"
+    "mtime": 1789057366.5278127,
+    "ast_hash": "932f1a8db7b05f62872b7a254b6770c4",
+    "semantic_hash": "932f1a8db7b05f62872b7a254b6770c4"
   },
   "packages/domain/test/quote.test.ts": {
     "mtime": 1788778062.9195561,
@@ -2045,9 +2045,9 @@
     "semantic_hash": "21c459767e1e2a2714be1591c2d49424"
   },
   "packages/db/src/market-data.ts": {
-    "mtime": 1789056934.8705182,
-    "ast_hash": "53a666d90c261d3de36c7c2330be2f4c",
-    "semantic_hash": ""
+    "mtime": 1789057979.2161565,
+    "ast_hash": "93f2a35835319729e0a8bc28a2d56742",
+    "semantic_hash": "93f2a35835319729e0a8bc28a2d56742"
   },
   ".agents/skills/agy-worker/SKILL.md": {
     "mtime": 1789036138.464806,
@@ -2098,5 +2098,50 @@
     "mtime": 1789051738.0918355,
     "ast_hash": "2394e94b9bd07c479a138f562b7437fe",
     "semantic_hash": ""
+  },
+  "packages/domain/src/classify-message.ts": {
+    "mtime": 1789057335.251736,
+    "ast_hash": "469b69448ef1daefbbd9c04068abf82e",
+    "semantic_hash": "469b69448ef1daefbbd9c04068abf82e"
+  },
+  "packages/domain/src/normalize.ts": {
+    "mtime": 1789057290.7570994,
+    "ast_hash": "1238a3e2e7aa32e0e95189edc386a450",
+    "semantic_hash": "1238a3e2e7aa32e0e95189edc386a450"
+  },
+  "packages/domain/src/parse-canonical-bot-order.ts": {
+    "mtime": 1789057366.5511577,
+    "ast_hash": "277fcb8637386799be1610864269fe67",
+    "semantic_hash": "277fcb8637386799be1610864269fe67"
+  },
+  "packages/domain/src/parse-canonical-bot-quote.ts": {
+    "mtime": 1789057951.691954,
+    "ast_hash": "e329d5eb19231bc2170961b25d1ac7b8",
+    "semantic_hash": "e329d5eb19231bc2170961b25d1ac7b8"
+  },
+  "packages/domain/src/parse-context-command.ts": {
+    "mtime": 1789057366.5742981,
+    "ast_hash": "67967ed2f7de69a8efa1b310a88198d3",
+    "semantic_hash": "67967ed2f7de69a8efa1b310a88198d3"
+  },
+  "packages/domain/src/parse-human-order.ts": {
+    "mtime": 1789057366.5944006,
+    "ast_hash": "11de91a835c915d7f80df2f4b9881821",
+    "semantic_hash": "11de91a835c915d7f80df2f4b9881821"
+  },
+  "packages/domain/src/parse-trade-receipt.ts": {
+    "mtime": 1789057366.6078994,
+    "ast_hash": "763f9938854f9ec53cfe718e54c8fd1e",
+    "semantic_hash": "763f9938854f9ec53cfe718e54c8fd1e"
+  },
+  "packages/domain/src/price-resolver.ts": {
+    "mtime": 1789057366.6193316,
+    "ast_hash": "4e76b893a3226f5f978d089ef4f9a94a",
+    "semantic_hash": "4e76b893a3226f5f978d089ef4f9a94a"
+  },
+  "packages/domain/src/types.ts": {
+    "mtime": 1789057284.027375,
+    "ast_hash": "dd5ff26060e7fadc59642a981a52202f",
+    "semantic_hash": "dd5ff26060e7fadc59642a981a52202f"
   }
 }

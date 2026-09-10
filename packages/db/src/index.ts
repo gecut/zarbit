@@ -185,11 +185,11 @@ export function createStore(
         },
       });
     },
-    latestQuote: () =>
+    latestQuote: async (): Promise<QuoteRecord | null> =>
       prisma.quoteHistory.findFirst({
         orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
       }),
-    quotesSince: (announcedAt: Date) =>
+    quotesSince: async (announcedAt: Date): Promise<QuoteRecord[]> =>
       prisma.quoteHistory.findMany({
         where: { announcedAt: { gte: announcedAt } },
         orderBy: [{ announcedAt: "asc" }, { sourceMessageId: "asc" }],
@@ -206,21 +206,45 @@ export function createStore(
         await tx.quoteHistory.deleteMany({
           where: { announcedAt: { lt: cutoff } },
         });
-        const history = await tx.quoteHistory.createMany({
-          data: {
-            compactQuote: input.compactQuote,
-            announcedAt: input.announcedAt,
-            receivedAt: input.receivedAt,
-            sourceMessageId: input.sourceMessageId,
-            ...(input.chatId !== undefined
-              ? { chatId: BigInt(input.chatId) }
-              : {}),
-          },
-          skipDuplicates: true,
+        const currentLatest = await tx.quoteHistory.findFirst({
+          orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
         });
-        return { historyRecorded: history.count === 1 };
+        const shouldRetainHistory = input.announcedAt >= cutoff;
+        let historyRecorded = false;
+        if (shouldRetainHistory) {
+          const history = await tx.quoteHistory.createMany({
+            data: {
+              compactQuote: input.compactQuote,
+              announcedAt: input.announcedAt,
+              receivedAt: input.receivedAt,
+              sourceMessageId: input.sourceMessageId,
+              ...(input.chatId !== undefined
+                ? { chatId: BigInt(input.chatId) }
+                : {}),
+            },
+            skipDuplicates: true,
+          });
+          historyRecorded = history.count === 1;
+        }
+        const isNewer =
+          !currentLatest ||
+          input.announcedAt > currentLatest.announcedAt ||
+          (input.announcedAt.getTime() === currentLatest.announcedAt.getTime() &&
+            input.sourceMessageId > currentLatest.sourceMessageId);
+        const latestUpdated = historyRecorded && isNewer;
+
+        return { historyRecorded, latestUpdated };
       }),
   };
+}
+export interface QuoteRecord {
+  id: number;
+  compactQuote: number;
+  announcedAt: Date;
+  receivedAt: Date;
+  sourceMessageId: number;
+  chatId?: bigint | null;
+  createdAt: Date;
 }
 export type Store = ReturnType<typeof createStore>;
 export type SessionRecord = NonNullable<Awaited<ReturnType<Store["session"]>>>;

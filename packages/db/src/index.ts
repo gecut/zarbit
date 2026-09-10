@@ -15,11 +15,16 @@ export const databasePoolOptions = {
 } as const;
 
 export function createPrismaClient(url = databaseUrl) {
-  return new PrismaClient({
-    adapter: new PrismaPg(
-      new Pool({ connectionString: url, ...databasePoolOptions }),
-    ),
+  const pool = new Pool({ connectionString: url, ...databasePoolOptions });
+  const client = new PrismaClient({
+    adapter: new PrismaPg(pool),
   });
+  const originalDisconnect = client.$disconnect.bind(client);
+  client.$disconnect = async () => {
+    await originalDisconnect();
+    await pool.end();
+  };
+  return client;
 }
 export function createStore(
   prisma: PrismaClient,
@@ -248,6 +253,11 @@ const databasePool = new Pool({
 export const prisma = new PrismaClient({
   adapter: new PrismaPg(databasePool),
 });
+const originalPrismaDisconnect = prisma.$disconnect.bind(prisma);
+prisma.$disconnect = async () => {
+  await originalPrismaDisconnect();
+  await databasePool.end();
+};
 
 export function databasePoolStats() {
   return {

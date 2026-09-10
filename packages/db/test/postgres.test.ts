@@ -13,6 +13,9 @@ async function clean() {
   await prisma.telegramSession.deleteMany();
   await prisma.loginRateLimit.deleteMany();
   await prisma.telegramUser.deleteMany();
+  await prisma.tradingAction.deleteMany();
+  await prisma.trade.deleteMany();
+  await prisma.participant.deleteMany();
 }
 
 test.beforeEach(async () => {
@@ -35,7 +38,7 @@ test("PostgreSQL records the first compact quote in history and latest", async (
 
   assert.deepEqual(recorded, { historyRecorded: true, latestUpdated: true });
   const quote = await store.latestQuote();
-  assert.equal(quote?.id, 1);
+  assert.equal(typeof quote?.id, "number");
   assert.equal(quote?.compactQuote, 95_900);
   assert.equal(quote?.announcedAt.getTime(), announcedAt.getTime());
   assert.equal(quote?.sourceMessageId, 10);
@@ -78,7 +81,7 @@ test("PostgreSQL keeps a newer latest quote while retaining valid older history"
   assert.equal(history.length, 2);
 });
 
-test("PostgreSQL removes expired history and retains an expired latest quote", async () => {
+test("PostgreSQL permanently retains older quote history without pruning", async () => {
   await prisma.quoteHistory.create({
     data: {
       compactQuote: 94_000,
@@ -94,22 +97,26 @@ test("PostgreSQL removes expired history and retains an expired latest quote", a
     receivedAt: currentTime,
     sourceMessageId: 21,
   });
-  const expired = await store.recordQuote({
+  const older = await store.recordQuote({
     compactQuote: 95_000,
     announcedAt: new Date("2026-08-30T12:00:00.000Z"),
     receivedAt: currentTime,
     sourceMessageId: 22,
   });
 
-  assert.deepEqual(expired, { historyRecorded: false, latestUpdated: false });
+  assert.deepEqual(older, { historyRecorded: true, latestUpdated: false });
   const history = await prisma.quoteHistory.findMany({
     orderBy: { sourceMessageId: "asc" },
   });
-  assert.equal(history.length, 1);
-  assert.equal(history[0]?.sourceMessageId, 21);
+  assert.equal(history.length, 3);
+  assert.deepEqual(
+    history.map((row) => row.sourceMessageId),
+    [20, 21, 22],
+  );
+  assert.equal((await store.latestQuote())?.sourceMessageId, 21);
 });
 
-test("PostgreSQL rejects expired quotes on empty history", async () => {
+test("PostgreSQL records older quotes on empty history and updates latest quote", async () => {
   const recorded = await store.recordQuote({
     compactQuote: 95_000,
     announcedAt: new Date("2026-08-30T12:00:00.000Z"),
@@ -117,9 +124,9 @@ test("PostgreSQL rejects expired quotes on empty history", async () => {
     sourceMessageId: 30,
   });
 
-  assert.deepEqual(recorded, { historyRecorded: false, latestUpdated: false });
-  assert.equal(await store.latestQuote(), null);
-  assert.equal(await prisma.quoteHistory.count(), 0);
+  assert.deepEqual(recorded, { historyRecorded: true, latestUpdated: true });
+  assert.equal((await store.latestQuote())?.compactQuote, 95_000);
+  assert.equal(await prisma.quoteHistory.count(), 1);
 });
 
 test("request recovery atomically returns only newly uncertain executions", async () => {

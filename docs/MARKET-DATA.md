@@ -14,6 +14,7 @@ This document defines the data foundation for ZarBit's market intelligence engin
 Phase 1 focuses strictly on **DATA COLLECTION and MARKET INTELLIGENCE FOUNDATION**. No participant list, leaderboard, P&L UI, whale UI, or automated follow execution is exposed to end users in this phase.
 
 ### Separation of Concerns
+
 - `docs/GROUP-TRADING-PROTOCOL.md` owns the **observed Telegram group mechanics**, Persian syntax rules, order grammar, and message classifications.
 - `docs/MARKET-DATA.md` (this document) owns the **application and persistence models**, database schema, MTProto ingestion pipeline, multi-session idempotency, conservative identity resolution, query contracts, and storage lifecycle.
 
@@ -91,6 +92,7 @@ erDiagram
 ### 2.1 Entity Details
 
 #### A. `Participant`
+
 - **Canonical ID Rule:** The participant alias emitted by the group management bot (`رسول اُف`, `سناتور`, `مرداد`, etc.) is the canonical `Participant.id`.
 - **Architectural Constraint:** Do NOT introduce a `ParticipantAlias` table. In this market, the bot-assigned Persian name is the primary canonical identifier within the order book and receipts.
 - **Telegram Identity Link:** `telegramUserId` is optional and initially null. It is populated strictly through the deterministic identity resolver.
@@ -100,6 +102,7 @@ erDiagram
   - `CONFLICT`: Contradictory evidence detected (two different Telegram accounts claimed or observed for the same alias). Frozen against automated operations.
 
 #### B. `TradingAction`
+
 - **Purpose:** Represents observed human trading actions required for future exact whale-following.
 - **Fundamental Principle:** Future whale-following is **ACTION COPY, not confirmed-trade copy**. A followed trader's raw action is the future execution trigger once their Telegram identity is `VERIFIED`. Canonical bot messages and receipts are used for validation and reconciliation, not as the primary Follow trigger.
 - **Action Types:**
@@ -111,6 +114,7 @@ erDiagram
 - **Reply Context Capture:** Must capture `replyToMessageId` and `replyToSenderId` to reconstruct which order was targeted. If reply metadata is absent on contextual commands (`ب`, `1`, `ن`), the target order must be marked as `UNRESOLVED_TARGET`, never guessed.
 
 #### C. `Trade`
+
 - **Confirmation Boundary:** A `Trade` exists **ONLY after an authoritative bot receipt (`حواله`)** is observed.
 - **Rule of Truth:** Canonical order messages (`🔵 ... 1 خ 104900 (مانده: 1)`) represent active liquidity, NOT completed trades. Even if an order's `مانده` decreases, the authoritative trade confirmation is strictly the bot receipt.
 - **Non-Uniqueness of Reference Numbers:** Empirical analysis of 3,820 real group messages proved that `شماره حواله` is **NOT globally unique** (e.g. reference `6380` was issued twice on the same trading day for two completely different trades). Therefore:
@@ -121,17 +125,19 @@ erDiagram
   - `rawPrice`: Exact BigInt Rial value printed on the receipt.
 
 #### D. `QuoteHistory`
+
 - **Current Baseline:** Already implemented in `packages/db` and Prisma migrations (`model QuoteHistory`), with `compactQuote`, `announcedAt`, `receivedAt`, and `sourceMessageId`.
 - **Evaluation of Quote Source:**
-  - *Raw publisher messages:* Human quote publishers often send bare numbers without labels (e.g. `۱۰۴۹۵۰` or shorthand `۹۳۰`), which requires contextual guessing and introduces risk if publisher IDs change.
-  - *Canonical bot quote messages:* The group management bot always responds with standard, formatted messages (`🟡 مظنه: 105020 🟡`), using 6-digit compact integers in ASCII/Persian digits.
-  - *Decision:* Canonical bot quote messages (`senderId = GROUP_BOT_ID`) **replace raw publisher messages as the authoritative persisted quote source**. This guarantees 100% synchronization with the group's active reference quote, eliminates shorthand guesswork, and prevents failures if publisher accounts change.
+  - _Raw publisher messages:_ Human quote publishers often send bare numbers without labels (e.g. `۱۰۴۹۵۰` or shorthand `۹۳۰`), which requires contextual guessing and introduces risk if publisher IDs change.
+  - _Canonical bot quote messages:_ The group management bot always responds with standard, formatted messages (`🟡 مظنه: 105020 🟡`), using 6-digit compact integers in ASCII/Persian digits.
+  - _Decision:_ Canonical bot quote messages (`senderId = GROUP_BOT_ID`) **replace raw publisher messages as the authoritative persisted quote source**. This guarantees 100% synchronization with the group's active reference quote, eliminates shorthand guesswork, and prevents failures if publisher accounts change.
 
 ---
 
 ## 3. Idempotent Ingestion Pipeline
 
 ### 3.1 Multi-Session Architecture
+
 The ZarBit worker manages up to 20 concurrent Telegram MTProto user sessions. When these sessions belong to members of the trading group, all connected sessions receive identical incoming group messages nearly simultaneously.
 
 ```mermaid
@@ -168,6 +174,7 @@ flowchart TD
 ```
 
 ### 3.2 Idempotency Rules
+
 1. **Source Message Keying:** All ingested records (`QuoteHistory`, `Trade`, `TradingAction`) enforce a `UNIQUE` index on `sourceMessageId`.
 2. **Transaction Isolation:** Inserts are executed using `createMany({ skipDuplicates: true })` or `INSERT ... ON CONFLICT (sourceMessageId) DO NOTHING`.
 3. **Observation Settlement:**
@@ -176,6 +183,7 @@ flowchart TD
 4. **Decoupled Processing:** Ingestion handlers never make outbound MTProto calls inside database transactions.
 
 ### 3.3 MTProto Message Metadata Extraction
+
 To eliminate the limitations of previous logs, the worker's MTProto subscription must extract complete message metadata:
 
 ```typescript
@@ -185,11 +193,11 @@ export interface ObservedGroupEvent {
   senderId: string;
   date: Date;
   text: string;
-  
+
   // Reply context required for TradingAction reconstruction
   replyToMessageId?: number;
   replyToSenderId?: string;
-  
+
   // Entity mentions for deterministic identity extraction
   entities?: Array<{
     type: string;
@@ -207,6 +215,7 @@ export interface ObservedGroupEvent {
 A core requirement for future whale-following is linking the bot-emitted participant alias (e.g. `سناتور`) to their actual Telegram user ID (`senderId`).
 
 ### 4.1 Non-Negotiable Resolver Constraints
+
 - **Deterministic evidence only.**
 - **NO fuzzy string matching** (e.g. matching Telegram user display name "Senator" to alias "سناتور" is strictly prohibited).
 - **NO LLM inference or heuristic semantic guessing.**
@@ -218,11 +227,11 @@ A core requirement for future whale-following is linking the bot-emitted partici
 
 ### 4.2 Evidence Qualification Levels
 
-| Evidence Level | Description | Status Contribution |
-|---|---|---|
-| **Level 1 (Direct Platform Link)** | Bot canonical order or receipt contains a direct Telegram `replyToMessageId` pointing to the user's raw message, OR an MTProto `text_mention` entity linking the alias to the user ID. | Strongest deterministic proof. Increments confirmation count. |
-| **Level 2 (Isolated Sequence)** | User sends order command $M_{user}$; Bot responds with canonical order $M_{bot}$ containing matching side, quantity, and price within $\Delta t \le 1.5$s, with **ZERO intervening messages** from any other user in the group. | Valid confirmation candidate ONLY if no other messages were in-flight. |
-| **Level 3 (Ambiguous / Interleaved)** | Multiple user orders in flight, concurrent messages within the time window, or absence of reply metadata. | **REJECTED as evidence.** Discarded immediately. |
+| Evidence Level                        | Description                                                                                                                                                                                                                     | Status Contribution                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Level 1 (Direct Platform Link)**    | Bot canonical order or receipt contains a direct Telegram `replyToMessageId` pointing to the user's raw message, OR an MTProto `text_mention` entity linking the alias to the user ID.                                          | Strongest deterministic proof. Increments confirmation count.          |
+| **Level 2 (Isolated Sequence)**       | User sends order command $M_{user}$; Bot responds with canonical order $M_{bot}$ containing matching side, quantity, and price within $\Delta t \le 1.5$s, with **ZERO intervening messages** from any other user in the group. | Valid confirmation candidate ONLY if no other messages were in-flight. |
+| **Level 3 (Ambiguous / Interleaved)** | Multiple user orders in flight, concurrent messages within the time window, or absence of reply metadata.                                                                                                                       | **REJECTED as evidence.** Discarded immediately.                       |
 
 ### 4.3 Resolver State Machine
 
@@ -256,13 +265,16 @@ stateDiagram-v2
 ## 5. Phase 1B Serving & Web Architecture
 
 ### 5.1 Dashboard Scope
+
 In Phase 1B, the web dashboard exposes only:
+
 1. **Latest official group quote** (compact integer converted to display Toman + announcement time).
 2. **Latest completed trade price** (compact integer converted to display Toman + execution time).
 
 No participants, leaderboards, whale cards, or raw trade logs are exposed in Phase 1B.
 
 ### 5.2 Deriving Latest Trade Price
+
 Zarbit **DOES NOT create a duplicate `LatestTrade` table**. Maintaining a separate table or singleton row introduces synchronization anomalies and dual-write hazards.
 
 Instead, the latest completed trade is derived efficiently from the indexed `Trade` table:
@@ -277,7 +289,9 @@ LIMIT 1;
 With the index `@@index([announcedAt, sourceMessageId])`, this query is executed as a backward B-tree index scan in sub-millisecond time.
 
 ### 5.3 Transport & Caching Architecture
+
 Phase 1B **preserves the existing polling and response-cache architecture**:
+
 - **Browser Polling:** The web client continues polling `quote.dashboard` via oRPC v1 every 3 seconds.
 - **Server Cache:** The server retains a 1-second process-local cache (`ResponseCache<QuoteDashboard>`) with stale-while-revalidate protection.
 - **Realtime Transports:** No WebSocket or Server-Sent Events (SSE) infrastructure is introduced in Phase 1. The existing polling architecture is well within capacity bounds and avoids unnecessary operational overhead.
@@ -289,14 +303,17 @@ Phase 1B **preserves the existing polling and response-cache architecture**:
 A strict distinction is maintained between **database retention** and **analytics query windows**:
 
 ### 6.1 Trade Retention
+
 - **Policy:** **PERMANENT RETENTION**.
 - **Rule:** Historical `Trade` records are **NEVER deleted or pruned**.
 - **Rationale:** Complete historical trade data is required for long-term trader profiling, multi-month performance backtesting, and machine-learning model training in future phases.
 
 ### 6.2 Rolling 7-Day View
+
 - **Policy:** **ANALYTICS WINDOW ONLY**.
 - **Rule:** The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) for computing rolling leaderboards, trader win rates, and active whale rankings.
 - **Warning:** 7 days must NEVER be configured as a database pruning TTL for trades.
 
 ### 6.3 QuoteHistory Retention
+
 - `QuoteHistory` may retain a rolling window (e.g. 7 to 30 days) to prevent table bloat while supporting the 3-day dashboard chart. Pruning logic in `recordQuote` applies strictly to `QuoteHistory`, never to `Trade`.

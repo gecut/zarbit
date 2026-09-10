@@ -40,24 +40,24 @@ Records: 3820
 
 از کل dataset:
 
-| معیار | مقدار |
-|---|---:|
-| کل eventها | 3,820 |
-| eventهای گروه معاملاتی اصلی | 3,341 |
-| خروجی‌های ربات اصلی در گروه | 1,534 |
+| معیار                         | مقدار |
+| ----------------------------- | ----: |
+| کل eventها                    | 3,820 |
+| eventهای گروه معاملاتی اصلی   | 3,341 |
+| خروجی‌های ربات اصلی در گروه   | 1,534 |
 | پیام canonical لفظ/سفارش ربات | 1,270 |
-| حواله/رسید معامله ربات | 167 |
-| اعلان مظنه ربات | 97 |
+| حواله/رسید معامله ربات        |   167 |
+| اعلان مظنه ربات               |    97 |
 
 در پیام‌های غیرربات گروه، پس از normalize کردن فاصله و رقم‌ها:
 
-| شکل پیام | تعداد مشاهده |
-|---|---:|
-| خرید/فروش قابل شناسایی (`...خ...` / `...ف...`) | 1,211 |
-| `ن` | 377 |
-| `ب` | 66 |
-| عدد مستقل | 125 |
-| سایر/خطا/متن آزاد | 28 |
+| شکل پیام                                       | تعداد مشاهده |
+| ---------------------------------------------- | -----------: |
+| خرید/فروش قابل شناسایی (`...خ...` / `...ف...`) |        1,211 |
+| `ن`                                            |          377 |
+| `ب`                                            |           66 |
+| عدد مستقل                                      |          125 |
+| سایر/خطا/متن آزاد                              |           28 |
 
 > این آمار **frequency رفتار مشاهده‌شده** است، نه تضمین اینکه تک‌تک پیام‌ها توسط ربات معتبر شناخته شده‌اند؛ خصوصاً پیام‌های context-dependent بدون `replyToMessageId` قابل اثبات کامل نیستند.
 
@@ -275,8 +275,8 @@ Canonical output:
 تفسیر:
 
 ```ts
-quantity = 2
-remaining = 1
+quantity = 2;
+remaining = 1;
 ```
 
 پس حداقل یک واحد از سفارش قبلاً مصرف/معامله شده و یک واحد هنوز active است.
@@ -344,10 +344,7 @@ Receipt/Havale = Trade confirmation
 مدل actorها:
 
 ```ts
-type Actor =
-  | "TRADER"
-  | "QUOTE_PUBLISHER"
-  | "GROUP_TRADING_BOT";
+type Actor = "TRADER" | "QUOTE_PUBLISHER" | "GROUP_TRADING_BOT";
 ```
 
 ## 5.1 Trader
@@ -685,10 +682,7 @@ Bot:
 مدل محتمل برای suffix سه‌رقمی:
 
 ```ts
-function resolveThreeDigitPrice(
-  currentQuote: number,
-  suffix: number,
-): number {
+function resolveThreeDigitPrice(currentQuote: number, suffix: number): number {
   const base = Math.floor(currentQuote / 1000) * 1000;
 
   const candidates = [
@@ -907,12 +901,7 @@ type CanonicalOrder = {
 
   botMessageId: number;
 
-  state:
-    | "ACTIVE"
-    | "PARTIALLY_FILLED"
-    | "FILLED"
-    | "CANCELLED"
-    | "EXPIRED";
+  state: "ACTIVE" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "EXPIRED";
 };
 ```
 
@@ -956,7 +945,7 @@ takeQuantity = 2;
 حداقل:
 
 ```ts
-replyToMessageId != null
+replyToMessageId != null;
 ```
 
 و reply target باید یک canonical active order معتبر باشد.
@@ -1054,7 +1043,7 @@ Same user shortly after:
 بنابراین:
 
 ```ts
-CANCEL_TARGET_RESOLUTION = UNRESOLVED
+CANCEL_TARGET_RESOLUTION = UNRESOLVED;
 ```
 
 و نباید بدون evidence بیشتر clone شود.
@@ -1153,7 +1142,6 @@ displayedPrice = compactPrice * 1000;
 sourceMessageId = primary / unique identifier of the trade receipt
 referenceNumber = indexed business metadata, NOT a unique constraint
 ```
-
 
 ## 17.3 DONE condition
 
@@ -1497,20 +1485,13 @@ type ParseContext = {
 # 28. Recommended deterministic classifier
 
 ```ts
-function classifyMessage(ctx: ParseContext):
-  | "QUOTE"
-  | "ORDER"
-  | "TAKE_PARTIAL"
-  | "TAKE_ALL"
-  | "CANCEL"
-  | "UNKNOWN" {
-
+function classifyMessage(
+  ctx: ParseContext,
+): "QUOTE" | "ORDER" | "TAKE_PARTIAL" | "TAKE_ALL" | "CANCEL" | "UNKNOWN" {
   const text = normalize(ctx.text);
 
   if (text === "ب") {
-    return ctx.repliedOrder?.active
-      ? "TAKE_ALL"
-      : "UNKNOWN";
+    return ctx.repliedOrder?.active ? "TAKE_ALL" : "UNKNOWN";
   }
 
   if (text === "ن") {
@@ -1553,15 +1534,9 @@ function classifyMessage(ctx: ParseContext):
 Semantic mapping:
 
 ```ts
-const quantity =
-  parsed.quantity === ""
-    ? 1
-    : Number(parsed.quantity);
+const quantity = parsed.quantity === "" ? 1 : Number(parsed.quantity);
 
-const side =
-  parsed.side === "خ"
-    ? "BUY"
-    : "SELL";
+const side = parsed.side === "خ" ? "BUY" : "SELL";
 ```
 
 price باید سپس به resolver داده شود.
@@ -1577,10 +1552,7 @@ type PriceResolution = {
   raw: string;
   resolvedCompactPrice: number;
 
-  mode:
-    | "FULL_COMPACT"
-    | "SHORT_SUFFIX"
-    | "FULL_MONETARY_COMPAT";
+  mode: "FULL_COMPACT" | "SHORT_SUFFIX" | "FULL_MONETARY_COMPAT";
 
   confidence: "HIGH" | "COMPAT";
 };
@@ -1803,7 +1775,7 @@ User sends compact raw command
 برای replication بهتر باید:
 
 ```ts
-telegram.message.deleted
+telegram.message.deleted;
 ```
 
 نیز log شود.
@@ -1942,20 +1914,20 @@ ambiguous financial input must not be guessed
 
 برای جلوگیری از ambiguity بهتر است در کد و docs این mapping ثابت بماند:
 
-| اصطلاح گروه | نام domain پیشنهادی |
-|---|---|
-| لفظ | `Order` / `TradeIntent` |
-| خرید / خ | `BUY` |
-| فروش / ف | `SELL` |
-| مظنه | `Quote` |
-| مانده | `remainingUnits` |
-| ب | `TAKE_ALL_REMAINING` |
-| عدد reply | `TAKE_PARTIAL` |
-| ن | `CANCEL` |
-| حواله | `TradeReceipt` / `ExecutionReceipt` |
-| شماره حواله | `receiptReference` |
-| قیمت کوتاه | `priceSuffix` |
-| قیمت کامل | `compactPrice` |
+| اصطلاح گروه | نام domain پیشنهادی                 |
+| ----------- | ----------------------------------- |
+| لفظ         | `Order` / `TradeIntent`             |
+| خرید / خ    | `BUY`                               |
+| فروش / ف    | `SELL`                              |
+| مظنه        | `Quote`                             |
+| مانده       | `remainingUnits`                    |
+| ب           | `TAKE_ALL_REMAINING`                |
+| عدد reply   | `TAKE_PARTIAL`                      |
+| ن           | `CANCEL`                            |
+| حواله       | `TradeReceipt` / `ExecutionReceipt` |
+| شماره حواله | `receiptReference`                  |
+| قیمت کوتاه  | `priceSuffix`                       |
+| قیمت کامل   | `compactPrice`                      |
 
 اگر هدف fidelity با زبان کاربران است، در UI فارسی می‌توان از خود واژه `لفظ` استفاده کرد، اما در domain code بهتر است identifierها شفاف و انگلیسی باشند.
 
@@ -2228,39 +2200,39 @@ BUY و SELL با قیمت‌های crossing ارسال شوند و مشخص شو
 
 # 46. Known / Unknown Matrix
 
-| موضوع | وضعیت |
-|---|---|
-| `خ = خرید` | `CONFIRMED` |
-| `ف = فروش` | `CONFIRMED` |
-| 🔵 خرید | `CONFIRMED` |
-| 🔴 فروش | `CONFIRMED` |
-| canonical order format | `CONFIRMED` |
-| `مانده` = remaining | `CONFIRMED` |
-| partial fill | `CONFIRMED` |
-| quantity پیش‌فرض = 1 | `CONFIRMED` |
-| Persian digits | `CONFIRMED` |
-| Arabic-Indic digits | `CONFIRMED` |
-| whitespace tolerance | `CONFIRMED` |
-| 6-digit compact price | `CONFIRMED` |
-| 3-digit shorthand | `CONFIRMED` |
-| 1/2-digit shorthand | `CONFIRMED` |
-| quote shorthand | `CONFIRMED` |
-| receipt = final confirmation | `CONFIRMED` |
-| receipt price = compact × 1000 | `CONFIRMED` |
-| `ب` = take all remaining | `CONFIRMED` |
-| numeric reply = requested quantity | `HIGH-CONFIDENCE` |
-| `ن` = cancel | `HIGH-CONFIDENCE` |
-| target selection برای `ن` بدون reply | `UNRESOLVED` |
-| `ب 1` / `ب 2` | `UNRESOLVED` |
-| exact shorthand resolver | `HIGH-CONFIDENCE / NEEDS EDGE TESTS` |
-| nine-digit monetary input | `OBSERVED ONCE` |
-| auto cross-match | `UNRESOLVED` |
-| FIFO | `UNRESOLVED` |
-| price priority | `UNRESOLVED` |
-| order replacement semantics | `UNRESOLVED` |
-| expiry TTL | `UNRESOLVED` |
-| receipt reference uniqueness | `CONFIRMED NON-UNIQUE` (repeats within same day; message ID is canonical unique key) |
-| bot message deletion timing | `UNRESOLVED` |
+| موضوع                                | وضعیت                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `خ = خرید`                           | `CONFIRMED`                                                                          |
+| `ف = فروش`                           | `CONFIRMED`                                                                          |
+| 🔵 خرید                              | `CONFIRMED`                                                                          |
+| 🔴 فروش                              | `CONFIRMED`                                                                          |
+| canonical order format               | `CONFIRMED`                                                                          |
+| `مانده` = remaining                  | `CONFIRMED`                                                                          |
+| partial fill                         | `CONFIRMED`                                                                          |
+| quantity پیش‌فرض = 1                 | `CONFIRMED`                                                                          |
+| Persian digits                       | `CONFIRMED`                                                                          |
+| Arabic-Indic digits                  | `CONFIRMED`                                                                          |
+| whitespace tolerance                 | `CONFIRMED`                                                                          |
+| 6-digit compact price                | `CONFIRMED`                                                                          |
+| 3-digit shorthand                    | `CONFIRMED`                                                                          |
+| 1/2-digit shorthand                  | `CONFIRMED`                                                                          |
+| quote shorthand                      | `CONFIRMED`                                                                          |
+| receipt = final confirmation         | `CONFIRMED`                                                                          |
+| receipt price = compact × 1000       | `CONFIRMED`                                                                          |
+| `ب` = take all remaining             | `CONFIRMED`                                                                          |
+| numeric reply = requested quantity   | `HIGH-CONFIDENCE`                                                                    |
+| `ن` = cancel                         | `HIGH-CONFIDENCE`                                                                    |
+| target selection برای `ن` بدون reply | `UNRESOLVED`                                                                         |
+| `ب 1` / `ب 2`                        | `UNRESOLVED`                                                                         |
+| exact shorthand resolver             | `HIGH-CONFIDENCE / NEEDS EDGE TESTS`                                                 |
+| nine-digit monetary input            | `OBSERVED ONCE`                                                                      |
+| auto cross-match                     | `UNRESOLVED`                                                                         |
+| FIFO                                 | `UNRESOLVED`                                                                         |
+| price priority                       | `UNRESOLVED`                                                                         |
+| order replacement semantics          | `UNRESOLVED`                                                                         |
+| expiry TTL                           | `UNRESOLVED`                                                                         |
+| receipt reference uniqueness         | `CONFIRMED NON-UNIQUE` (repeats within same day; message ID is canonical unique key) |
+| bot message deletion timing          | `UNRESOLVED`                                                                         |
 
 ---
 
@@ -2366,21 +2338,21 @@ Trading Group Protocol
 
 این سند از کل dataset ساخته شده است. نمونه‌های کلیدی قابل ردیابی در eventهای زیر هستند:
 
-| موضوع | eventهای نمونه |
-|---|---|
-| حواله اولیه | `1–2` |
-| `۱ف۰۵۰` → canonical SELL | `3–4` |
-| `1خ104850` → canonical BUY | `8–9` |
-| full مظنه `104950` | `15–16` |
-| مظنه `105020` | `93–94` |
-| `2 ف 105050` | `155–156` |
-| Arabic/Persian order variants | متعدد |
-| `1خ50` → `105050` | `818–819` |
-| no quantity `خ ۷۰۰` → qty=1 | حوالی event `1244–1245` |
-| `ب` → take all 2 | `1877–1881` |
-| `۱ خ ۰۷` → `105107` | `1925–1926` |
-| `۲` → receipt quantity=2 | `2143–2144` |
-| 9-digit `105105000` → `105105` | `3563–3564` |
+| موضوع                          | eventهای نمونه          |
+| ------------------------------ | ----------------------- |
+| حواله اولیه                    | `1–2`                   |
+| `۱ف۰۵۰` → canonical SELL       | `3–4`                   |
+| `1خ104850` → canonical BUY     | `8–9`                   |
+| full مظنه `104950`             | `15–16`                 |
+| مظنه `105020`                  | `93–94`                 |
+| `2 ف 105050`                   | `155–156`               |
+| Arabic/Persian order variants  | متعدد                   |
+| `1خ50` → `105050`              | `818–819`               |
+| no quantity `خ ۷۰۰` → qty=1    | حوالی event `1244–1245` |
+| `ب` → take all 2               | `1877–1881`             |
+| `۱ خ ۰۷` → `105107`            | `1925–1926`             |
+| `۲` → receipt quantity=2       | `2143–2144`             |
+| 9-digit `105105000` → `105105` | `3563–3564`             |
 
 ---
 
@@ -2394,6 +2366,7 @@ Trading Group Protocol
 Status: CONFIRMED | HIGH-CONFIDENCE | UNRESOLVED
 
 Observed:
+
 - event X
 - event Y
 

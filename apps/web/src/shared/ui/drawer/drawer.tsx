@@ -25,7 +25,7 @@ function Backdrop(props: DrawerBackdropProps) {
     <BaseDrawer.Backdrop
       {...props}
       className={cn(
-        "zarbit-drawer-backdrop z-60 bg-black/50 backdrop-blur-xs opacity-(--drawer-swipe-progress) fixed inset-0 min-h-dvh",
+        "zarbit-drawer-backdrop z-60 backdrop-blur-xs opacity-(--drawer-swipe-progress) fixed inset-0 min-h-dvh bg-black/50",
         "transition-opacity duration-500",
         "[data-starting-style]:opacity-0 [data-ending-style]:opacity-0 [data-swiping]:duration-0 [data-ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
         props.className,

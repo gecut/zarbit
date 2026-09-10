@@ -14,7 +14,11 @@ import { RequestCard } from "./_request-card";
 import { RequestDetailsDrawer } from "./_request-details-drawer";
 import { RequestFormDrawer } from "./_request-form-drawer";
 
-export function RequestList({ history = false, requestId, onCloseLinkedRequest }: {
+export function RequestList({
+  history = false,
+  requestId,
+  onCloseLinkedRequest,
+}: {
   history?: boolean;
   requestId?: string;
   onCloseLinkedRequest?: () => void;

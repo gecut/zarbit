@@ -9,7 +9,13 @@ export const Route = createFileRoute("/history")({
 function HistoryPage() {
   const { requestId } = Route.useSearch();
   const navigate = Route.useNavigate();
-  return <RequestList history requestId={requestId} onCloseLinkedRequest={() => {
-    void navigate({ search: {}, replace: true });
-  }} />;
+  return (
+    <RequestList
+      history
+      requestId={requestId}
+      onCloseLinkedRequest={() => {
+        void navigate({ search: {}, replace: true });
+      }}
+    />
+  );
 }

@@ -229,7 +229,8 @@ export function createStore(
         const isNewer =
           !currentLatest ||
           input.announcedAt > currentLatest.announcedAt ||
-          (input.announcedAt.getTime() === currentLatest.announcedAt.getTime() &&
+          (input.announcedAt.getTime() ===
+            currentLatest.announcedAt.getTime() &&
             input.sourceMessageId > currentLatest.sourceMessageId);
         const latestUpdated = historyRecorded && isNewer;
 

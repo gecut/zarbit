@@ -35,9 +35,9 @@ export function sessionInterval(data?: TelegramSessionStatus): number | false {
     data?.connection === "CONNECTING"
   )
     return 2000;
+  if (data?.state === "DISCONNECTED" || data?.state === "REVOKED") return false;
   if (data?.connection === "OFFLINE" || data?.connection === "DEGRADED")
     return 5000;
-  if (data?.state === "DISCONNECTED" || data?.state === "REVOKED") return false;
   return 5000;
 }
 export function retryQuery(count: number, error: unknown): boolean {

@@ -69,12 +69,28 @@ test("does not record a malformed quote or a message from another source", async
   assert.equal(events.length, 0);
 });
 
-
 test("passes the actual source timestamp to request matching", async () => {
   const announcedAt = new Date(Date.now() - 1000);
   let received: unknown;
-  const record = createQuoteRecorder({ recordQuote: async () => ({ historyRecorded: true, latestUpdated: true }) },
-    { groupId: -1001, senderId: "55" }, async (quote) => { received = quote; });
-  await record("user-1", 1, { chatId: -1001, senderId: "55", messageId: 42, text: "مظنه: 96200", date: announcedAt });
-  assert.deepEqual(received, { compactQuote: 96200, sourceMessageId: 42, announcedAt });
+  const record = createQuoteRecorder(
+    {
+      recordQuote: async () => ({ historyRecorded: true, latestUpdated: true }),
+    },
+    { groupId: -1001, senderId: "55" },
+    async (quote) => {
+      received = quote;
+    },
+  );
+  await record("user-1", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 42,
+    text: "مظنه: 96200",
+    date: announcedAt,
+  });
+  assert.deepEqual(received, {
+    compactQuote: 96200,
+    sourceMessageId: 42,
+    announcedAt,
+  });
 });

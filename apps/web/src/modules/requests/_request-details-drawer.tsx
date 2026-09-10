@@ -40,7 +40,7 @@ export function RequestDetailsDrawer({
         query.state.data?.status === "ACTIVE" ? 3000 : false,
     }),
   );
-  const request = detail.isError ? null : detail.data ?? initialRequest;
+  const request = detail.isError ? null : (detail.data ?? initialRequest);
   const [pending, setPending] = useState<"send" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,11 +111,18 @@ export function RequestDetailsDrawer({
         ) : null
       }
     >
-      {selectedId && detail.isPending ? <p role="status">در حال دریافت جزئیات درخواست…</p> : null}
+      {selectedId && detail.isPending ? (
+        <p role="status">در حال دریافت جزئیات درخواست…</p>
+      ) : null}
       {selectedId && detail.isError ? (
         <div role="alert">
-          <p>جزئیات درخواست در دسترس نیست؛ ممکن است حذف شده باشد یا به آن دسترسی نداشته باشید.</p>
-          <Button variant="secondary" onPress={() => void detail.refetch()}>تلاش دوباره</Button>
+          <p>
+            جزئیات درخواست در دسترس نیست؛ ممکن است حذف شده باشد یا به آن دسترسی
+            نداشته باشید.
+          </p>
+          <Button variant="secondary" onPress={() => void detail.refetch()}>
+            تلاش دوباره
+          </Button>
         </div>
       ) : null}
       {request ? (

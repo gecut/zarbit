@@ -52,7 +52,7 @@ test("PostgreSQL keeps a newer latest quote while retaining valid older history"
     sourceMessageId: 11,
   });
 
-  assert.equal(
+  assert.deepEqual(
     await store.recordQuote({
       compactQuote: 95_000,
       announcedAt: new Date("2026-09-07T08:00:00.000Z"),
@@ -61,7 +61,7 @@ test("PostgreSQL keeps a newer latest quote while retaining valid older history"
     }),
     { historyRecorded: true, latestUpdated: false },
   );
-  assert.equal(
+  assert.deepEqual(
     await store.recordQuote({
       compactQuote: 96_000,
       announcedAt: new Date("2026-09-07T08:01:00.000Z"),
@@ -123,18 +123,41 @@ test("PostgreSQL can set a stale latest quote without retaining expired history"
 });
 
 test("request recovery atomically returns only newly uncertain executions", async () => {
-  const owner = await prisma.telegramUser.create({ data: { telegramUserId: "recovery-test" } });
-  const base = { userId: owner.id, condition: "GTE" as const, action: "ALERT" as const, targetPrice: 96155 };
-  await prisma.request.createMany({ data: [
-    { ...base, id: "unclaimed", status: "ACTIVE" },
-    { ...base, id: "running", status: "ACTIVE", claimToken: "claim-a" },
-    { ...base, id: "finished", status: "DONE", claimToken: "claim-b" },
-    { ...base, id: "uncertain", status: "UNKNOWN", claimToken: "claim-c" },
-  ] });
-  const [first, concurrent] = await Promise.all([store.recoverRequests(), store.recoverRequests()]);
-  assert.deepEqual([...first, ...concurrent].map((row) => row.id), ["running"]);
+  const owner = await prisma.telegramUser.create({
+    data: { telegramUserId: "recovery-test" },
+  });
+  const base = {
+    userId: owner.id,
+    condition: "GTE" as const,
+    action: "ALERT" as const,
+    targetPrice: 96155,
+  };
+  await prisma.request.createMany({
+    data: [
+      { ...base, id: "unclaimed", status: "ACTIVE" },
+      { ...base, id: "running", status: "ACTIVE", claimToken: "claim-a" },
+      { ...base, id: "finished", status: "DONE", claimToken: "claim-b" },
+      { ...base, id: "uncertain", status: "UNKNOWN", claimToken: "claim-c" },
+    ],
+  });
+  const [first, concurrent] = await Promise.all([
+    store.recoverRequests(),
+    store.recoverRequests(),
+  ]);
+  assert.deepEqual(
+    [...first, ...concurrent].map((row) => row.id),
+    ["running"],
+  );
   assert.equal([...first, ...concurrent][0]?.status, "UNKNOWN");
   assert.deepEqual(await store.recoverRequests(), []);
-  assert.equal((await prisma.request.findUniqueOrThrow({ where: { id: "unclaimed" } })).status, "ACTIVE");
-  assert.equal((await prisma.request.findUniqueOrThrow({ where: { id: "finished" } })).status, "DONE");
+  assert.equal(
+    (await prisma.request.findUniqueOrThrow({ where: { id: "unclaimed" } }))
+      .status,
+    "ACTIVE",
+  );
+  assert.equal(
+    (await prisma.request.findUniqueOrThrow({ where: { id: "finished" } }))
+      .status,
+    "DONE",
+  );
 });

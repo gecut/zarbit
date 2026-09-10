@@ -5,7 +5,11 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   workers: 2,
-  use: { browserName: "chromium", channel: process.env.PLAYWRIGHT_CHANNEL, trace: "retain-on-failure" },
+  use: {
+    browserName: "chromium",
+    channel: process.env.PLAYWRIGHT_CHANNEL,
+    trace: "retain-on-failure",
+  },
   projects: [
     ...modes.map((mode, i) => ({
       name: mode,

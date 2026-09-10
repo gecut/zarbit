@@ -11,7 +11,8 @@ export class SessionOutages {
 
   connected(userId: string, revision: number): boolean {
     const previous = this.states.get(userId);
-    const announceRecovery = previous?.revision === revision && previous.delivered;
+    const announceRecovery =
+      previous?.revision === revision && previous.delivered;
     this.states.set(userId, { revision, attempted: false, delivered: false });
     return announceRecovery;
   }
@@ -27,13 +28,23 @@ export class SessionOutages {
     this.states.delete(userId);
   }
 
-  async check(userId: string, revision: number, now: number, send: () => Promise<boolean>): Promise<void> {
+  async check(
+    userId: string,
+    revision: number,
+    now: number,
+    send: () => Promise<boolean>,
+  ): Promise<void> {
     const state = this.states.get(userId);
     if (state?.revision !== revision) {
       this.clear(userId);
       return;
     }
-    if (state.since === undefined || now - state.since < 120_000 || state.attempted) return;
+    if (
+      state.since === undefined ||
+      now - state.since < 120_000 ||
+      state.attempted
+    )
+      return;
     state.attempted = true;
     state.delivered = await send();
   }

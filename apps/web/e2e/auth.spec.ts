@@ -163,13 +163,24 @@ test("late legacy loader after unmount cannot publish a client", async ({
   expect(paths).toHaveLength(1);
 });
 
-test('authentication deadline returns a recoverable network error', async ({ page }, info) => {
-  test.skip(info.project.name !== 'rpc');
+test("authentication deadline returns a recoverable network error", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "rpc");
   let release!: () => void;
-  const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route(endpoint, async route => { await pending; await route.abort().catch(() => undefined); });
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(endpoint, async (route) => {
+    await pending;
+    await route.abort().catch(() => undefined);
+  });
   try {
-    await page.goto('/e2e/harness.html');
-    await expect(page.getByRole('alert')).toContainText('ارتباط برقرار نشد', { timeout: 35_000 });
-  } finally { release(); }
+    await page.goto("/e2e/harness.html");
+    await expect(page.getByRole("alert")).toContainText("ارتباط برقرار نشد", {
+      timeout: 35_000,
+    });
+  } finally {
+    release();
+  }
 });

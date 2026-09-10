@@ -111,14 +111,19 @@ test("maps revoking and error states to their explicit operational policy", () =
   assert.equal(failed.canStartLogin, true);
 });
 
-
 test("first login is available without an MTProto session but not during service failure", () => {
   for (const state of ["DISCONNECTED", "REVOKED", "ERROR"] as const) {
-    const healthy = resolveTelegramSessionPresentation(createSession({ state, connectedTelegramUserId: null }));
+    const healthy = resolveTelegramSessionPresentation(
+      createSession({ state, connectedTelegramUserId: null }),
+    );
     assert.equal(healthy.canStartLogin, true);
     assert.notEqual(healthy.chip.label, "دریافت مظنه فعال");
     for (const connection of ["OFFLINE", "DEGRADED"] as const) {
-      assert.equal(resolveTelegramSessionPresentation(createSession({ state, connection })).canStartLogin, false);
+      assert.equal(
+        resolveTelegramSessionPresentation(createSession({ state, connection }))
+          .canStartLogin,
+        false,
+      );
     }
   }
 });

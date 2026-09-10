@@ -2,16 +2,16 @@
 
 ## Boundaries
 
-| Component          | Responsibility                                                                      |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI, quote & trade dashboard  |
-| apps/server        | Hono API, Mini App identity/allowlist, quote/trade dashboard API, worker proxy      |
-| apps/worker        | All MTProto clients, OTP, membership, session files, reply extraction, data ingestion |
-| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                               |
-| packages/domain    | Integer quote conversion, group trading grammar, receipt/action parsers             |
+| Component          | Responsibility                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI, quote & trade dashboard     |
+| apps/server        | Hono API, Mini App identity/allowlist, quote/trade dashboard API, worker proxy         |
+| apps/worker        | All MTProto clients, OTP, membership, session files, reply extraction, data ingestion  |
+| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                  |
+| packages/domain    | Integer quote conversion, group trading grammar, receipt/action parsers                |
 | packages/db        | Prisma/PostgreSQL: sessions, requests, QuoteHistory, Trade, TradingAction, Participant |
-| packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references               |
-| packages/env       | Service-specific environment contracts and independent database configuration       |
+| packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references                  |
+| packages/env       | Service-specific environment contracts and independent database configuration          |
 
 There is no MTProto client or session volume on the server. Server, worker, and migration job use one PostgreSQL user. The worker alone owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership and locking maintenance.
 

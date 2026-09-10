@@ -20,4 +20,3 @@ Phase 1 persists four market entities in PostgreSQL: `QuoteHistory` (baseline), 
 - **Retention:** `Trade` records are **permanently retained** and must never be pruned. The 7-day rolling window is strictly an analytics query filter for leaderboards and trader performance.
 - **Latest trade derivation:** The dashboard derives the latest completed trade price directly from `Trade` using an indexed scan on `@@index([announcedAt, sourceMessageId])`. No duplicate latest-trade table or singleton is permitted.
 - **Participants:** Canonical primary key is the bot-emitted participant alias (`Participant.id`). No `ParticipantAlias` table is introduced.
-

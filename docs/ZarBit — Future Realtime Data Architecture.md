@@ -28,10 +28,10 @@ The architecture is intentionally designed for ZarBit's current scale and topolo
 
 ZarBit currently has three main runtime applications:
 
-| Component | Responsibility |
-| --- | --- |
-| `apps/web` | React/Vite Mini App, HeroUI, TanStack Router/Query |
-| `apps/server` | Hono API, authentication, oRPC, application reads/writes |
+| Component     | Responsibility                                                     |
+| ------------- | ------------------------------------------------------------------ |
+| `apps/web`    | React/Vite Mini App, HeroUI, TanStack Router/Query                 |
+| `apps/server` | Hono API, authentication, oRPC, application reads/writes           |
 | `apps/worker` | Telegram MTProto clients, sessions, membership and quote ingestion |
 
 `packages/contracts` owns shared RPC contracts and `packages/db` owns PostgreSQL access.
@@ -758,15 +758,15 @@ Silent truncation is forbidden.
 
 Recommended logical server caching:
 
-| Data | Scope | Suggested strategy |
-| --- | --- | --- |
-| `quote.latest` | global | very short cache, approximately 0.5–1s |
-| `quote.chart` | global | approximately 30–60s |
-| `quote.live` | global | event stream, not snapshot cache |
-| `requests.active` | per-user | short cache + mutation invalidation |
-| `requests.detail` | per-user | no server cache unless later justified |
+| Data               | Scope    | Suggested strategy                                             |
+| ------------------ | -------- | -------------------------------------------------------------- |
+| `quote.latest`     | global   | very short cache, approximately 0.5–1s                         |
+| `quote.chart`      | global   | approximately 30–60s                                           |
+| `quote.live`       | global   | event stream, not snapshot cache                               |
+| `requests.active`  | per-user | short cache + mutation invalidation                            |
+| `requests.detail`  | per-user | no server cache unless later justified                         |
 | `requests.history` | per-user | client/query caching; server cache optional only with evidence |
-| user mapping | per-user | retain existing short-lived mapping cache |
+| user mapping       | per-user | retain existing short-lived mapping cache                      |
 
 These values are operational defaults, not permanent business rules.
 
@@ -1429,7 +1429,7 @@ compatibility with the existing oRPC/Hono/PostgreSQL stack
 a clear path to future scaling
 ```
 
-It adopts the **snapshot + incremental stream + reconciliation** pattern demonstrated by realtime trading systems while deliberately avoiding exchange-scale infrastructure that ZarBit does not currently need. Coinbase and Binance both distinguish realtime market streams from authenticated user streams, supporting the underlying separation of concerns used by this design. 
+It adopts the **snapshot + incremental stream + reconciliation** pattern demonstrated by realtime trading systems while deliberately avoiding exchange-scale infrastructure that ZarBit does not currently need. Coinbase and Binance both distinguish realtime market streams from authenticated user streams, supporting the underlying separation of concerns used by this design.
 
 The goal is therefore not maximum realtime complexity.
 

@@ -115,8 +115,12 @@
 }
 
 @layer base {
-  :root{
-    --background-secondary: color-mix(in oklab, var(--background) 98%, var(--foreground) 2%);
+  :root {
+    --background-secondary: color-mix(
+      in oklab,
+      var(--background) 98%,
+      var(--foreground) 2%
+    );
     /* --background-tertiary: color-mix(in oklab, var(--background) 92%, var(--foreground) 8%); */
   }
 
@@ -166,8 +170,7 @@
 @layer components {
   .zarbit-drawer-backdrop {
     opacity: calc(1 - var(--drawer-swipe-progress, 0));
-    transition:
-      opacity 450ms cubic-bezier(0.32, 0.72, 0, 1);
+    transition: opacity 450ms cubic-bezier(0.32, 0.72, 0, 1);
     will-change: opacity;
   }
 

@@ -4,7 +4,13 @@ import { AppError } from "@zarbit/contracts";
 import { createWorkerApp } from "../src/http";
 import type { Sessions } from "../src/sessions";
 
-const sessions = { runtimeHealth: () => ({ activeSessions: 0, reservedSessions: 0, remainingCapacity: 20 }) } as Sessions;
+const sessions = {
+  runtimeHealth: () => ({
+    activeSessions: 0,
+    reservedSessions: 0,
+    remainingCapacity: 20,
+  }),
+} as Sessions;
 const token = "a".repeat(32);
 
 test("worker healthcheck requires a successful database query", async () => {
@@ -18,15 +24,20 @@ test("worker healthcheck requires a successful database query", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(typeof body.uptimeSeconds, "number");
-  assert.deepEqual({ ...body, uptimeSeconds: 0 }, {
-    uptimeSeconds: 0,
-    releaseId: process.env.RELEASE_ID ?? null,
-    httpReady: true,
-    activeSessions: 0, reservedSessions: 0, remainingCapacity: 20,
-    ok: true,
-    databaseLatencyMs: 2,
-    databasePoolTotal: 1,
-  });
+  assert.deepEqual(
+    { ...body, uptimeSeconds: 0 },
+    {
+      uptimeSeconds: 0,
+      releaseId: process.env.RELEASE_ID ?? null,
+      httpReady: true,
+      activeSessions: 0,
+      reservedSessions: 0,
+      remainingCapacity: 20,
+      ok: true,
+      databaseLatencyMs: 2,
+      databasePoolTotal: 1,
+    },
+  );
 });
 
 test("worker healthcheck fails when the database is unavailable", async () => {
@@ -78,9 +89,20 @@ test("worker preserves safe command failures", async () => {
   });
 
   assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
-    error: { code: "PHONE_CODE_INVALID", message: "کد واردشده درست نیست." },
-  });
+  const body = (await response.json()) as {
+    error: {
+      code: string;
+      reasonCode?: string;
+      messageKey?: string;
+      requestId?: string;
+      message: string;
+    };
+  };
+  assert.equal(body.error.code, "PHONE_CODE_INVALID");
+  assert.equal(body.error.reasonCode, "PHONE_CODE_INVALID");
+  assert.equal(body.error.messageKey, "PHONE_CODE_INVALID");
+  assert.equal(body.error.message, "کد واردشده درست نیست.");
+  assert.ok(body.error.requestId);
 });
 
 test("worker returns the PASSWORD login state as a successful code command", async () => {

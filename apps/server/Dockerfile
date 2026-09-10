@@ -1,11 +1,23 @@
-FROM node:24-slim AS builder
-RUN apt-get update && apt-get install -y --no-install-recommends openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
+FROM --platform=$BUILDPLATFORM node:24-slim AS pruner
+WORKDIR /app
+RUN npm install -g turbo@^2
+COPY . .
+RUN turbo prune server --docker
+
+FROM --platform=$BUILDPLATFORM node:24-slim AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@10.26.0
 WORKDIR /app
 ENV DATABASE_URL=postgresql://zarbit:zarbit@127.0.0.1:5432/zarbit?schema=public CI=true HUSKY=0
-COPY . .
-RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir /pnpm/store
-RUN cd apps/server && pnpm run build
+
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+RUN --mount=type=cache,id=zarbit-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store
+
+COPY --from=pruner /app/out/full/ .
+RUN pnpm --filter @zarbit/db run db:generate
+RUN pnpm --filter server run build
 
 FROM node:24-slim AS runner
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*

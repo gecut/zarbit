@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
 
-import type { AppDependencies, AppEnv } from "../src/app-types";
-import { createApp } from "../src/app";
-import { registerQuoteRoutes } from "../src/quote-routes";
+import type { AppDependencies } from "../src/app-dependencies";
+import type { AppEnv } from "../src/transport/http/app-env";
+import { createApp } from "../src/app/create-app";
+import { registerQuoteRoutes } from "../src/legacy/rest/register-quote-routes";
 
 function appWithQuote(
   quote: Awaited<ReturnType<AppDependencies["store"]["latestQuote"]>>,

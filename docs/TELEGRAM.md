@@ -10,11 +10,16 @@ TELEGRAM_API_ID/HASH belong to the product's Telegram application and are provid
 
 All public endpoints require Mini App authentication and return no-store responses. Login supports phone, code, optional two-step password, resend and cancellation. QR routes are removed. One random challenge per owner has a ten-minute lifetime; send and retry limits are persisted. OTP/password/hash stay only in short-lived worker memory and never enter logs or the database.
 
-## Group quote ingestion
+## Group market data ingestion
 
 The adapter loads dialogs, including archived dialogs, to resolve the private group's peer/access hash. It never joins groups automatically. Membership is checked after login and periodically; nonmembers remain authorized but dormant.
 
-Only new messages from TELEGRAM_GROUP_ID and QUOTE_SENDER_ID qualify. A valid compact quote is persisted with its original message timestamp. Each active account can observe it, but the PostgreSQL singleton makes the final value global and prevents older events overwriting newer ones.
+The worker subscribes to incoming messages in `TELEGRAM_GROUP_ID` and extracts complete event metadata: `messageId`, `senderId`, `date`, `text`, `replyToMessageId`, `replyToSenderId`, and MTProto message entities.
+
+- **Authoritative Quotes:** Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group trading bot qualify as the authoritative persisted quote source in `QuoteHistory`.
+- **Trading Actions:** Human messages are parsed and recorded as `TradingAction` (`ORDER_BUY`, `ORDER_SELL`, `TAKE_ALL`, `TAKE_QUANTITY`, `CANCEL`) preserving their reply context.
+- **Completed Trades:** Authoritative bot receipts (`حواله`) issued by the bot are parsed and recorded into `Trade`.
+- **Idempotency:** Multiple active worker sessions observe group messages concurrently; database unique constraints on `sourceMessageId` ensure zero duplicate rows. Unresolved protocol behaviors (e.g. unreplied cancels, auto-cross matching) are preserved as unresolved and never guessed.
 
 ## Failures and disconnect
 

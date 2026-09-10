@@ -1,18 +1,22 @@
 # Zarbit — Business Rules
 
-## Quote
+## Quote and market data
 
-Only a new message in the fixed Telegram group from the configured publisher qualifies. The parser accepts an independent compact integer or `مظنه: number`, including Persian/Arabic digits and grouped commas; it rejects unrelated or combined text.
+Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group management bot qualify as the authoritative persisted quote source. The parser accepts compact integers, including Persian/Arabic digits and grouped commas.
 
-The database, API, requests, and Telegram messages retain the compact value, such as `95900`. Only the primary latest-quote figure on the dashboard displays `95,900,000 تومان`; other price displays remain compact. `announcedAt` is the original Telegram message date. One global latest-quote record exists; an older message cannot replace a newer message, while duplicate observations are idempotent.
+The database, API, requests, and Telegram messages retain the compact value, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other price displays remain compact. `announcedAt` is the original Telegram message date. Multiple connected sessions observe events concurrently; ingestion is idempotent via `sourceMessageId` deduplication.
+
+Trades exist strictly upon observing authoritative bot receipts (`حواله`). Canonical order messages (`🔵 ... / 🔴 ...`) represent active liquidity only and are never treated as confirmed trades. Historical trades are retained permanently; the rolling 7-day window is an analytics query filter, not a retention limit.
 
 ## Ownership and readiness
 
-Mini App signature and allowlist authorize API access. MTProto login must connect the same account as the Mini App identity. Connected, group-member accounts observe valid quote events; each observation updates the same global latest quote.
+Mini App signature and allowlist authorize API access. MTProto login must connect the same account as the Mini App identity. Connected, group-member accounts observe group events; each observation is deduplicated at the data layer.
+
+Participant aliases emitted by the group bot serve as canonical participant identifiers. Alias-to-Telegram-identity resolution requires deterministic platform evidence and multiple confirmations ($K \ge 3$); unresolved state is always preferred over false mapping, and conflicts never overwrite verified records.
 
 ## Product limits
 
-Up to 20 simultaneous Telegram clients including OTP and recovery; one worker, group and publisher. Fixed environment allowlist requires restart. No automatic group joining, order execution, alerts, accounting, quote history, public signup or distributed infrastructure.
+Up to 20 simultaneous Telegram clients including OTP and recovery; one worker, group and group bot. Fixed environment allowlist requires restart. Phase 1 is data collection first: no public signup, portfolio, participant directory, leaderboard UI, or automated follow execution in this phase.
 
 ## Validation policy
 

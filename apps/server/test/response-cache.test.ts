@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ResponseCache } from "../src/response-cache";
-import { ReadCapacity, RpcRateLimit } from "../src/rpc-capacity";
+import { ResponseCache } from "../src/platform/cache/response-cache";
+import { ReadCapacity } from "../src/platform/resilience/read-capacity";
+import { RpcRateLimit } from "../src/platform/resilience/rpc-rate-limit";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

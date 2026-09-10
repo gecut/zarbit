@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "agy-worker": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/agy-worker/SKILL.md",
+      "computedHash": "2ab8661b75b8a2fbcc51f99d60299421c26345f6064787497ad90029577d9f80"
+    },
     "brandkit": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",

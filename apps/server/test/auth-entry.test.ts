@@ -5,13 +5,14 @@ import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import type { RpcClient } from "@zarbit/contracts/rpc";
-import type { AppDependencies } from "../src/app-types";
+import type { AppDependencies } from "../src/app-dependencies";
 
 process.env.TELEGRAM_BOT_TOKEN = "test-only-token";
 process.env.ALLOWED_TELEGRAM_USER_IDS = "101,102";
 process.env.NODE_ENV = "production";
-const { authenticateTelegramRequest } = await import("../src/auth");
-const { createApp } = await import("../src/app");
+const { authenticateTelegramRequest } =
+  await import("../src/security/telegram/authenticate-telegram-request");
+const { createApp } = await import("../src/app/create-app");
 function signed(id: number, age = 0) {
   const p = new URLSearchParams({
     auth_date: String(Math.floor(Date.now() / 1000) - age),

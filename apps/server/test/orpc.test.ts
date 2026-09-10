@@ -9,9 +9,9 @@ import {
   type TelegramSessionStatus,
 } from "@zarbit/contracts";
 import type { RpcClient } from "@zarbit/contracts/rpc";
-import { createApp } from "../src/app";
-import type { AppDependencies } from "../src/app-types";
-import { generateOpenApi } from "../src/openapi";
+import { createApp } from "../src/app/create-app";
+import type { AppDependencies } from "../src/app-dependencies";
+import { generateOpenApi } from "../src/transport/http/generate-open-api";
 
 function fixture() {
   let userReads = 0,
@@ -20,12 +20,23 @@ function fixture() {
   const commands: string[] = [];
   const events: string[] = [];
   const status: TelegramSessionStatus = {
+    kind: "ACTIVE",
     state: "ACTIVE",
     connection: "CONNECTED",
+    reasonCode: "NONE",
     groupId: null,
     quoteSenderId: null,
     connectedTelegramUserId: "alice",
     membershipCheckedAt: null,
+    observedAt: "2026-09-05T16:00:00.000Z",
+    stateChangedAt: "2026-09-05T16:00:00.000Z",
+    retryAt: null,
+    capabilities: {
+      canLogin: true,
+      canCreateRequest: true,
+      canCheckMembership: true,
+      canRevoke: true,
+    },
     error: null,
     login: null,
   };
@@ -190,7 +201,11 @@ test("mutations bypass cached readiness; revoke persists before worker command",
   const f = fixture();
   const client = f.client();
   await client.telegram.status();
-  f.status.connection = "OFFLINE";
+  Object.assign(f.status, {
+    kind: "DEGRADED",
+    connection: "OFFLINE",
+    reasonCode: "WORKER_UNAVAILABLE",
+  });
   await assert.rejects(
     client.requests.create({
       action: "ALERT",

@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AppError, type TelegramSessionStatus } from "@zarbit/contracts";
 import { Hono } from "hono";
-import type { AppDependencies, AppEnv } from "../src/app-types";
-import {
-  createWorkerCommand,
-  type SessionReader,
-} from "../src/telegram-session";
-import { registerTelegramSessionRoutes } from "../src/telegram-session-routes";
+import type { AppDependencies } from "../src/app-dependencies";
+import type { AppEnv } from "../src/transport/http/app-env";
+import { createSessionCommand } from "../src/modules/telegram/create-session-command";
+import type { SessionReader } from "../src/modules/telegram/session-reader";
+import { registerTelegramSessionRoutes } from "../src/legacy/rest/register-telegram-session-routes";
 
 const storedSession = {
   state: "ACTIVE" as const,
@@ -16,12 +15,23 @@ const storedSession = {
 };
 
 const onlineStatus: TelegramSessionStatus = {
+  kind: "ACTIVE",
   state: "ACTIVE",
   connection: "CONNECTED",
+  reasonCode: "NONE",
   groupId: -1001234567890,
   quoteSenderId: "123456789",
   connectedTelegramUserId: "123456",
   membershipCheckedAt: "2026-09-05T16:00:00.000Z",
+  observedAt: "2026-09-05T16:00:00.000Z",
+  stateChangedAt: "2026-09-05T16:00:00.000Z",
+  retryAt: null,
+  capabilities: {
+    canLogin: true,
+    canCreateRequest: true,
+    canCheckMembership: true,
+    canRevoke: true,
+  },
   error: null,
   login: null,
 };
@@ -34,11 +44,11 @@ function statusStore(
 
 function commandWith(options?: {
   fetch?: typeof globalThis.fetch;
-  log?: Parameters<typeof createWorkerCommand>[0]["log"];
+  log?: Parameters<typeof createSessionCommand>[0]["log"];
   store?: SessionReader;
   token?: string;
 }) {
-  return createWorkerCommand({
+  return createSessionCommand({
     fetch:
       options?.fetch ??
       ((async () =>
@@ -54,14 +64,14 @@ function commandWith(options?: {
   });
 }
 
-async function assertOffline(command: ReturnType<typeof createWorkerCommand>) {
+async function assertOffline(command: ReturnType<typeof createSessionCommand>) {
   const status = await command("user-1", { type: "status" });
   assert.equal(status.connection, "OFFLINE");
   assert.equal(status.login, null);
-  assert.equal(status.state, "ACTIVE");
+  assert.equal(status.state, "DISCONNECTED");
 }
 
-function statusRouteApp(command: ReturnType<typeof createWorkerCommand>) {
+function statusRouteApp(command: ReturnType<typeof createSessionCommand>) {
   const app = new Hono<AppEnv>();
   app.use("*", async (c, next) => {
     c.set("user", { id: "user-1", telegramUserId: "123456" });

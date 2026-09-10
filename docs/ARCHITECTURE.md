@@ -4,12 +4,12 @@
 
 | Component          | Responsibility                                                                      |
 | ------------------ | ----------------------------------------------------------------------------------- |
-| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI                           |
-| apps/server        | Hono API, Mini App identity/allowlist, latest-quote API, bot launcher, worker proxy |
-| apps/worker        | All MTProto clients, OTP, membership, session files and quote ingestion             |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI, quote & trade dashboard  |
+| apps/server        | Hono API, Mini App identity/allowlist, quote/trade dashboard API, worker proxy      |
+| apps/worker        | All MTProto clients, OTP, membership, session files, reply extraction, data ingestion |
 | packages/contracts | Shared strict Zod commands and public TypeScript DTOs                               |
-| packages/domain    | Integer quote conversion and quote parser                                           |
-| packages/db        | Prisma/PostgreSQL, latest quote and session operations                              |
+| packages/domain    | Integer quote conversion, group trading grammar, receipt/action parsers             |
+| packages/db        | Prisma/PostgreSQL: sessions, requests, QuoteHistory, Trade, TradingAction, Participant |
 | packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references               |
 | packages/env       | Service-specific environment contracts and independent database configuration       |
 
@@ -33,13 +33,15 @@ One runtime client and one serialized operation stream per user. Runtime reserva
 
 A local SQLite OS lock on `.worker-owner.sqlite` prevents another current-version worker opening the same session volume. It is released on shutdown/crash; this assumes a local volume with reliable file locking, not a network filesystem. State revision and conditional activation prevent a late operation reactivating a revoked/replaced session. File names are random 64-hex values, directory mode 0700, files 0600, runtime UID 1000. Clients close before files are removed. Network failures keep authorization; revoked authorization is removed.
 
-## Latest quote and PostgreSQL
+## Market data and PostgreSQL
 
-Each valid quote event is persisted as one global singleton. A conditional upsert prevents an older Telegram message from replacing a newer quote; duplicate observations are idempotent. Database writes remain short and contain no Telegram calls.
+Market data is ingested continuously by connected worker sessions. All observed group entities (`QuoteHistory`, `Trade`, `TradingAction`) enforce database-level `UNIQUE(sourceMessageId)` to ensure idempotent writes despite multiple worker sessions observing the same group messages simultaneously.
+
+Canonical bot quote messages (`🟡 مظنه: <price> 🟡`) serve as the authoritative quote source in `QuoteHistory`. Authoritative bot receipts (`حواله`) create `Trade` records, which are permanently retained. The dashboard derives the latest completed trade price efficiently via indexed backward scan on `Trade(announcedAt DESC, sourceMessageId DESC)` with zero duplicate table overhead. Database writes remain short and contain no Telegram calls. See [MARKET-DATA.md](MARKET-DATA.md) for full ingestion, entity, and identity resolution rules.
 
 ## Web state
 
-Private queries use the shared oRPC v1 contract and its official TanStack Query integration. Quote and active requests poll every three seconds in foreground/background; changing session states poll every two seconds, stable sessions every five seconds, and disconnected/revoked sessions stop polling. Identity/history use five-minute freshness. Focus/reconnect refresh stale queries. Mutations never retry automatically. OTP mutation data is cleared after each response and is never persisted.
+Private queries use the shared oRPC v1 contract and its official TanStack Query integration. Quote/dashboard (exposing the latest official quote and latest completed trade price) and active requests poll every three seconds in foreground/background; changing session states poll every two seconds, stable sessions every five seconds, and disconnected/revoked sessions stop polling. Identity/history use five-minute freshness. Focus/reconnect refresh stale queries. Mutations never retry automatically. OTP mutation data is cleared after each response and is never persisted.
 
 Hono exposes authenticated `/rpc/*` and `/openapi/*` adapters over one contract-first router. Bounded process-local caches, single-flight reads, separate read capacity and per-user rate budgets protect PostgreSQL and the worker. Session checks for writes are always live. Legacy HTTP routes remain for the explicit build-time rollback flag. See [RPC.md](RPC.md) for limits, stale bounds, compatibility, metrics and browser background constraints.
 

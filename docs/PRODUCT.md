@@ -2,7 +2,7 @@
 
 ## Scope
 
-Private Persian/RTL Telegram Mini App that displays the latest gold quote from one fixed group and publisher. Up to 20 simultaneous Telegram clients support login and recovery. No public signup, billing, admin, portfolio, orders or horizontal scaling.
+Private Persian/RTL Telegram Mini App that displays the latest gold quote and market intelligence from one fixed group and authoritative group bot. Up to 20 simultaneous Telegram clients support login, recovery, and message observation. Phase 1 focuses strictly on data collection and market data foundation: persisting `Participant`, `TradingAction`, `Trade`, and `QuoteHistory`. No public signup, billing, admin, portfolio, participant lists, leaderboards, whale cards, or follow execution are exposed in this phase.
 
 ## Access and login
 
@@ -20,13 +20,13 @@ Stored states: PENDING_OTP, ACTIVE, NOT_IN_GROUP, REVOKING, REVOKED, ERROR. DISC
 
 ## Screens
 
-Dashboard with the latest quote and its announcement time; Telegram connection with phone/code/password, expiry, resend, cancellation, membership recheck and confirmed disconnect.
+Dashboard displays the latest official group quote (with announcement time) and the latest completed trade price (derived efficiently from `Trade`); Telegram connection with phone/code/password, expiry, resend, cancellation, membership recheck and confirmed disconnect.
 
 The existing compact mobile layout, RTL and Vazirmatn font remain. HeroUI semantic tokens define colors, surfaces, states, focus, shadows and radii. Theme can follow Telegram/system or be set manually to light/dark. The update prompt never forces a reload.
 
-## Quote
+## Quote and market data
 
-Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `95900`. Only the primary latest-quote figure on the dashboard displays `95,900,000 تومان`; other prices remain compact. The global latest quote records the Telegram message timestamp and does not maintain quote history in this phase.
+Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other internal prices remain compact. `QuoteHistory` is persisted in PostgreSQL to provide both latest-quote resolution and chart trendlines. Completed trades are recorded strictly from authoritative bot receipts into `Trade` and retained permanently.
 
 ## Release validation
 

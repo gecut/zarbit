@@ -5,9 +5,11 @@ The default browser transport is oRPC **1.15.0**, pinned across packages. `@zarb
 ## Procedures and transport
 
 - `auth.identity`
-- `quote.latest`, `quote.dashboard`
+- `quote.latest`, `quote.dashboard` (delivering latest official group quote, latest completed trade price derived from `Trade`, and chart trendline)
 - `telegram.status`, `telegram.command` (login/code/password/resend/cancel/membership/revoke)
 - `requests.active`, `requests.history`, `requests.detail`, `requests.create`, `requests.update`, `requests.cancel`, `requests.forceSend`
+
+Phase 1 exposes no participant directories, trading actions, or leaderboard procedures. The existing polling and server response-cache architecture is preserved; no WebSocket or SSE transport is required for Phase 1.
 
 Every procedure verifies Telegram initData and the allowlist. Owners come only from that verified identity. User lookup/upsert is cached for five minutes; signature/expiry checks are **not** cached. No secret or initData appears in query keys or logs. Per-provider and per-user key scopes prevent cache sharing between identities. A 401 discards private snapshots and closes the authentication gate.
 

@@ -12,8 +12,9 @@ import { requestView } from "@zarbit/db/requests";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import type { AppDependencies, AppEnv } from "../src/app-types";
-import { registerRequestRoutes } from "../src/request-routes";
+import type { AppDependencies } from "../src/app-dependencies";
+import type { AppEnv } from "../src/transport/http/app-env";
+import { registerRequestRoutes } from "../src/legacy/rest/register-request-routes";
 
 const baseRow = {
   id: "request-1",

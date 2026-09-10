@@ -109,7 +109,7 @@ test("PostgreSQL removes expired history and retains an expired latest quote", a
   assert.equal(history[0]?.sourceMessageId, 21);
 });
 
-test("PostgreSQL can set a stale latest quote without retaining expired history", async () => {
+test("PostgreSQL rejects expired quotes on empty history", async () => {
   const recorded = await store.recordQuote({
     compactQuote: 95_000,
     announcedAt: new Date("2026-08-30T12:00:00.000Z"),
@@ -117,8 +117,8 @@ test("PostgreSQL can set a stale latest quote without retaining expired history"
     sourceMessageId: 30,
   });
 
-  assert.deepEqual(recorded, { historyRecorded: false, latestUpdated: true });
-  assert.equal((await store.latestQuote())?.compactQuote, 95_000);
+  assert.deepEqual(recorded, { historyRecorded: false, latestUpdated: false });
+  assert.equal(await store.latestQuote(), null);
   assert.equal(await prisma.quoteHistory.count(), 0);
 });
 

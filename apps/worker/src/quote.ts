@@ -123,17 +123,102 @@ export function createQuoteRecorder(
     const confirmParticipantIdentity = store.confirmParticipantIdentity;
     if (!confirmParticipantIdentity) return;
 
-    const result = await resolveParticipantIdentity(
-      { confirmParticipantIdentity },
-      action,
-      canonical,
-    );
-    if (result?.outcome === "conflict") {
-      workerLog.warn("telegram.participant_identity.conflict", {
+    try {
+      const result = await resolveParticipantIdentity(
+        { confirmParticipantIdentity },
+        action,
+        canonical,
+      );
+
+      if (!result || result.outcome === "rejected") {
+        workerLog.info(
+          "telegram.participant_identity.ambiguous_correlation_ignored",
+          {
+            canonicalMessageId: canonical.messageId,
+            chatId: canonical.chatId,
+            participantAlias: canonical.order.participantAlias,
+            senderId: action.senderId,
+            sourceMessageId: action.sourceMessageId,
+          },
+        );
+        return;
+      }
+
+      if (result.outcome === "confirmed") {
+        workerLog.info("telegram.participant_identity.evidence_accepted", {
+          canonicalMessageId: canonical.messageId,
+          chatId: canonical.chatId,
+          confirmationCount: result.confirmationCount,
+          participantAlias: canonical.order.participantAlias,
+          senderId: action.senderId,
+          sourceMessageId: action.sourceMessageId,
+          verified: result.verified,
+        });
+        if (result.verified) {
+          workerLog.info(
+            "telegram.participant_identity.verification_completed",
+            {
+              canonicalMessageId: canonical.messageId,
+              chatId: canonical.chatId,
+              confirmationCount: result.confirmationCount,
+              participantAlias: canonical.order.participantAlias,
+              senderId: action.senderId,
+              sourceMessageId: action.sourceMessageId,
+            },
+          );
+        }
+        return;
+      }
+
+      if (result.outcome === "conflict") {
+        workerLog.warn("telegram.participant_identity.conflict", {
+          canonicalMessageId: canonical.messageId,
+          chatId: canonical.chatId,
+          participantAlias: canonical.order.participantAlias,
+          resolutionStatus: result.resolutionStatus,
+          senderId: action.senderId,
+          sourceMessageId: action.sourceMessageId,
+        });
+        return;
+      }
+    } catch (error) {
+      workerLog.failure("telegram.participant_identity.failed", error, {
         canonicalMessageId: canonical.messageId,
         chatId: canonical.chatId,
         participantAlias: canonical.order.participantAlias,
         sourceMessageId: action.sourceMessageId,
+      });
+    }
+  };
+
+  const correlateActionAndCanonical = async (
+    chatId: number,
+    actionMessageId: number,
+    canonical: CanonicalOrderObservation,
+  ) => {
+    if (
+      !store.findTradingActionForIdentityCorrelation ||
+      !store.confirmParticipantIdentity
+    ) {
+      return;
+    }
+    try {
+      const action = await store.findTradingActionForIdentityCorrelation(
+        chatId,
+        actionMessageId,
+      );
+      if (
+        action &&
+        (action.actionType === "ORDER_BUY" ||
+          action.actionType === "ORDER_SELL")
+      ) {
+        await resolveIdentity(action, canonical);
+      }
+    } catch (error) {
+      workerLog.failure("telegram.participant_identity.failed", error, {
+        canonicalMessageId: canonical.messageId,
+        chatId,
+        sourceMessageId: actionMessageId,
       });
     }
   };
@@ -285,23 +370,12 @@ export function createQuoteRecorder(
       const orderResult = parseCanonicalBotOrder(event.text);
       if (orderResult.status === "parsed") {
         activeOrders.set(event.messageId, orderResult.data, event.date);
-        if (
-          store.findTradingActionForIdentityCorrelation &&
-          store.confirmParticipantIdentity
-        ) {
-          const action = await store.findTradingActionForIdentityCorrelation(
-            event.chatId,
-            event.messageId - 1,
-          );
-          if (action) {
-            await resolveIdentity(action, {
-              chatId: event.chatId,
-              messageId: event.messageId,
-              observedAt: event.date,
-              order: orderResult.data,
-            });
-          }
-        }
+        await correlateActionAndCanonical(event.chatId, event.messageId - 1, {
+          chatId: event.chatId,
+          messageId: event.messageId,
+          observedAt: event.date,
+          order: orderResult.data,
+        });
         workerLog.debug("telegram.order.observed", {
           chatId: event.chatId,
           compactPrice: orderResult.data.compactPrice,
@@ -413,24 +487,13 @@ export function createQuoteRecorder(
         status,
       });
       const canonical = activeOrders.get(event.messageId + 1);
-      if (
-        actionRecorded &&
-        canonical &&
-        store.findTradingActionForIdentityCorrelation &&
-        store.confirmParticipantIdentity
-      ) {
-        const action = await store.findTradingActionForIdentityCorrelation(
-          event.chatId,
-          event.messageId,
-        );
-        if (action) {
-          await resolveIdentity(action, {
-            chatId: event.chatId,
-            messageId: canonical.botMessageId,
-            observedAt: canonical.observedAt,
-            order: canonical,
-          });
-        }
+      if (actionRecorded && canonical) {
+        await correlateActionAndCanonical(event.chatId, event.messageId, {
+          chatId: event.chatId,
+          messageId: canonical.botMessageId,
+          observedAt: canonical.observedAt,
+          order: canonical,
+        });
       }
       return;
     }
@@ -440,7 +503,7 @@ export function createQuoteRecorder(
       const isBuy = normalized.includes("خ");
       const actionType: TradingActionType = isBuy ? "ORDER_BUY" : "ORDER_SELL";
 
-      await recordAction({
+      const actionRecorded = await recordAction({
         actionType,
         quantity: null,
         compactPrice: null,
@@ -449,6 +512,15 @@ export function createQuoteRecorder(
         targetOrderMessageId: null,
         status: "AMBIGUOUS",
       });
+      const canonical = activeOrders.get(event.messageId + 1);
+      if (actionRecorded && canonical) {
+        await correlateActionAndCanonical(event.chatId, event.messageId, {
+          chatId: event.chatId,
+          messageId: canonical.botMessageId,
+          observedAt: canonical.observedAt,
+          order: canonical,
+        });
+      }
       return;
     }
 

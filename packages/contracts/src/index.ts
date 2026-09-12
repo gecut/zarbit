@@ -320,3 +320,5 @@ export type RequestHistoryPage = z.infer<typeof requestHistoryPageSchema>;
 
 // Reserved for authenticated, read-only service diagnostics.
 export const WORKER_DIAGNOSTIC_USER_ID = "__zarbit_worker_diagnostic__";
+
+export * from "./analytics";

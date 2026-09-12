@@ -25,6 +25,7 @@ export type {
   TradeReceipt,
   TradingSide,
 } from "./types";
+export * from "./analytics";
 
 export const compactQuoteMultiplier = 1_000;
 

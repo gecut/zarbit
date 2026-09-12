@@ -1,4 +1,5 @@
 import { createMarketDataStore } from "./market-data";
+import { createAnalyticsDataStore } from "./analytics";
 import { createRequestStore } from "./requests";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
@@ -7,6 +8,7 @@ import { AppError, type Identity } from "@zarbit/contracts";
 import { PrismaClient, Prisma } from "../prisma/generated/client";
 
 export * from "./market-data";
+export * from "./analytics";
 
 export const databasePoolOptions = {
   max: databasePoolMax,
@@ -36,6 +38,7 @@ export function createStore(
     db: prisma,
     ...createRequestStore(prisma, now),
     ...createMarketDataStore(prisma, now),
+    ...createAnalyticsDataStore(prisma),
     user: (identity: Identity) =>
       prisma.telegramUser.upsert({
         where: { telegramUserId: identity.telegramUserId },

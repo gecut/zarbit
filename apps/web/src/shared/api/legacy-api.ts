@@ -9,6 +9,9 @@ import {
   type UpdateRequestInput,
   type RequestDetail,
   type RequestHistoryPage,
+  type ParticipantAnalyticsSummary,
+  type ParticipantAnalyticsDetail,
+  type TraderListQuery,
 } from "@zarbit/contracts";
 
 import { telegramInitData } from "../telegram/telegram";
@@ -34,6 +37,8 @@ export interface LegacyApi {
   updateRequest(id: string, input: UpdateRequestInput): Promise<RequestDetail>;
   cancelRequest(id: string): Promise<RequestDetail>;
   forceSendRequest(id: string): Promise<RequestDetail>;
+  getTraders(query?: TraderListQuery): Promise<ParticipantAnalyticsSummary[]>;
+  getTraderDetail(alias: string): Promise<ParticipantAnalyticsDetail | null>;
 }
 
 function serverUrl(): string {
@@ -153,6 +158,20 @@ export function createLegacyApi(): LegacyApi {
       request<RequestDetail>(
         `/api/requests/${encodeURIComponent(id)}/force-send`,
         { method: "POST" },
+      ),
+    getTraders: (query) => {
+      const params = new URLSearchParams();
+      if (query?.sortBy) params.set("sortBy", query.sortBy);
+      if (query?.sortOrder) params.set("sortOrder", query.sortOrder);
+      if (query?.limit) params.set("limit", String(query.limit));
+      const qs = params.toString();
+      return request<ParticipantAnalyticsSummary[]>(
+        `/api/analytics/traders${qs ? `?${qs}` : ""}`,
+      );
+    },
+    getTraderDetail: (alias) =>
+      request<ParticipantAnalyticsDetail | null>(
+        `/api/analytics/traders/${encodeURIComponent(alias)}`,
       ),
   };
 }

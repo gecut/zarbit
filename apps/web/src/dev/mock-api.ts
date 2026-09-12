@@ -13,6 +13,11 @@ import {
 
 import type { LegacyApi } from "../shared/api/legacy-api";
 import { createQuoteDashboard, getQuoteScenario } from "./quote-scenarios";
+import {
+  createMockTraderDetail,
+  getMockTradersList,
+  getTradersScenario,
+} from "./trader-scenarios";
 
 export const mockIdentity: Identity = {
   telegramUserId: "10000001",
@@ -523,6 +528,36 @@ export function createMockApi(): LegacyApi {
     },
     forceSendRequest: async (id) => {
       return forceSend(id);
+    },
+    getTraders: async (query) => {
+      const search = getSearch();
+      const scenario = getTradersScenario(search);
+      if (scenario === "loading") {
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+      }
+      if (scenario === "error") {
+        throw new AppError(
+          "MOCK_ERROR",
+          "خطای آزمایشی دریافت لیست فعالان بازار.",
+          503,
+        );
+      }
+      return getMockTradersList(search, query?.sortBy, query?.sortOrder);
+    },
+    getTraderDetail: async (alias) => {
+      const search = getSearch();
+      const scenario = getTradersScenario(search);
+      if (scenario === "loading") {
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
+      }
+      if (scenario === "error") {
+        throw new AppError(
+          "MOCK_ERROR",
+          "خطای آزمایشی دریافت مشخصات فعال بازار.",
+          503,
+        );
+      }
+      return createMockTraderDetail(alias);
     },
   };
 }

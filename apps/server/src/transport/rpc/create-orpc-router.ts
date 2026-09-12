@@ -11,6 +11,9 @@ import { createAuthRouter } from "../../modules/auth/create-auth-router";
 import { createQuoteRouter } from "../../modules/quote/create-quote-router";
 import { createRequestsRouter } from "../../modules/requests/create-requests-router";
 import { createTelegramRouter } from "../../modules/telegram/create-telegram-router";
+import { createAnalyticsRouter } from "../../modules/analytics/create-analytics-router";
+import { AnalyticsService } from "../../modules/analytics/analytics-service";
+import type { ParticipantAnalyticsSummary } from "@zarbit/contracts";
 import { ResponseCache } from "../../platform/cache/response-cache";
 import { serverLog } from "../../platform/observability/server-log";
 import { RpcMetrics } from "../../platform/observability/rpc-metrics";
@@ -51,6 +54,13 @@ export function createOrpcRouter(deps: AppDependencies) {
     maxEntries: 100,
     observe: observe("session"),
   });
+  const traders = new ResponseCache<ParticipantAnalyticsSummary[]>({
+    ttlMs: 5000,
+    staleMs: 5000,
+    maxEntries: 10,
+    observe: observe("analytics.traders"),
+  });
+  const analyticsService = new AnalyticsService(deps.store);
 
   const read = <T>(name: string, load: () => Promise<T>) =>
     capacity.run(() => metrics.measure(`db.${name}`, load));
@@ -135,6 +145,12 @@ export function createOrpcRouter(deps: AppDependencies) {
       store: deps.store,
       command: deps.command,
       active,
+      read,
+    }),
+    analytics: createAnalyticsRouter(os.analytics, {
+      store: deps.store,
+      service: analyticsService,
+      tradersCache: traders,
       read,
     }),
   });

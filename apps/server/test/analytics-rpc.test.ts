@@ -1,0 +1,123 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createORPCClient } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
+import type { RpcClient } from "@zarbit/contracts/rpc";
+import { createApp } from "../src/app/create-app";
+import type { AppDependencies } from "../src/app-dependencies";
+
+function fixture() {
+  const mockTrades = [
+    {
+      id: "t-1",
+      chatId: 100n,
+      sourceMessageId: 101,
+      referenceNumber: "1001",
+      buyerParticipantId: "اسکان",
+      sellerParticipantId: "مرداد",
+      quantity: 2,
+      compactPrice: 105000,
+      rawPrice: 105000000n,
+      receiptTimeText: null,
+      announcedAt: new Date("2026-09-08T10:00:00Z"),
+      createdAt: new Date("2026-09-08T10:00:00Z"),
+    },
+    {
+      id: "t-2",
+      chatId: 100n,
+      sourceMessageId: 102,
+      referenceNumber: "1002",
+      buyerParticipantId: "عرفاان",
+      sellerParticipantId: "اسکان",
+      quantity: 1,
+      compactPrice: 105200,
+      rawPrice: 105200000n,
+      receiptTimeText: null,
+      announcedAt: new Date("2026-09-09T10:00:00Z"),
+      createdAt: new Date("2026-09-09T10:00:00Z"),
+    },
+  ];
+
+  const store = {
+    user: async (identity: { telegramUserId: string }) => ({
+      id: identity.telegramUserId,
+    }),
+    latestQuote: async () => null,
+    latestTrade: async () => null,
+    quotesSince: async () => [],
+    activeRequests: async () => [],
+    requestHistory: async () => ({ items: [], nextCursor: null }),
+    request: async () => null,
+    createRequest: async () => null,
+    updateRequest: async () => null,
+    cancelRequest: async () => null,
+    session: async () => null,
+    participant: async (alias: string) =>
+      alias === "اسکان" || alias === "مرداد" || alias === "عرفاان"
+        ? { id: alias, telegramUserId: null }
+        : null,
+
+    // Analytics repository methods
+    activeParticipantAliasesInWindow: async () => ["اسکان", "مرداد", "عرفاان"],
+    tradesForParticipantsChronological: async () => mockTrades,
+    participantTradesChronological: async (alias: string) =>
+      mockTrades.filter(
+        (t) =>
+          t.buyerParticipantId === alias || t.sellerParticipantId === alias,
+      ),
+    earliestTradeDate: async () => new Date("2026-09-08T10:00:00Z"),
+  } as unknown as AppDependencies["store"];
+
+  const deps: AppDependencies = {
+    store,
+    authenticate: () => ({ telegramUserId: "1001", firstName: "Tester" }),
+    command: async () => ({}) as any,
+  };
+
+  const app = createApp(deps);
+  const link = new RPCLink({
+    url: "http://localhost/rpc",
+    fetch: async (request) => app.request(request),
+    headers: () => ({ "X-Telegram-Init-Data": "valid" }),
+  });
+  const client: RpcClient = createORPCClient(link);
+
+  return { client };
+}
+
+test("analytics.traders returns sorted participant list via oRPC", async () => {
+  const { client } = fixture();
+  const traders = await client.analytics.traders({
+    sortBy: "REALIZED_PNL",
+    sortOrder: "DESC",
+    limit: 10,
+  });
+
+  assert.ok(Array.isArray(traders));
+  assert.equal(traders.length, 3);
+  // اسکان bought 2 @ 105000, sold 1 @ 105200 -> Realized P&L = +200 points = +20,000 Tomans
+  const eskan = traders.find((t) => t.alias === "اسکان");
+  assert.ok(eskan);
+  assert.equal(eskan.realizedPnlPoints, 200);
+  assert.equal(eskan.realizedPnlTomans, 20_000);
+  assert.equal(eskan.totalVolume, 3); // 2 buy + 1 sell
+  assert.equal(eskan.observedPosition, 1); // 2 - 1 = 1 Long
+});
+
+test("analytics.traderDetail returns detail and recent trades for valid alias", async () => {
+  const { client } = fixture();
+  const detail = await client.analytics.traderDetail({ alias: "اسکان" });
+
+  assert.ok(detail);
+  assert.equal(detail.summary.alias, "اسکان");
+  assert.equal(detail.summary.realizedPnlPoints, 200);
+  assert.equal(detail.recentTrades.length, 2);
+  assert.equal(detail.recentTrades[0]?.counterpartyAlias, "عرفاان");
+});
+
+test("analytics.traderDetail returns null for non-existent alias", async () => {
+  const { client } = fixture();
+  const detail = await client.analytics.traderDetail({ alias: "ناشناس" });
+  assert.equal(detail, null);
+});

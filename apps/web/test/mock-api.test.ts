@@ -249,7 +249,50 @@ test("interoperates seamlessly with adaptLegacyApi and createRpcUtils", async ()
       utils.requests.active.queryOptions(),
     );
     assert.equal(activeRequests.length, 2);
+
+    const traders = await client.fetchQuery(
+      utils.analytics.traders.queryOptions(),
+    );
+    assert.ok(Array.isArray(traders));
+    assert.ok(traders.length > 0);
   } finally {
     client.clear();
+  }
+});
+
+test("mock api supports analytics scenarios and RPC client integration", async () => {
+  const api = createMockApi();
+  const rpc = adaptLegacyApi(api);
+
+  // Normal list
+  const traders = await rpc.analytics.traders();
+  assert.ok(traders.length >= 10);
+  assert.equal(traders[0]?.alias, "اسکان");
+
+  // Trader detail
+  const detail = await rpc.analytics.traderDetail({ alias: "اسکان" });
+  assert.ok(detail);
+  assert.equal(detail.summary.alias, "اسکان");
+  assert.equal(detail.recentTrades.length, 3);
+
+  // Dynamic search scenario: empty
+  const originalWindow = globalThis.window;
+  try {
+    globalThis.window = {
+      location: { search: "?tradersScenario=empty" },
+    } as any;
+    const emptyTraders = await rpc.analytics.traders();
+    assert.equal(emptyTraders.length, 0);
+
+    // Dynamic search scenario: error
+    globalThis.window = {
+      location: { search: "?tradersScenario=error" },
+    } as any;
+    await assert.rejects(
+      async () => rpc.analytics.traders(),
+      (err: any) => err instanceof AppError && err.code === "MOCK_ERROR",
+    );
+  } finally {
+    globalThis.window = originalWindow;
   }
 });

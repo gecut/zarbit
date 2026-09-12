@@ -3,6 +3,8 @@ import { HomeIcon as HomeBoldIcon } from "@solar-icons/react/bold/home";
 import { SettingsMinimalisticIcon } from "@solar-icons/react/linear/settings-minimalistic";
 import { SettingsMinimalisticIcon as SettingsMinimalisticBoldIcon } from "@solar-icons/react/bold/settings-minimalistic";
 import { HistoryIcon } from "@solar-icons/react/linear/history";
+import { UsersGroupRoundedIcon } from "@solar-icons/react/linear/users-group-rounded";
+import { UsersGroupRoundedIcon as UsersGroupRoundedBoldIcon } from "@solar-icons/react/bold/users-group-rounded";
 import { Link, Outlet } from "@tanstack/react-router";
 
 import { AuthGate } from "../shared/auth/auth";
@@ -15,6 +17,12 @@ const navigationItems = [
     to: "/history",
     Icon: HistoryIcon,
     ActiveIcon: HistoryIcon,
+  },
+  {
+    label: "معامله‌گران",
+    to: "/traders",
+    Icon: UsersGroupRoundedIcon,
+    ActiveIcon: UsersGroupRoundedBoldIcon,
   },
   {
     label: "تنظیمات",
@@ -69,7 +77,7 @@ export function AppShell() {
       </div>
 
       <nav
-        className="max-w-124 border-border bg-surface/80 shadow-surface rounded-4xl fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-3 border p-1 backdrop-blur-sm"
+        className="max-w-124 border-border bg-surface/80 shadow-surface rounded-4xl fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-4 border p-1 backdrop-blur-sm"
         aria-label="ناوبری اصلی"
       >
         {navigationItems.map(({ label, to, Icon, ActiveIcon }) => (

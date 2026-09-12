@@ -9,6 +9,10 @@ import {
   quotePointSchema,
   telegramSessionStatusSchema,
   sessionCommandSchema,
+  participantAnalyticsSummarySchema,
+  participantAnalyticsDetailSchema,
+  traderListQuerySchema,
+  traderDetailQuerySchema,
 } from "./index";
 
 export const rpcErrorDataSchema = z
@@ -94,6 +98,16 @@ export const rpcContract = {
       .route({ method: "POST", path: "/requests/{id}/force-send" })
       .input(idInput)
       .output(requestDetailSchema),
+  },
+  analytics: {
+    traders: base
+      .route({ method: "GET", path: "/analytics/traders" })
+      .input(traderListQuerySchema.optional())
+      .output(z.array(participantAnalyticsSummarySchema)),
+    traderDetail: base
+      .route({ method: "GET", path: "/analytics/traders/{alias}" })
+      .input(traderDetailQuerySchema)
+      .output(participantAnalyticsDetailSchema.nullable()),
   },
 };
 export type RpcClient = ContractRouterClient<typeof rpcContract>;

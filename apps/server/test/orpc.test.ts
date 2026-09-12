@@ -248,7 +248,7 @@ test("OpenAPI includes every contract operation and authentication scheme", asyn
         ).length,
       0,
     ),
-    12,
+    14,
   );
   assert.ok(spec.components?.securitySchemes?.telegram);
 });

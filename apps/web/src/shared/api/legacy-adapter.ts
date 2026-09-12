@@ -1,6 +1,7 @@
 import type { RpcClient } from "@zarbit/contracts/rpc";
 import type {
   CreateRequestInput,
+  TraderListQuery,
   UpdateRequestInput,
   WorkerCommand,
 } from "@zarbit/contracts";
@@ -29,6 +30,11 @@ export function adaptLegacyApi(api: LegacyApi): RpcClient {
         api.updateRequest(id, data),
       cancel: ({ id }: { id: string }) => api.cancelRequest(id),
       forceSend: ({ id }: { id: string }) => api.forceSendRequest(id),
+    },
+    analytics: {
+      traders: (input?: TraderListQuery) => api.getTraders(input),
+      traderDetail: ({ alias }: { alias: string }) =>
+        api.getTraderDetail(alias),
     },
   } as unknown as RpcClient;
 }

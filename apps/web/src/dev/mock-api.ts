@@ -2,6 +2,8 @@ import {
   AppError,
   workerCommandSchema,
   telegramSessionStatusSchema,
+  createRequestInputSchema,
+  updateRequestInputSchema,
   type Identity,
   type TelegramSessionStatusV2,
   type WorkerCommand,
@@ -12,20 +14,43 @@ import {
 import type { LegacyApi } from "../shared/api/legacy-api";
 import { createQuoteDashboard, getQuoteScenario } from "./quote-scenarios";
 
-const mockIdentity: Identity = {
+export const mockIdentity: Identity = {
   telegramUserId: "10000001",
   firstName: "کاربر توسعه",
   username: "zarbit_dev",
 };
 
-function initialSession(): TelegramSessionStatusV2 {
+export type SessionScenario =
+  | "active"
+  | "disconnected"
+  | "login_pending"
+  | "not_in_group"
+  | "degraded"
+  | "revoked"
+  | "error";
+
+export function getSessionScenario(search: string): SessionScenario {
+  const value = new URLSearchParams(search).get("sessionScenario");
+  return [
+    "disconnected",
+    "login_pending",
+    "not_in_group",
+    "degraded",
+    "revoked",
+    "error",
+  ].includes(value ?? "")
+    ? (value as SessionScenario)
+    : "active";
+}
+
+function initialSession(now = Date.now()): TelegramSessionStatusV2 {
   return {
     kind: "ACTIVE",
     state: "ACTIVE",
     connection: "CONNECTED",
     reasonCode: "NONE",
-    observedAt: new Date().toISOString(),
-    stateChangedAt: new Date().toISOString(),
+    observedAt: new Date(now).toISOString(),
+    stateChangedAt: new Date(now).toISOString(),
     retryAt: null,
     capabilities: {
       canLogin: false,
@@ -36,10 +61,167 @@ function initialSession(): TelegramSessionStatusV2 {
     groupId: -1001234567890,
     quoteSenderId: "123456789",
     connectedTelegramUserId: mockIdentity.telegramUserId,
-    membershipCheckedAt: new Date().toISOString(),
+    membershipCheckedAt: new Date(now).toISOString(),
     error: null,
     login: null,
   };
+}
+
+export function createSessionFromScenario(
+  scenario: SessionScenario,
+  now = Date.now(),
+): TelegramSessionStatusV2 {
+  switch (scenario) {
+    case "disconnected":
+      return {
+        kind: "DISCONNECTED",
+        state: "DISCONNECTED",
+        connection: "OFFLINE",
+        reasonCode: "LOGIN_REQUIRED",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: null,
+        capabilities: {
+          canLogin: true,
+          canCreateRequest: false,
+          canCheckMembership: false,
+          canRevoke: false,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: null,
+        membershipCheckedAt: null,
+        error: null,
+        login: null,
+      };
+    case "login_pending":
+      return {
+        kind: "LOGIN_PENDING",
+        state: "LOGIN_PENDING",
+        connection: "CONNECTING",
+        reasonCode: "NONE",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: null,
+        capabilities: {
+          canLogin: false,
+          canCreateRequest: false,
+          canCheckMembership: false,
+          canRevoke: false,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: null,
+        membershipCheckedAt: null,
+        error: null,
+        login: {
+          id: "7f23a13b-9d84-4d31-8b52-fb647b92cc83",
+          step: "CODE",
+          expiresAt: new Date(now + 5 * 60_000).toISOString(),
+          resendAvailableAt: new Date(now + 30_000).toISOString(),
+          delivery: "app",
+          codeLength: 5,
+          maskedPhone: "+98912•••••12",
+          error: null,
+        },
+        phase: "CODE",
+      };
+    case "not_in_group":
+      return {
+        kind: "NOT_IN_GROUP",
+        state: "NOT_IN_GROUP",
+        connection: "CONNECTED",
+        reasonCode: "GROUP_MEMBERSHIP_REQUIRED",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: null,
+        capabilities: {
+          canLogin: false,
+          canCreateRequest: false,
+          canCheckMembership: true,
+          canRevoke: true,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: mockIdentity.telegramUserId,
+        membershipCheckedAt: new Date(now - 10 * 60_000).toISOString(),
+        error: null,
+        login: null,
+      };
+    case "degraded":
+      return {
+        kind: "DEGRADED",
+        state: "DEGRADED",
+        connection: "OFFLINE",
+        reasonCode: "WORKER_UNAVAILABLE",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: new Date(now + 30_000).toISOString(),
+        capabilities: {
+          canLogin: false,
+          canCreateRequest: false,
+          canCheckMembership: false,
+          canRevoke: false,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: mockIdentity.telegramUserId,
+        membershipCheckedAt: new Date(now).toISOString(),
+        error: "ارتباط با کارگزار تلگرام قطع شده است.",
+        login: null,
+      };
+    case "revoked":
+      return {
+        kind: "REVOKED",
+        state: "REVOKED",
+        connection: "OFFLINE",
+        reasonCode: "TELEGRAM_LOGGED_OUT",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: null,
+        capabilities: {
+          canLogin: true,
+          canCreateRequest: false,
+          canCheckMembership: false,
+          canRevoke: false,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: null,
+        membershipCheckedAt: null,
+        error: null,
+        login: null,
+      };
+    case "error":
+      return {
+        kind: "ERROR",
+        state: "ERROR",
+        connection: "OFFLINE",
+        reasonCode: "UNKNOWN_FAILURE",
+        observedAt: new Date(now).toISOString(),
+        stateChangedAt: new Date(now).toISOString(),
+        retryAt: new Date(now + 60_000).toISOString(),
+        capabilities: {
+          canLogin: true,
+          canCreateRequest: false,
+          canCheckMembership: false,
+          canRevoke: true,
+        },
+        groupId: -1001234567890,
+        quoteSenderId: "123456789",
+        connectedTelegramUserId: null,
+        membershipCheckedAt: null,
+        error: "خطای ناشناخته در اتصال به تلگرام رخ داده است.",
+        login: null,
+      };
+    case "active":
+    default:
+      return initialSession(now);
+  }
+}
+
+function getSearch(): string {
+  return typeof window !== "undefined" ? window.location.search : "";
 }
 
 function copySession(
@@ -51,7 +233,10 @@ function copySession(
   });
 }
 
-function seedRequests(): RequestDetail[] {
+function seedRequests(search = ""): RequestDetail[] {
+  const value = new URLSearchParams(search).get("requestsScenario");
+  if (value === "empty") return [];
+
   const now = Date.now();
   const make = (
     input: CreateRequestInput,
@@ -116,24 +301,48 @@ function seedRequests(): RequestDetail[] {
 }
 
 export function createMockApi(): LegacyApi {
-  let session = initialSession();
-  const requests: RequestDetail[] = seedRequests();
-  const scenario = getQuoteScenario(window.location.search);
-  const dashboard = createQuoteDashboard(scenario);
+  const initialSearch = getSearch();
+  let session = createSessionFromScenario(getSessionScenario(initialSearch));
+  const requests: RequestDetail[] = seedRequests(initialSearch);
 
   const completeLogin = () => {
     session = initialSession();
   };
 
+  const forceSend = async (id: string): Promise<RequestDetail> => {
+    const row = requests.find((r) => r.id === id);
+    if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+    if (row.status !== "ACTIVE") {
+      throw new AppError(
+        "REQUEST_CONFLICT",
+        "وضعیت درخواست تغییر کرده است؛ صفحه را تازه کنید.",
+        409,
+      );
+    }
+    const nowIso = new Date().toISOString();
+    row.status = "DONE";
+    row.executionPhase = "DONE";
+    row.outgoingMessageId = Math.floor(Math.random() * 9000) + 1000;
+    row.deliveryStartedAt = nowIso;
+    row.completedAt = nowIso;
+    row.updatedAt = nowIso;
+    return structuredClone(row);
+  };
+
   return {
     authenticate: async () => ({ ...mockIdentity }),
     getQuoteDashboard: async () => {
+      const scenario = getQuoteScenario(getSearch());
       if (scenario === "loading")
         await new Promise((resolve) => setTimeout(resolve, 1_200));
       if (scenario === "error")
         throw new AppError("MOCK_ERROR", "خطای آزمایشی دریافت مظنه.", 503);
+      const dashboard = createQuoteDashboard(scenario, Date.now());
       return {
         latest: dashboard.latest ? { ...dashboard.latest } : null,
+        latestTrade: dashboard.latestTrade
+          ? { ...dashboard.latestTrade }
+          : null,
         points: dashboard.points.map((point) => ({ ...point })),
       };
     },
@@ -151,8 +360,8 @@ export function createMockApi(): LegacyApi {
           state: "LOGIN_PENDING",
           connection: "CONNECTING",
           reasonCode: "NONE",
-          observedAt: new Date().toISOString(),
-          stateChangedAt: new Date().toISOString(),
+          observedAt: new Date(now).toISOString(),
+          stateChangedAt: new Date(now).toISOString(),
           retryAt: null,
           capabilities: {
             canLogin: false,
@@ -177,9 +386,35 @@ export function createMockApi(): LegacyApi {
           },
           phase: "CODE",
         };
-      } else if (input.type === "code" || input.type === "password") {
+      } else if (input.type === "code") {
         if (!session.login || session.login.id !== input.id)
           throw new AppError("INVALID_LOGIN", "ورود معتبر نیست.", 400);
+        if (input.code === "00000") {
+          throw new AppError("INVALID_CODE", "کد ورود نامعتبر است.", 400);
+        }
+        if (input.code === "22222") {
+          session = {
+            ...session,
+            login: {
+              ...session.login,
+              step: "PASSWORD",
+              error: null,
+            },
+            phase: "PASSWORD",
+          };
+          return copySession(session);
+        }
+        completeLogin();
+      } else if (input.type === "password") {
+        if (!session.login || session.login.id !== input.id)
+          throw new AppError("INVALID_LOGIN", "ورود معتبر نیست.", 400);
+        if (input.password === "wrong") {
+          throw new AppError(
+            "INVALID_PASSWORD",
+            "رمز عبور دو مرحله‌ای نامعتبر است.",
+            400,
+          );
+        }
         completeLogin();
       } else if (input.type === "resend") {
         if (!session.login || session.login.id !== input.id)
@@ -194,51 +429,21 @@ export function createMockApi(): LegacyApi {
       } else if (input.type === "cancel") {
         if (!session.login || session.login.id !== input.id)
           throw new AppError("INVALID_LOGIN", "ورود معتبر نیست.", 400);
-        session = {
-          kind: "DISCONNECTED",
-          state: "DISCONNECTED",
-          connection: "OFFLINE",
-          reasonCode: "LOGIN_REQUIRED",
-          observedAt: new Date().toISOString(),
-          stateChangedAt: new Date().toISOString(),
-          retryAt: null,
-          capabilities: {
-            canLogin: true,
-            canCreateRequest: false,
-            canCheckMembership: false,
-            canRevoke: false,
-          },
-          groupId: -1001234567890,
-          quoteSenderId: "123456789",
-          connectedTelegramUserId: null,
-          membershipCheckedAt: null,
-          error: null,
-          login: null,
-        };
+        session = createSessionFromScenario("disconnected");
       } else if (input.type === "membership") {
-        session = { ...session, membershipCheckedAt: new Date().toISOString() };
+        const nowIso = new Date().toISOString();
+        if (session.kind === "NOT_IN_GROUP") {
+          session = {
+            ...initialSession(),
+            membershipCheckedAt: nowIso,
+          };
+        } else {
+          session = { ...session, membershipCheckedAt: nowIso };
+        }
       } else if (input.type === "revoke") {
-        session = {
-          kind: "REVOKED",
-          state: "REVOKED",
-          connection: "OFFLINE",
-          reasonCode: "TELEGRAM_LOGGED_OUT",
-          observedAt: new Date().toISOString(),
-          stateChangedAt: new Date().toISOString(),
-          retryAt: null,
-          capabilities: {
-            canLogin: true,
-            canCreateRequest: false,
-            canCheckMembership: false,
-            canRevoke: false,
-          },
-          groupId: -1001234567890,
-          quoteSenderId: "123456789",
-          connectedTelegramUserId: null,
-          membershipCheckedAt: null,
-          error: null,
-          login: null,
-        };
+        session = createSessionFromScenario("revoked");
+      } else if (input.type === "force-send") {
+        await forceSend(input.id);
       }
 
       return copySession(session);
@@ -255,16 +460,18 @@ export function createMockApi(): LegacyApi {
       nextCursor: null,
     }),
     createRequest: async (input) => {
-      const now = new Date().toISOString();
-      const row = {
-        ...input,
+      const data = createRequestInputSchema.parse(input);
+      const nowIso = new Date().toISOString();
+      const row: RequestDetail = {
+        ...data,
+        units: data.action === "ALERT" ? null : data.units,
         id: crypto.randomUUID(),
-        status: "ACTIVE" as const,
-        executionPhase: "WAITING_QUOTE" as const,
+        status: "ACTIVE",
+        executionPhase: "WAITING_QUOTE",
         outcomeCode: null,
         deliveryStartedAt: null,
         unknownReason: null,
-        resolutionState: "NOT_APPLICABLE" as const,
+        resolutionState: "NOT_APPLICABLE",
         executing: false,
         triggeredQuote: null,
         triggeredMessageId: null,
@@ -272,8 +479,8 @@ export function createMockApi(): LegacyApi {
         completedAt: null,
         failureReason: null,
         cancellationReason: null,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: nowIso,
+        updatedAt: nowIso,
       };
       requests.unshift(row);
       return structuredClone(row);
@@ -281,24 +488,41 @@ export function createMockApi(): LegacyApi {
     updateRequest: async (id, input) => {
       const row = requests.find((r) => r.id === id);
       if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
-      Object.assign(row, input);
+      if (row.status !== "ACTIVE") {
+        throw new AppError(
+          "REQUEST_CONFLICT",
+          "وضعیت درخواست تغییر کرده است؛ صفحه را تازه کنید.",
+          409,
+        );
+      }
+      const data = updateRequestInputSchema.parse(input);
+      Object.assign(row, {
+        ...data,
+        units: data.action === "ALERT" ? null : data.units,
+        updatedAt: new Date().toISOString(),
+      });
       return structuredClone(row);
     },
     cancelRequest: async (id) => {
       const row = requests.find((r) => r.id === id);
       if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
+      if (row.status !== "ACTIVE") {
+        throw new AppError(
+          "REQUEST_CONFLICT",
+          "وضعیت درخواست تغییر کرده است؛ صفحه را تازه کنید.",
+          409,
+        );
+      }
+      const nowIso = new Date().toISOString();
       row.status = "CANCELLED";
+      row.executionPhase = "CANCELLED";
       row.cancellationReason = "لغو توسط کاربر";
-      row.completedAt = new Date().toISOString();
+      row.completedAt = nowIso;
+      row.updatedAt = nowIso;
       return structuredClone(row);
     },
     forceSendRequest: async (id) => {
-      const row = requests.find((r) => r.id === id);
-      if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
-      row.status = "DONE";
-      row.outgoingMessageId = 1;
-      row.completedAt = new Date().toISOString();
-      return structuredClone(row);
+      return forceSend(id);
     },
   };
 }

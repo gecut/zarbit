@@ -165,22 +165,10 @@ export function createMarketDataStore(
       });
     },
 
-    latestTrade: (
-      chatId?: bigint | number,
-    ): Promise<
-      | (Trade & {
-          buyerParticipant: Participant;
-          sellerParticipant: Participant;
-        })
-      | null
-    > =>
+    latestTrade: (chatId?: bigint | number): Promise<Trade | null> =>
       db.trade.findFirst({
         where: chatId !== undefined ? { chatId: BigInt(chatId) } : undefined,
         orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
-        include: {
-          buyerParticipant: true,
-          sellerParticipant: true,
-        },
       }),
 
     tradesSince: (

@@ -49,6 +49,7 @@ function fixture() {
       quoteReads++;
       return null;
     },
+    latestTrade: async () => null,
     quotesSince: async () => [],
     activeRequests: async (id: string) => {
       activeReads++;
@@ -123,7 +124,11 @@ test("every RPC route authenticates, cold reads coalesce and user caches stay is
   const timings = await Promise.all(
     Array.from({ length: 20 }, async () => {
       const before = performance.now();
-      assert.deepEqual(await a.quote.dashboard(), { latest: null, points: [] });
+      assert.deepEqual(await a.quote.dashboard(), {
+        latest: null,
+        latestTrade: null,
+        points: [],
+      });
       return performance.now() - before;
     }),
   );

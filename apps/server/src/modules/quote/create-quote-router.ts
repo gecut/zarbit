@@ -23,15 +23,24 @@ export function createQuoteRouter<TDashboardProcedure, TLatestProcedure>(
     deps.quotes.get("global", () =>
       deps.read("quote", async () => {
         const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-        const [latest, points] = await Promise.all([
+        const [latestQuote, latestTrade, points] = await Promise.all([
           deps.store.latestQuote(),
+          deps.store.latestTrade
+            ? deps.store.latestTrade()
+            : Promise.resolve(null),
           deps.store.quotesSince(since),
         ]);
         return {
-          latest: latest
+          latest: latestQuote
             ? {
-                quote: latest.compactQuote,
-                announcedAt: latest.announcedAt.toISOString(),
+                quote: latestQuote.compactQuote,
+                announcedAt: latestQuote.announcedAt.toISOString(),
+              }
+            : null,
+          latestTrade: latestTrade
+            ? {
+                price: latestTrade.compactPrice,
+                announcedAt: latestTrade.announcedAt.toISOString(),
               }
             : null,
           points: points.map((p) => ({

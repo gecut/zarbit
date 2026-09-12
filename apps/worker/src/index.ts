@@ -17,7 +17,7 @@ import { Sessions } from "./sessions";
 import { SessionFiles } from "./session-files";
 import { mtcuteFactory } from "./mtcute";
 import { createWorkerApp } from "./http";
-import { createQuoteRecorder } from "./quote";
+import { createMarketIngestion } from "./market-ingestion";
 import { acquireWorkerOwnership } from "./ownership";
 import { workerLog } from "./logger";
 
@@ -93,7 +93,7 @@ export async function startWorker() {
     private: notify,
   });
   sessions.forceSend = (userId, id) => requests.execute(userId, id);
-  sessions.onQuote = createQuoteRecorder(
+  sessions.onQuote = createMarketIngestion(
     store,
     {
       groupId: env.TELEGRAM_GROUP_ID!,

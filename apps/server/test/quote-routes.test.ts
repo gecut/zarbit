@@ -10,11 +10,13 @@ import { registerQuoteRoutes } from "../src/legacy/rest/register-quote-routes";
 function appWithQuote(
   quote: Awaited<ReturnType<AppDependencies["store"]["latestQuote"]>>,
   points: Awaited<ReturnType<AppDependencies["store"]["quotesSince"]>> = [],
+  trade: Awaited<ReturnType<AppDependencies["store"]["latestTrade"]>> = null,
 ) {
   const app = new Hono<AppEnv>();
   registerQuoteRoutes(app, {
     store: {
       latestQuote: async () => quote,
+      latestTrade: async () => trade,
       quotesSince: async () => points,
     },
   } as unknown as AppDependencies);
@@ -66,6 +68,7 @@ test("returns a three-day dashboard with compact amounts", async () => {
         quote: 96_120,
         announcedAt: "2026-09-07T08:00:00.000Z",
       },
+      latestTrade: null,
       points: [
         {
           quote: 95_900,
@@ -85,7 +88,7 @@ test("returns an empty dashboard before the first quote", async () => {
     "http://server/api/quote/dashboard",
   );
   assert.deepEqual(await response.json(), {
-    data: { latest: null, points: [] },
+    data: { latest: null, latestTrade: null, points: [] },
   });
 });
 

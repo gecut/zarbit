@@ -1,21 +1,16 @@
 import { normalizeCompactText, normalizeProtocolText } from "./normalize";
-import type {
-  CommandContext,
-  ContextCommandIntent,
-  ParseResult,
-} from "./types";
+import type { ContextCommandIntent, ParseResult } from "./types";
 
 /**
  * Parses context-dependent trading commands:
  * - "ب" (take all remaining from active replied order)
  * - "ن" (cancellation intent)
- * - Numeric standalone reply (take partial quantity or quote update)
+ * - Numeric standalone reply (take partial quantity)
  *
- * Rejects unresolved variants like "ب 1" or guessing without required context.
+ * Rejects unresolved variants like "ب 1" or repeated "نن".
  */
 export function parseContextCommand(
   rawText: string,
-  context?: CommandContext,
 ): ParseResult<ContextCommandIntent> {
   const normalized = normalizeProtocolText(rawText);
 
@@ -36,28 +31,13 @@ export function parseContextCommand(
     };
   }
 
-  // Canonical "ب" command — TAKE_ALL_REMAINING
+  // Canonical "ب" command — TAKE_ALL
   if (compact === "ب") {
-    if (context?.hasActiveRepliedOrder === true) {
-      return {
-        status: "parsed",
-        data: {
-          command: "TAKE_ALL_REMAINING",
-          executionQuantity: context.repliedOrderRemaining ?? null,
-        },
-      };
-    }
-
-    if (context?.hasActiveRepliedOrder === false) {
-      return {
-        status: "unsupported",
-        reason: "Target replied order is not active",
-      };
-    }
-
     return {
-      status: "ambiguous",
-      reason: "Command 'ب' requires active replied order context",
+      status: "parsed",
+      data: {
+        command: "TAKE_ALL",
+      },
     };
   }
 
@@ -71,27 +51,15 @@ export function parseContextCommand(
 
   // Canonical "ن" command — CANCEL
   if (compact === "ن") {
-    if (context?.hasRepliedToOwnOrder === true) {
-      return {
-        status: "parsed",
-        data: {
-          command: "CANCEL",
-          target: "REPLIED_ORDER",
-        },
-      };
-    }
-
-    // Per MARKET-DATA.md: Absent reply metadata on contextual commands marks target as UNRESOLVED_TARGET, never guessed.
     return {
       status: "parsed",
       data: {
         command: "CANCEL",
-        target: "UNRESOLVED_TARGET",
       },
     };
   }
 
-  // Standalone numeric replies
+  // Standalone numeric replies (TAKE_QUANTITY)
   if (/^\d+$/u.test(compact)) {
     const value = Number(compact);
     if (!Number.isSafeInteger(value) || value <= 0) {
@@ -101,40 +69,12 @@ export function parseContextCommand(
       };
     }
 
-    if (context?.hasActiveRepliedOrder === true) {
-      if (
-        context.repliedOrderRemaining !== undefined &&
-        value > context.repliedOrderRemaining
-      ) {
-        return {
-          status: "ambiguous",
-          reason: `Requested take quantity (${value}) exceeds remaining order quantity (${context.repliedOrderRemaining})`,
-        };
-      }
-
-      return {
-        status: "parsed",
-        data: {
-          command: "TAKE_PARTIAL",
-          quantity: value,
-        },
-      };
-    }
-
-    if (context?.isQuotePublisher === true && !context?.hasActiveRepliedOrder) {
-      return {
-        status: "parsed",
-        data: {
-          command: "QUOTE_INPUT",
-          rawQuoteText: compact,
-        },
-      };
-    }
-
     return {
-      status: "ambiguous",
-      reason:
-        "Standalone numeric command requires active order reply context or quote publisher permission",
+      status: "parsed",
+      data: {
+        command: "TAKE_QUANTITY",
+        quantity: value,
+      },
     };
   }
 

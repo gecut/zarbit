@@ -21,8 +21,8 @@ export function adaptLegacyApi(api: LegacyApi): RpcClient {
     },
     requests: {
       active: () => api.getActiveRequests(),
-      history: (input: { cursor?: string }) =>
-        api.getRequestHistory(input.cursor),
+      history: (input?: { cursor?: string }) =>
+        api.getRequestHistory(input?.cursor),
       detail: ({ id }: { id: string }) => api.getRequest(id),
       create: (input: CreateRequestInput) => api.createRequest(input),
       update: ({ id, data }: { id: string; data: UpdateRequestInput }) =>

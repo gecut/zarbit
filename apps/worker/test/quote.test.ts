@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createQuoteRecorder } from "../src/quote";
+import { createMarketIngestion as createQuoteRecorder } from "../src/market-ingestion";
 
 test("records only recognized quotes from the configured group publisher", async () => {
   const events: Array<Record<string, unknown>> = [];

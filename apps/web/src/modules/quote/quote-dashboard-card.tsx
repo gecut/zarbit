@@ -1,6 +1,9 @@
 import { Button, Card, Skeleton } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
-import { DollarMinimalisticIcon } from "@solar-icons/react/linear";
+import {
+  BillCheckIcon,
+  DollarMinimalisticIcon,
+} from "@solar-icons/react/linear";
 import {
   Area,
   AreaChart,
@@ -19,6 +22,17 @@ function formatQuote(value: number) {
   return new Intl.NumberFormat("fa-IR").format(value);
 }
 
+function safeDisplayPrice(price: number | undefined | null): number | null {
+  if (typeof price !== "number" || !Number.isSafeInteger(price) || price <= 0) {
+    return null;
+  }
+  try {
+    return compactQuoteToDisplayPrice(price);
+  } catch {
+    return null;
+  }
+}
+
 const staleAfterMs = 5 * 60_000;
 const tehranTimeZone = "Asia/Tehran";
 
@@ -35,6 +49,8 @@ const timeFormatter = new Intl.DateTimeFormat("fa-IR", {
 
 function formatDate(value: string) {
   const date = new Date(value);
+  if (isNaN(date.getTime())) return "ثبت‌نشده";
+
   const diff = date.getTime() - Date.now();
 
   const minute = 60_000;
@@ -66,9 +82,17 @@ function DashboardSkeleton() {
         <Skeleton className="h-4 w-24 rounded" />
       </Card.Header>
       <Card.Content className="grid gap-6 p-0 pt-6">
-        <div className="grid gap-3">
-          <Skeleton className="h-10 w-4/5 rounded" />
-          <Skeleton className="h-4 w-28 rounded" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="border-border/50 bg-surface-secondary/40 space-y-2 rounded-2xl border p-3.5 sm:p-4">
+            <Skeleton className="h-3 w-16 rounded" />
+            <Skeleton className="h-7 w-24 rounded sm:w-28" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
+          <div className="border-border/50 bg-surface-secondary/40 space-y-2 rounded-2xl border p-3.5 sm:p-4">
+            <Skeleton className="h-3 w-16 rounded" />
+            <Skeleton className="h-7 w-24 rounded sm:w-28" />
+            <Skeleton className="h-3 w-20 rounded" />
+          </div>
         </div>
         <Skeleton className="h-50 w-full rounded-2xl sm:h-60" />
       </Card.Content>
@@ -84,7 +108,7 @@ export function QuoteDashboardCard() {
     return (
       <Card className="border-danger bg-danger-soft text-danger-soft-foreground rounded-2xl border p-4 sm:p-6">
         <Card.Header className="p-0">
-          <Card.Title>دریافت مظنه ناموفق بود</Card.Title>
+          <Card.Title>دریافت اطلاعات بازار ناموفق بود</Card.Title>
         </Card.Header>
         <Card.Content className="p-0 pt-3 text-sm leading-7">
           {quote.error.message}
@@ -97,13 +121,16 @@ export function QuoteDashboardCard() {
       </Card>
     );
 
-  if (!quote.data.latest)
+  const { latest, latestTrade, points } = quote.data;
+
+  if (!latest && !latestTrade)
     return (
       <Card variant="tertiary">
         <Card.Header className="p-0">
           <Card.Title>هنوز مظنه‌ای دریافت نشده است</Card.Title>
           <Card.Description>
-            پس از اتصال یک حساب عضو گروه، آخرین مظنه اینجا نمایش داده می‌شود.
+            پس از اتصال یک حساب عضو گروه، آخرین مظنه و معاملات اینجا نمایش داده
+            می‌شود.
           </Card.Description>
         </Card.Header>
         <Card.Content className="p-0 pt-6">
@@ -123,8 +150,11 @@ export function QuoteDashboardCard() {
     );
 
   const isStale =
-    Date.now() - new Date(quote.data.latest.announcedAt).getTime() >
-    staleAfterMs;
+    latest != null &&
+    Date.now() - new Date(latest.announcedAt).getTime() > staleAfterMs;
+
+  const displayQuote = safeDisplayPrice(latest?.quote);
+  const displayTradePrice = safeDisplayPrice(latestTrade?.price);
 
   return (
     <Card variant="tertiary">
@@ -135,26 +165,77 @@ export function QuoteDashboardCard() {
           </p>
         )}
 
-        <div className="flex flex-col gap-2 px-4">
-          <DollarMinimalisticIcon className="mx-auto size-12 text-[#DAA464]" />
+        <div className="grid grid-cols-2 gap-3">
+          {/* Latest Official Quote */}
+          <div className="border-border bg-surface-secondary/60 flex flex-col justify-between rounded-2xl border p-3.5 sm:p-4">
+            <div className="text-muted flex items-center gap-1.5">
+              <DollarMinimalisticIcon className="size-4 shrink-0 text-[#DAA464]" />
+              <span className="text-xs font-medium">آخرین مظنه</span>
+            </div>
 
-          <div className="flex items-end justify-center gap-1">
-            <p className="text-foreground text-3xl font-semibold sm:text-4xl">
-              {formatQuote(compactQuoteToDisplayPrice(quote.data.latest.quote))}
-            </p>
+            <div className="my-1.5 flex items-end gap-1">
+              {displayQuote != null ? (
+                <>
+                  <span className="text-foreground text-xl font-bold tabular-nums sm:text-2xl">
+                    {formatQuote(displayQuote)}
+                  </span>
+                  <TomanIcon className="text-muted mb-0.5 size-4 shrink-0 opacity-70" />
+                </>
+              ) : (
+                <span className="text-muted text-base font-medium sm:text-lg">
+                  ثبت‌نشده
+                </span>
+              )}
+            </div>
 
-            <TomanIcon className="mb-2 size-5 opacity-60" />
+            {latest ? (
+              <time
+                className="text-muted text-xs leading-relaxed"
+                dateTime={latest.announcedAt}
+              >
+                {formatDate(latest.announcedAt)}
+              </time>
+            ) : (
+              <span className="text-muted text-xs leading-relaxed">
+                در انتظار اعلام مظنه
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <Card.Title className="text-muted text-sm">آخرین مظنه</Card.Title>
+          {/* Latest Completed Trade */}
+          <div className="border-border bg-surface-secondary/60 flex flex-col justify-between rounded-2xl border p-3.5 sm:p-4">
+            <div className="text-muted flex items-center gap-1.5">
+              <BillCheckIcon className="text-accent size-4 shrink-0" />
+              <span className="text-xs font-medium">آخرین معامله</span>
+            </div>
 
-            <time
-              className="text-muted text-xs"
-              dateTime={quote.data.latest.announcedAt}
-            >
-              {formatDate(quote.data.latest.announcedAt)}
-            </time>
+            <div className="my-1.5 flex items-end gap-1">
+              {displayTradePrice != null ? (
+                <>
+                  <span className="text-foreground text-xl font-bold tabular-nums sm:text-2xl">
+                    {formatQuote(displayTradePrice)}
+                  </span>
+                  <TomanIcon className="text-muted mb-0.5 size-4 shrink-0 opacity-70" />
+                </>
+              ) : (
+                <span className="text-muted text-base font-medium sm:text-lg">
+                  ثبت‌نشده
+                </span>
+              )}
+            </div>
+
+            {latestTrade ? (
+              <time
+                className="text-muted text-xs leading-relaxed"
+                dateTime={latestTrade.announcedAt}
+              >
+                {formatDate(latestTrade.announcedAt)}
+              </time>
+            ) : (
+              <span className="text-muted text-xs leading-relaxed">
+                در انتظار ثبت حواله
+              </span>
+            )}
           </div>
         </div>
       </Card.Header>
@@ -165,7 +246,7 @@ export function QuoteDashboardCard() {
             روند سه روز گذشته
           </h2>
 
-          {quote.data.points.length ? (
+          {points.length ? (
             <div className="h-50 **:outline-0 min-w-0 sm:h-60" dir="ltr">
               <ResponsiveContainer height="100%" width="100%">
                 <AreaChart

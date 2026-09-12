@@ -33,9 +33,17 @@ export const quotePointSchema = z
   })
   .strict();
 export type QuotePoint = z.infer<typeof quotePointSchema>;
+export const tradePointSchema = z
+  .object({
+    price: z.number().int().positive(),
+    announcedAt: z.string().datetime(),
+  })
+  .strict();
+export type TradePoint = z.infer<typeof tradePointSchema>;
 export const quoteDashboardSchema = z
   .object({
     latest: quotePointSchema.nullable(),
+    latestTrade: tradePointSchema.nullable().optional(),
     points: z.array(quotePointSchema),
   })
   .strict();

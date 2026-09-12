@@ -5,9 +5,9 @@
     "semantic_hash": "6245d0ab773b03169d5923e55c0d0970"
   },
   "apps/web/src/dev/quote-scenarios.ts": {
-    "mtime": 1789197327.2360427,
-    "ast_hash": "63a8ed4156163cae6aea7e2f6e8f87a8",
-    "semantic_hash": "63a8ed4156163cae6aea7e2f6e8f87a8"
+    "mtime": 1788884559.2385716,
+    "ast_hash": "b60c418ad2040a1d8dcae3a109fc2229",
+    "semantic_hash": "b60c418ad2040a1d8dcae3a109fc2229"
   },
   "apps/web/src/routes/__root.tsx": {
     "mtime": 1788868406.7626395,
@@ -150,9 +150,9 @@
     "semantic_hash": "28552e5ab789b3f6bc8b9be2af54854f"
   },
   "apps/web/test/quote-scenarios.test.ts": {
-    "mtime": 1789197397.643505,
-    "ast_hash": "18b6ac5680c8c8b8a2fc590b6dec4423",
-    "semantic_hash": "18b6ac5680c8c8b8a2fc590b6dec4423"
+    "mtime": 1788884559.3183522,
+    "ast_hash": "088a174f68994d126ad518579d0aa410",
+    "semantic_hash": "088a174f68994d126ad518579d0aa410"
   },
   "apps/web/test/telegram-session-view-model.test.ts": {
     "mtime": 1789058484.7381485,
@@ -480,9 +480,9 @@
     "semantic_hash": "7e57e58ea63a5d129d2962b8da45239e"
   },
   "apps/web/src/modules/quote/quote-dashboard-card.tsx": {
-    "mtime": 1789197358.411826,
-    "ast_hash": "59984b8299305bfa8252ea32754baba8",
-    "semantic_hash": "59984b8299305bfa8252ea32754baba8"
+    "mtime": 1788884559.1764972,
+    "ast_hash": "c149b2c471bc509eb9b995842f6ac92d",
+    "semantic_hash": "c149b2c471bc509eb9b995842f6ac92d"
   },
   "apps/web/src/modules/requests/_request-card.tsx": {
     "mtime": 1788883743.5122435,
@@ -580,9 +580,9 @@
     "semantic_hash": "2cd2a66ff78153c3464e5706b6b43e13"
   },
   "apps/web/src/shared/api/legacy-api.ts": {
-    "mtime": 1789197340.2408378,
-    "ast_hash": "262fd19a87c52090d5c406e951b761d3",
-    "semantic_hash": "262fd19a87c52090d5c406e951b761d3"
+    "mtime": 1788894423.326662,
+    "ast_hash": "ea0306bcab3bbe6d9d65e0e2e2f2d298",
+    "semantic_hash": "ea0306bcab3bbe6d9d65e0e2e2f2d298"
   },
   "apps/web/src/shared/api/orpc.ts": {
     "mtime": 1788894544.8729708,
@@ -635,9 +635,9 @@
     "semantic_hash": "baf8b76ff10b24fb82e24aa2c84a439a"
   },
   "apps/web/test/rpc-query.test.ts": {
-    "mtime": 1789197413.3079875,
-    "ast_hash": "c748da660306e9f3cc6a932c83685934",
-    "semantic_hash": "c748da660306e9f3cc6a932c83685934"
+    "mtime": 1788894776.9122324,
+    "ast_hash": "2454c749e9ba71dc983ba671e023718c",
+    "semantic_hash": "2454c749e9ba71dc983ba671e023718c"
   },
   "apps/worker/test/requests.test.ts": {
     "mtime": 1789058483.030068,

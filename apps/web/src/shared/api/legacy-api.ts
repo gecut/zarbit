@@ -15,6 +15,7 @@ import { telegramInitData } from "../telegram/telegram";
 
 export type {
   QuotePoint,
+  TradePoint,
   QuoteDashboard,
   TelegramSessionState,
 } from "@zarbit/contracts";

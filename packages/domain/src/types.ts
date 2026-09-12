@@ -39,40 +39,17 @@ export interface HumanOrderIntent {
 
 export type ContextCommandIntent =
   | {
-      readonly command: "TAKE_ALL_REMAINING";
-      readonly executionQuantity: number | null;
+      readonly command: "TAKE_ALL";
     }
   | {
-      readonly command: "TAKE_PARTIAL";
+      readonly command: "TAKE_QUANTITY";
       readonly quantity: number;
     }
   | {
       readonly command: "CANCEL";
-      readonly target: "REPLIED_ORDER" | "UNRESOLVED_TARGET";
-    }
-  | {
-      readonly command: "QUOTE_INPUT";
-      readonly rawQuoteText: string;
     };
-
-export interface CommandContext {
-  readonly hasActiveRepliedOrder?: boolean;
-  readonly repliedOrderRemaining?: number;
-  readonly hasRepliedToOwnOrder?: boolean;
-  readonly isQuotePublisher?: boolean;
-  readonly currentQuote?: number;
-}
 
 export interface PriceResolution {
   readonly resolvedCompactPrice: number;
   readonly mode: "SHORT_SUFFIX" | "FULL_COMPACT";
 }
-
-export type ClassifiedProtocolMessage =
-  | { readonly kind: "CANONICAL_BOT_ORDER"; readonly order: CanonicalBotOrder }
-  | { readonly kind: "CANONICAL_BOT_QUOTE"; readonly quote: CanonicalBotQuote }
-  | { readonly kind: "TRADE_RECEIPT"; readonly receipt: TradeReceipt }
-  | { readonly kind: "HUMAN_ORDER"; readonly order: HumanOrderIntent }
-  | { readonly kind: "CONTEXT_COMMAND"; readonly command: ContextCommandIntent }
-  | { readonly kind: "AMBIGUOUS"; readonly reason: string }
-  | { readonly kind: "UNSUPPORTED"; readonly reason: string };

@@ -1,4 +1,4 @@
-import type { QuotePoint, QuoteDashboard } from "@zarbit/contracts";
+import type { QuotePoint, QuoteDashboard, TradePoint } from "@zarbit/contracts";
 
 export type QuoteScenario = "normal" | "empty" | "loading" | "stale" | "error";
 
@@ -27,6 +27,10 @@ export function createQuoteDashboard(
     quote: 96_120,
     announcedAt: new Date(now - latestOffset).toISOString(),
   };
+  const latestTrade: TradePoint = {
+    price: 96_100,
+    announcedAt: new Date(now - latestOffset - 30_000).toISOString(),
+  };
 
-  return { latest, points };
+  return { latest, latestTrade, points };
 }

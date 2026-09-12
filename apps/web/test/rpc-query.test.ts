@@ -254,3 +254,38 @@ test("mutations fail once while offline instead of queuing or replaying", async 
     client.clear();
   }
 });
+
+test("quote dashboard query delivers both official quote and completed trade in a single query path", async () => {
+  let calls = 0;
+  const rpc = createRpcClient(
+    "http://server/rpc",
+    () => "test",
+    async () => {
+      calls++;
+      return Response.json({
+        json: {
+          latest: {
+            quote: 105_020,
+            announcedAt: "2026-09-12T07:00:00.000Z",
+          },
+          latestTrade: {
+            price: 105_120,
+            announcedAt: "2026-09-12T07:01:00.000Z",
+          },
+          points: [{ quote: 105_000, announcedAt: "2026-09-12T06:00:00.000Z" }],
+        },
+      });
+    },
+  );
+  const api = createRpcUtils(rpc, "market-snapshot");
+  const client = createQueryClient();
+  try {
+    const data = await client.fetchQuery(api.quote.dashboard.queryOptions());
+    assert.equal(calls, 1, "only a single query network call was made");
+    assert.equal(data.latest?.quote, 105_020);
+    assert.equal(data.latestTrade?.price, 105_120);
+    assert.notEqual(data.latest?.quote, data.latestTrade?.price);
+  } finally {
+    client.clear();
+  }
+});

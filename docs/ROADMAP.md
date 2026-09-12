@@ -82,6 +82,9 @@ Phase 2 builds the analytics and ranking engine on top of accumulated Phase 1 da
 ### 2.1 Rolling 7-Day Performance Engine
 
 - Trader ranking runs over a **rolling 7-day query window** (not a data retention limit).
+
+Participant analytics confidence measures participant-observed coverage from the later of the participant's first trade and the earliest system trade. Identity resolution remains conservative and deterministic (direct reply, then one compatible action in the bounded window, otherwise ambiguous). Historical unresolved aliases and private-message orders are observability limitations; they do not authorize alias-based Follow execution.
+
 - Metrics per `Participant`:
   - Total trade volume (units and Rial turnover).
   - Completed trade count (buys vs. sells).

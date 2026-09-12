@@ -205,6 +205,7 @@ export function getMockTradersList(
     | "TRADE_COUNT"
     | "AVG_TRADE_SIZE" = "REALIZED_PNL",
   sortOrder: "ASC" | "DESC" = "DESC",
+  limit = 50,
 ): ParticipantAnalyticsSummary[] {
   const scenario = getTradersScenario(search);
   if (scenario === "empty") return [];
@@ -229,7 +230,7 @@ export function getMockTradersList(
     return sortOrder === "DESC" ? -diff : diff;
   });
 
-  return copy;
+  return copy.slice(0, limit);
 }
 
 export function createMockTraderDetail(

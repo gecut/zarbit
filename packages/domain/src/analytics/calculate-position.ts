@@ -1,4 +1,4 @@
-import { RECEIPT_TOMAN_MULTIPLIER } from "./constants";
+import { RECEIPT_TOMAN_MULTIPLIER, roundAnalyticsPoints } from "./constants";
 import type { ParticipantTrade, PositionState, TradeTransition } from "./types";
 
 /**
@@ -86,7 +86,7 @@ export function calculatePositionTransition(
     if (q <= prevQ) {
       // Partial or Full close of Long
       const nextQ = prevQ - q;
-      const realizedPnlPoints = q * (p - prevC);
+      const realizedPnlPoints = roundAnalyticsPoints(q * (p - prevC));
       const realizedPnlTomans = Math.round(
         realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
       );
@@ -115,7 +115,7 @@ export function calculatePositionTransition(
     // Atomic split: close all prevQ at p, open (q - prevQ) Short at p
     const closedQty = prevQ;
     const openedQty = q - prevQ;
-    const realizedPnlPoints = closedQty * (p - prevC);
+    const realizedPnlPoints = roundAnalyticsPoints(closedQty * (p - prevC));
     const realizedPnlTomans = Math.round(
       realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
     );
@@ -169,7 +169,7 @@ export function calculatePositionTransition(
   if (q <= shortQty) {
     // Partial or Full close of Short
     const nextShortQty = shortQty - q;
-    const realizedPnlPoints = q * (prevC - p);
+    const realizedPnlPoints = roundAnalyticsPoints(q * (prevC - p));
     const realizedPnlTomans = Math.round(
       realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
     );
@@ -198,7 +198,7 @@ export function calculatePositionTransition(
   // Atomic split: close all shortQty at p, open (q - shortQty) Long at p
   const closedQty = shortQty;
   const openedQty = q - shortQty;
-  const realizedPnlPoints = closedQty * (prevC - p);
+  const realizedPnlPoints = roundAnalyticsPoints(closedQty * (prevC - p));
   const realizedPnlTomans = Math.round(
     realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
   );

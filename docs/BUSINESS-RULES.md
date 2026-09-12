@@ -8,6 +8,10 @@ The database, API, requests, and Telegram messages retain the compact value, suc
 
 Trades exist strictly upon observing authoritative bot receipts (`حواله`). Canonical order messages (`🔵 ... / 🔴 ...`) represent active liquidity only and are never treated as confirmed trades. Historical trades are retained permanently; the rolling 7-day window is an analytics query filter, not a retention limit.
 
+Analytics uses one canonical price conversion: `compactPrice × 1000 = receipt/display price in Tomans`. Realized P&L uses the same multiplier. Compact prices remain unchanged in storage, APIs, requests, and secondary displays.
+
+Participant confidence coverage starts at the later of the participant's first observed trade and the earliest system trade. This prevents new participants from inheriting system-wide history. `UNVERIFIED_INVENTORY` remains a reserved contract state because the public analytics and development mock surfaces expose it; the current trade replay engine does not currently produce unmatched units.
+
 ## Ownership and readiness
 
 Mini App signature and allowlist authorize API access. MTProto login must connect the same account as the Mini App identity. Connected, group-member accounts observe group events; each observation is deduplicated at the data layer.

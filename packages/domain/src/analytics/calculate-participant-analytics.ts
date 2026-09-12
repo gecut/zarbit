@@ -2,7 +2,7 @@ import {
   calculatePositionTransition,
   createInitialPositionState,
 } from "./calculate-position";
-import { ROLLING_WINDOW_MS } from "./constants";
+import { ROLLING_WINDOW_MS, roundAnalyticsPoints } from "./constants";
 import type {
   DataCoverageConfidence,
   ParticipantAnalytics7D,
@@ -71,7 +71,9 @@ export function calculateParticipantAnalytics7D(
     const transition = calculatePositionTransition(currentState, trade);
     currentState = transition.nextPosition;
 
-    realizedPnlPoints += transition.realizedPnlPoints;
+    realizedPnlPoints = roundAnalyticsPoints(
+      realizedPnlPoints + transition.realizedPnlPoints,
+    );
     realizedPnlTomans += transition.realizedPnlTomans;
 
     if (trade.side === "BUY") {
@@ -103,7 +105,7 @@ export function calculateParticipantAnalytics7D(
     confidence = "UNVERIFIED_INVENTORY";
   } else {
     const historyStart = earliestSystemDate
-      ? Math.min(
+      ? Math.max(
           earliestSystemDate.getTime(),
           firstTradeAt ? firstTradeAt.getTime() : Infinity,
         )
@@ -123,7 +125,7 @@ export function calculateParticipantAnalytics7D(
     alias,
     windowStart,
     windowEnd,
-    realizedPnlPoints,
+    realizedPnlPoints: roundAnalyticsPoints(realizedPnlPoints),
     realizedPnlTomans,
     totalVolume,
     buyVolume,

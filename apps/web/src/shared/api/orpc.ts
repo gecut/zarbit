@@ -75,6 +75,10 @@ export function createRpcUtils(client: RpcClient, scope: string) {
         dashboard: { queryOptions: fastQuery },
         latest: { queryOptions: fastQuery },
       },
+      analytics: {
+        traders: { queryOptions: slowQuery },
+        traderDetail: { queryOptions: slowQuery },
+      },
       telegram: {
         status: { queryOptions: fastQuery },
         command: { mutationOptions: { retry: false, gcTime: 0 } },

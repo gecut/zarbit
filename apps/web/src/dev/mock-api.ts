@@ -542,7 +542,12 @@ export function createMockApi(): LegacyApi {
           503,
         );
       }
-      return getMockTradersList(search, query?.sortBy, query?.sortOrder);
+      return getMockTradersList(
+        search,
+        query?.sortBy,
+        query?.sortOrder,
+        query?.limit,
+      );
     },
     getTraderDetail: async (alias) => {
       const search = getSearch();

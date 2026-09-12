@@ -1,10 +1,13 @@
 import type { QuotePoint, QuoteDashboard, TradePoint } from "@zarbit/contracts";
 
-export type QuoteScenario = "normal" | "empty" | "loading" | "stale" | "error";
+export type QuoteScenario =
+  "normal" | "no-trades" | "empty" | "loading" | "stale" | "error";
 
 export function getQuoteScenario(search: string): QuoteScenario {
   const value = new URLSearchParams(search).get("quoteScenario");
-  return ["empty", "loading", "stale", "error"].includes(value ?? "")
+  return ["no-trades", "empty", "loading", "stale", "error"].includes(
+    value ?? "",
+  )
     ? (value as QuoteScenario)
     : "normal";
 }
@@ -27,10 +30,13 @@ export function createQuoteDashboard(
     quote: 96_120,
     announcedAt: new Date(now - latestOffset).toISOString(),
   };
-  const latestTrade: TradePoint = {
-    price: 96_100,
-    announcedAt: new Date(now - latestOffset - 30_000).toISOString(),
-  };
+  const latestTrade: TradePoint | null =
+    scenario === "no-trades"
+      ? null
+      : {
+          price: 96_100,
+          announcedAt: new Date(now - latestOffset - 30_000).toISOString(),
+        };
 
   return { latest, latestTrade, points };
 }

@@ -130,7 +130,7 @@ erDiagram
 - **Evaluation of Quote Source:**
   - _Raw publisher messages:_ Human quote publishers often send bare numbers without labels (e.g. `۱۰۴۹۵۰` or shorthand `۹۳۰`), which requires contextual guessing and introduces risk if publisher IDs change.
   - _Canonical bot quote messages:_ The group management bot always responds with standard, formatted messages (`🟡 مظنه: 105020 🟡`), using 6-digit compact integers in ASCII/Persian digits.
-  - _Decision:_ Canonical bot quote messages (`senderId = GROUP_BOT_ID`) **replace raw publisher messages as the authoritative persisted quote source**. This guarantees 100% synchronization with the group's active reference quote, eliminates shorthand guesswork, and prevents failures if publisher accounts change.
+  - _Decision:_ Canonical bot quote messages (`senderId = GROUP_BOT_ID`) **replace raw publisher messages as the authoritative persisted quote source**. This guarantees 100% synchronization with the group's active reference quote, eliminates shorthand guesswork, and prevents failures if publisher accounts change. Compact prices convert to receipt/display Tomans by multiplying by 1000.
 
 ---
 

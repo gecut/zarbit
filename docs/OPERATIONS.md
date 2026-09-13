@@ -18,7 +18,7 @@ This is a maintenance-window clean baseline, not a data migration.
 1. Stop web, server, and worker for the old release. Confirm no old worker still owns the Telegram sessions. Never use `down -v`.
 2. Snapshot the legacy SQLite **and** legacy Telegram-session volumes. Label them with the old image tag and cutover time, detach them from services, and retain them for at least seven days. Do not delete them automatically.
 3. Provision the database. Confirm it is attached to Dokploy's external `dokploy-network` and has at least 15 available connections.
-4. Add matching `DATABASE_URL` and `MIGRATION_DATABASE_URL`, plus `DATABASE_POOL_MAX=5`, in Dokploy. Deploy the immutable PostgreSQL release with the new `zarbit-telegram-sessions-postgres` volume.
+4. Add matching `DATABASE_URL` and `MIGRATION_DATABASE_URL`, plus `DATABASE_POOL_MAX=5`, in Dokploy. Deploy the immutable PostgreSQL release with the new `zarbit-telegram-sessions-postgres` volume. The Server also opens one dedicated PostgreSQL connection for `LISTEN zarbit_market_changed`; include that connection in provider capacity and leave migration/headroom capacity outside the runtime pool.
 5. Run the `migrate` job once. It receives only `MIGRATION_DATABASE_URL`, creates the reviewed PostgreSQL baseline, prepares the new session-volume ownership, and exits. Confirm `prisma migrate status` is clean.
 6. Start web, server, and worker. Server and worker healthchecks must be successful only after their `SELECT 1` query succeeds. Keep one server and one worker.
 7. Users must log in to Telegram again. The prior session files are intentionally detached; do not copy them into the new volume.
@@ -32,6 +32,12 @@ The migration job is mandatory on future releases too. It never reads legacy SQL
 - Container logs use Docker's `local` driver, capped at five 10 MB files per service. Server and worker emit structured Pino JSON with MTProto connection state/DC, operation duration, retry context, and a redacted native error cause chain. `LOG_LEVEL=info` records lifecycle transitions; use `debug` temporarily for high-frequency quote and health events. Credentials, Telegram secrets, numbers, OTPs, passwords, request bodies, and message text are redacted or never emitted.
 - Runtime server and worker use UID 1000. Only the migration maintenance job runs as root to initialize the **new session volume**. The server must not mount that volume or receive Telegram API ID/hash.
 - Provider monitoring shows connections below the configured caps, healthy backups/PITR, normal latency, and no sustained lock contention.
+
+### Market listener and SSE release gate
+
+The market listener is a single long-lived Server connection outside Prisma's five-connection query pool. It reconnects with bounded backoff, rehydrates current heads after reconnect, and closes before the Server exits. The market stream uses a 15-second transport keepalive and bounded subscriber lifetime/buffers.
+
+Before production release, verify the actual Dokploy/Traefik path in staging for event-stream buffering, compression, idle timeout, HTTP version, health checks, and graceful shutdown. Do not add proxy labels or timeout values without evidence from the deployed path; a successful local SSE smoke test is insufficient.
 
 GitHub Actions runs the PostgreSQL baseline, migration status, integration tests, typecheck, and build. Local Docker/image execution and real Telegram behavior still require deployment-environment acceptance.
 

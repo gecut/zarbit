@@ -10,7 +10,7 @@ import type { AppDependencies } from "../src/app-dependencies";
 process.env.TELEGRAM_BOT_TOKEN = "test-only-token";
 process.env.ALLOWED_TELEGRAM_USER_IDS = "101,102";
 process.env.NODE_ENV = "production";
-const { authenticateTelegramRequest } =
+const { authenticateTelegramRequest, createTelegramAuthenticator } =
   await import("../src/security/telegram/authenticate-telegram-request");
 const { createApp } = await import("../src/app/create-app");
 function signed(id: number, age = 0) {
@@ -95,6 +95,40 @@ test("missing, invalid, expired and non-allowlisted identities never reach the s
     );
   }
   assert.equal(reads, 0);
+});
+test("development fallback is allowlisted, rejects supplied invalid data, and never applies outside development", () => {
+  const development = createTelegramAuthenticator({
+    nodeEnv: "development",
+    devTelegramUserId: "101",
+    allowedTelegramUserIds: new Set(["101"]),
+    verifyTelegramInitData: () => {
+      throw new Error("invalid init data");
+    },
+  });
+  assert.deepEqual(development(undefined), {
+    telegramUserId: "101",
+    firstName: "کاربر توسعه",
+  });
+  assert.throws(() => development("invalid"), /invalid init data/);
+
+  const disallowed = createTelegramAuthenticator({
+    nodeEnv: "development",
+    devTelegramUserId: "101",
+    allowedTelegramUserIds: new Set(),
+  });
+  assert.throws(
+    () => disallowed(undefined),
+    /دسترسی این حساب تلگرام مجاز نیست/,
+  );
+
+  for (const nodeEnv of ["production", "test"] as const) {
+    const authenticate = createTelegramAuthenticator({
+      nodeEnv,
+      devTelegramUserId: "101",
+      allowedTelegramUserIds: new Set(["101"]),
+    });
+    assert.throws(() => authenticate(undefined), /برنامه را از داخل تلگرام/);
+  }
 });
 test("database failure becomes a safe service error after successful authentication", async () => {
   const app = createApp({

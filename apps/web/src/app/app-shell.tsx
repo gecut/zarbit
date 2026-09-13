@@ -9,6 +9,7 @@ import { Link, Outlet } from "@tanstack/react-router";
 
 import { AuthGate } from "../shared/auth/auth";
 import { PwaUpdate } from "./pwa-update";
+import { ScrollShadow } from "@heroui/react";
 
 const navigationItems = [
   { label: "خانه", to: "/", Icon: HomeIcon, ActiveIcon: HomeBoldIcon },
@@ -37,8 +38,8 @@ const navigationItemClass =
 
 export function AppShell() {
   return (
-    <main className="min-h-(--tg-viewport-height,100svh) px-4 pb-[calc(6.65rem+max(env(safe-area-inset-bottom),var(--tg-safe-bottom,0px)))] pt-[max(1rem,env(safe-area-inset-top),var(--tg-safe-top,0px))] sm:px-6">
-      <header className="bg-background/50 fixed inset-x-0 top-0 z-50 w-full p-6 backdrop-blur-xl">
+    <main className="min-h-(--tg-viewport-height,100svh) h-screen px-4 pb-[calc(6.65rem+max(env(safe-area-inset-bottom),var(--tg-safe-bottom,0px)))] pt-[max(0rem,env(safe-area-inset-top),var(--tg-safe-top,0px))] sm:px-6">
+      <header className="bg-background/50 fixed inset-x-0 top-0 z-50 flex h-20 w-full items-center px-6 backdrop-blur-xl">
         <nav className="max-w-124 mx-auto flex w-full items-center justify-between gap-4">
           <Link
             to="/"
@@ -68,12 +69,16 @@ export function AppShell() {
         </nav>
       </header>
 
-      <div className="max-w-124 mx-auto w-full min-w-0 pt-20">
-        <PwaUpdate />
+      <div className="h-screen pt-20">
+        <ScrollShadow className="max-h-[calc(100vh-5rem)]">
+          <div className="max-w-124 relative mx-auto w-full min-w-0 overflow-auto">
+            <PwaUpdate />
 
-        <AuthGate>
-          <Outlet />
-        </AuthGate>
+            <AuthGate>
+              <Outlet />
+            </AuthGate>
+          </div>
+        </ScrollShadow>
       </div>
 
       <nav

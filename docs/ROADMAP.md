@@ -124,16 +124,18 @@ Phase 3 introduces autonomous order copying and execution.
 
 ## 5. Scope & Decision Matrix
 
-| Capability                                                      | Phase 1A | Phase 1B | Phase 2  |  Phase 3  |
-| --------------------------------------------------------------- | :------: | :------: | :------: | :-------: |
-| Persist `Participant`, `TradingAction`, `Trade`, `QuoteHistory` |    ✅    |    ✅    |    ✅    |    ✅     |
-| Canonical Bot Quotes as Authoritative Source                    |    ✅    |    ✅    |    ✅    |    ✅     |
-| Multi-Session Idempotent Ingestion                              |    ✅    |    ✅    |    ✅    |    ✅     |
-| Conservative Deterministic Identity Resolver                    |    ✅    |    ✅    |    ✅    |    ✅     |
-| Permanent Trade Retention                                       |    ✅    |    ✅    |    ✅    |    ✅     |
-| Latest Quote & Completed Trade Price on Dashboard               |    ❌    |    ✅    |    ✅    |    ✅     |
-| Existing oRPC Polling Architecture                              |    ✅    |    ✅    |    ✅    |  Review   |
-| Rolling 7-Day Performance Analytics & Win Rate                  |    ❌    |    ❌    |    ✅    |    ✅     |
-| Leaderboard & Participant Profiling API / UI                    |    ❌    |    ❌    |    ✅    |    ✅     |
-| Action-Copy Order Execution Engine                              |    ❌    |    ❌    |    ❌    |    ✅     |
-| Realtime SSE / Event Streaming                                  |    ❌    |    ❌    | Optional | Evaluated |
+| Capability                                                      |      Phase 1A       |           Phase 1B           |  Phase 2  |  Phase 3  |
+| --------------------------------------------------------------- | :-----------------: | :--------------------------: | :-------: | :-------: |
+| Persist `Participant`, `TradingAction`, `Trade`, `QuoteHistory` |         ✅          |              ✅              |    ✅     |    ✅     |
+| Canonical Bot Quotes as Authoritative Source                    |         ✅          |              ✅              |    ✅     |    ✅     |
+| Multi-Session Idempotent Ingestion                              |         ✅          |              ✅              |    ✅     |    ✅     |
+| Conservative Deterministic Identity Resolver                    |         ✅          |              ✅              |    ✅     |    ✅     |
+| Permanent Trade Retention                                       |         ✅          |              ✅              |    ✅     |    ✅     |
+| Latest Quote & Completed Trade Price on Dashboard               |         ❌          |              ✅              |    ✅     |    ✅     |
+| Existing oRPC Polling Architecture                              |         ✅          |              ✅              |    ✅     |  Review   |
+| Rolling 7-Day Performance Analytics & Win Rate                  |         ❌          |              ❌              |    ✅     |    ✅     |
+| Leaderboard & Participant Profiling API / UI                    |         ❌          |              ❌              |    ✅     |    ✅     |
+| Action-Copy Order Execution Engine                              |         ❌          |              ❌              |    ❌     |    ✅     |
+| Market SSE / Event Streaming                                    | Implemented locally | Release verification pending | Home only | No Follow |
+
+Home Market implementation uses `market.snapshot/history/live`, transactional NOTIFY and bounded client recovery. Local validation does not close the Dokploy proxy and real Telegram release gates. The prior Future Realtime proposal is archived; ARCHITECTURE.md and RPC.md are canonical.

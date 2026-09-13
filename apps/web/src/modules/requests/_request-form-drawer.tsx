@@ -70,12 +70,12 @@ export function RequestFormDrawer({
     setError(null);
 
     void queryClient
-      .fetchQuery(api.quote.dashboard.queryOptions())
+      .fetchQuery(api.market.snapshot.queryOptions())
       .then((dashboard) => {
         if (requestId !== quoteRequestRef.current || priceEditedRef.current)
           return;
 
-        const latestPrice = dashboard.latest?.quote;
+        const latestPrice = dashboard.quote?.compactPrice;
         const nextPrice =
           typeof latestPrice === "number" &&
           Number.isSafeInteger(latestPrice) &&

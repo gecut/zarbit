@@ -28,3 +28,7 @@ Network outage retains the authorization file and uses bounded reconnect backoff
 ## Logs and manual verification
 
 Operational logs use shared Pino JSON events and opaque session/challenge references, not raw Telegram errors or credentials. The owner verifies OTP/2FA, identity mismatch rejection, private-group access, quote persistence/display, membership loss, revocation and disconnect with real accounts.
+
+## Committed Market propagation
+
+`recordQuote` and `recordTrade` notify PostgreSQL inside their insert transaction only when `createMany(skipDuplicates)` reports one new row. NOTIFY delivery happens after commit; rolled-back/duplicate observations do not emit. Payload is type plus sourceMessageId and contains no raw receipt, user identity or session data. One Server listener reads committed rows; Worker never pushes directly to Web/Server. The configured single group remains mandatory for revision semantics. Listener recovery relies on authoritative reads because PostgreSQL notifications are not replayed. Ingestion, Request matching, membership and Telegram command boundaries remain unchanged.

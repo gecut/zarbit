@@ -1,14 +1,13 @@
 import { implement, ORPCError } from "@orpc/server";
 import {
   AppError,
-  type QuoteDashboard,
   type RequestDetail,
   telegramSessionStatusSchema,
 } from "@zarbit/contracts";
 import { rpcContract } from "@zarbit/contracts/rpc";
 import type { AppDependencies } from "../../app-dependencies";
 import { createAuthRouter } from "../../modules/auth/create-auth-router";
-import { createQuoteRouter } from "../../modules/quote/create-quote-router";
+import { createMarketRouter } from "../../modules/market/create-market-router";
 import { createRequestsRouter } from "../../modules/requests/create-requests-router";
 import { createTelegramRouter } from "../../modules/telegram/create-telegram-router";
 import { createAnalyticsRouter } from "../../modules/analytics/create-analytics-router";
@@ -20,12 +19,18 @@ import { RpcMetrics } from "../../platform/observability/rpc-metrics";
 import { ReadCapacity } from "../../platform/resilience/read-capacity";
 import { RpcRateLimit } from "../../platform/resilience/rpc-rate-limit";
 import { rpcError } from "./rpc-error";
+import {
+  createMarketRuntime,
+  type MarketRuntime,
+} from "../../modules/market/create-market-runtime";
 
-export function createOrpcRouter(deps: AppDependencies) {
+export function createOrpcRouter(
+  deps: AppDependencies,
+  runtime: MarketRuntime = createMarketRuntime(deps.store),
+) {
   const metrics = new RpcMetrics((snapshot) =>
     serverLog.info({ event: "rpc.metrics", ...snapshot }, "rpc.metrics"),
   );
-  const capacity = new ReadCapacity();
   const workerCapacity = new ReadCapacity(4, 3000);
   const limiter = new RpcRateLimit();
   const observe = (name: string) => (event: string) =>
@@ -36,12 +41,7 @@ export function createOrpcRouter(deps: AppDependencies) {
     maxEntries: 100,
     observe: observe("identity"),
   });
-  const quotes = new ResponseCache<QuoteDashboard>({
-    ttlMs: 1000,
-    staleMs: 1000,
-    maxEntries: 1,
-    observe: observe("quote"),
-  });
+
   const active = new ResponseCache<RequestDetail[]>({
     ttlMs: 1000,
     maxEntries: 100,
@@ -63,7 +63,7 @@ export function createOrpcRouter(deps: AppDependencies) {
   const analyticsService = new AnalyticsService(deps.store);
 
   const read = <T>(name: string, load: () => Promise<T>) =>
-    capacity.run(() => metrics.measure(`db.${name}`, load));
+    runtime.read(name, () => metrics.measure(`db.${name}`, load));
 
   const os = implement(rpcContract)
     .$context<{ headers: Headers; requestId: string; resHeaders?: Headers }>()
@@ -127,13 +127,30 @@ export function createOrpcRouter(deps: AppDependencies) {
       });
     });
 
+  const market = createMarketRouter(os.market, {
+    state: runtime.state,
+  });
+
   return os.router({
     auth: createAuthRouter(os.auth),
-    quote: createQuoteRouter(os.quote, {
-      store: deps.store,
-      quotes,
-      read,
-    }),
+    market: {
+      ...market,
+      live: os.market.live.handler(async ({ signal, lastEventId }) => {
+        if (!runtime.state.connected)
+          throw new ORPCError("SERVICE_UNAVAILABLE", {
+            message: "ارتباط زنده بازار در حال بازیابی است.",
+          });
+        await runtime.state.read();
+        // No replay guarantee. Subscribe synchronously with the current head.
+        return runtime.hub.subscribe(
+          {
+            type: lastEventId ? "RECONCILE_REQUIRED" : "SYNC",
+            revision: runtime.state.revision,
+          },
+          signal,
+        );
+      }),
+    },
     telegram: createTelegramRouter(os.telegram, {
       store: deps.store,
       command: deps.command,

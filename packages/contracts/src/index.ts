@@ -26,28 +26,7 @@ export const codeSchema = z
 export const passwordSchema = z
   .object({ password: z.string().min(1).max(1024) })
   .strict();
-export const quotePointSchema = z
-  .object({
-    quote: z.number().int().positive(),
-    announcedAt: z.string().datetime(),
-  })
-  .strict();
-export type QuotePoint = z.infer<typeof quotePointSchema>;
-export const tradePointSchema = z
-  .object({
-    price: z.number().int().positive(),
-    announcedAt: z.string().datetime(),
-  })
-  .strict();
-export type TradePoint = z.infer<typeof tradePointSchema>;
-export const quoteDashboardSchema = z
-  .object({
-    latest: quotePointSchema.nullable(),
-    latestTrade: tradePointSchema.nullable().optional(),
-    points: z.array(quotePointSchema),
-  })
-  .strict();
-export type QuoteDashboard = z.infer<typeof quoteDashboardSchema>;
+export * from "./market";
 export const telegramSessionKindSchema = z.enum([
   "DISCONNECTED",
   "LOGIN_PENDING",

@@ -7,6 +7,7 @@ export function useTelegramSession() {
   return useQuery(
     api.telegram.status.queryOptions({
       refetchInterval: (query) => sessionInterval(query.state.data),
+      refetchIntervalInBackground: false,
     }),
   );
 }
@@ -24,7 +25,6 @@ export function useSessionCommand() {
       onSettled: async () => {
         await Promise.all([
           client.invalidateQueries({ queryKey: api.telegram.key() }),
-          client.invalidateQueries({ queryKey: api.quote.key() }),
           client.invalidateQueries({ queryKey: api.requests.key() }),
         ]);
       },

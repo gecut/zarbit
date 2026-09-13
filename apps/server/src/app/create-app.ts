@@ -1,3 +1,4 @@
+import type { MarketRuntime } from "../modules/market/create-market-runtime";
 import { Hono } from "hono";
 import type { AppDependencies } from "../app-dependencies";
 import type { AppEnv } from "../transport/http/app-env";
@@ -7,12 +8,12 @@ import { registerApiMiddleware } from "../transport/http/register-api-middleware
 import { createOrpcRouter } from "../transport/rpc/create-orpc-router";
 import { registerRpcRoutes } from "../transport/rpc/register-rpc-routes";
 
-export function createApp(deps: AppDependencies) {
+export function createApp(deps: AppDependencies, market?: MarketRuntime) {
   const app = new Hono<AppEnv>();
 
   registerApiMiddleware(app, deps);
 
-  const router = createOrpcRouter(deps);
+  const router = createOrpcRouter(deps, market);
   registerRpcRoutes(app, router);
 
   let spec: ReturnType<typeof generateOpenApi> | undefined;

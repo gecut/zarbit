@@ -4,7 +4,7 @@ Private Persian/RTL Telegram Mini App that shows the latest quote received from 
 
 ## Development
 
-Use Node.js 24 and pnpm 10.26.0. Provision PostgreSQL first; see [docs/POSTGRES.md](docs/POSTGRES.md). Configure apps/server/.env and apps/worker/.env from their examples with the same `DATABASE_URL` and `WORKER_INTERNAL_TOKEN`; configure apps/web/.env with VITE_SERVER_URL. The root .env is only for Docker Compose, not shared application configuration.
+Use Node.js 24 and pnpm 10.26.0. Provision PostgreSQL first; see [docs/POSTGRES.md](docs/POSTGRES.md). Configure apps/server/.env and apps/worker/.env from their examples with the same `DATABASE_URL` and `WORKER_INTERNAL_TOKEN`; configure apps/web/.env with VITE_SERVER_URL. The root .env is only for Docker Compose, not shared application configuration. Local web development always talks to the server; use `DEV_TELEGRAM_USER_ID` with the same ID in `ALLOWED_TELEGRAM_USER_IDS` to access it outside Telegram.
 
 Install with pnpm install. Generate Prisma with pnpm run db:generate. Apply migrations with `MIGRATION_DATABASE_URL` explicitly set, using `pnpm --filter @zarbit/db exec prisma migrate deploy`; run the server and worker only with `DATABASE_URL`. Then pnpm run dev starts the apps. The web development port is 3001, server 3000, worker's private command port 3002.
 

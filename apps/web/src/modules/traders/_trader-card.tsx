@@ -1,6 +1,7 @@
 import { Card, Chip, cn } from "@heroui/react";
 import type { ParticipantAnalyticsSummary } from "@zarbit/contracts";
 import { DataCoverageBadge } from "./_data-coverage-badge";
+import TomanIcon from "@/shared/ui/_toman-icon";
 
 function formatPersianNumber(value: number): string {
   return new Intl.NumberFormat("fa-IR").format(value);
@@ -26,51 +27,47 @@ export function TraderCard({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+
           onSelect(trader.alias);
         }
       }}
-      className="border-border bg-surface shadow-surface hover:border-accent/40 group relative w-full cursor-pointer rounded-2xl border p-4 text-right transition-all duration-150"
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* Left side: P&L */}
-        <div className="text-left">
-          <div
-            className={cn(
-              "dir-ltr text-base font-bold tracking-tight",
-              isProfitable && "text-success",
-              isLoss && "text-danger",
-              !isProfitable && !isLoss && "text-muted",
-            )}
-          >
-            {isProfitable ? "+" : ""}
-            {formatPersianNumber(trader.realizedPnlTomans)}
-            <span className="text-muted mr-1 text-xs font-normal">تومان</span>
-          </div>
-          <div className="text-muted dir-ltr text-xs">
-            {isProfitable ? "+" : ""}
-            {formatPersianNumber(trader.realizedPnlPoints)} پوینت
-          </div>
-        </div>
-
-        {/* Right side: Rank & Alias */}
-        <div className="flex items-center gap-3">
-          <span className="bg-surface-secondary text-muted flex size-7 shrink-0 items-center justify-center rounded-xl text-xs font-semibold">
-            {formatPersianNumber(rank)}
+      <Card.Content className="flex flex-row items-start justify-between gap-2">
+        <div className="flex gap-2">
+          <span className="bg-surface-secondary text-muted flex size-8 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold">
+            {rank}
           </span>
+
           <div>
             <div className="text-foreground text-base font-semibold">
               {trader.alias}
             </div>
+
             <DataCoverageBadge
               confidence={trader.confidence}
               className="mt-1"
             />
           </div>
         </div>
-      </div>
 
-      {/* Metrics Row */}
-      <div className="border-border/60 text-muted mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
+        <div className="text-left">
+          <div
+            className={cn(
+              "flex items-center gap-1 text-base font-bold tracking-tight",
+              isProfitable && "text-success",
+              isLoss && "text-danger",
+              !isProfitable && !isLoss && "text-muted",
+            )}
+          >
+            {formatPersianNumber(trader.realizedPnlTomans)}
+            {isProfitable ? "+" : ""}
+
+            <TomanIcon className="text-muted mb-1 size-4" />
+          </div>
+        </div>
+      </Card.Content>
+
+      <Card.Footer className="border-border/60 text-muted flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
         <div className="flex items-center gap-2">
           <span>حجم:</span>
           <span className="text-foreground font-semibold">
@@ -89,7 +86,7 @@ export function TraderCard({
               size="sm"
               variant="soft"
               color="default"
-              className="text-[11px]"
+              className="px-2 text-xs font-light"
             >
               موقعیت باز: بسته
             </Chip>
@@ -98,22 +95,22 @@ export function TraderCard({
               size="sm"
               variant="soft"
               color="success"
-              className="text-[11px]"
+              className="px-2 text-xs font-light"
             >
-              خرید: +{formatPersianNumber(trader.observedPosition)}
+              خرید: {formatPersianNumber(trader.observedPosition)}+
             </Chip>
           ) : (
             <Chip
               size="sm"
               variant="soft"
               color="danger"
-              className="text-[11px]"
+              className="px-2 text-xs font-light"
             >
               فروش: {formatPersianNumber(trader.observedPosition)}
             </Chip>
           )}
         </div>
-      </div>
+      </Card.Footer>
     </Card>
   );
 }

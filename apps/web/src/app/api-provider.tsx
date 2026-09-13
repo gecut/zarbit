@@ -2,11 +2,8 @@ import { env } from "@zarbit/env/web";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { RpcClient } from "@zarbit/contracts/rpc";
 import { createRpcClient } from "../shared/api/orpc";
-import { adaptLegacyApi } from "../shared/api/legacy-adapter";
 import { telegramInitData } from "../shared/telegram/telegram";
 import { ApiContext } from "../shared/api/api-context";
-
-const usesMockApi = import.meta.env.DEV && env.VITE_API_MODE === "mock";
 
 export function ApiProvider({ children }: { children: ReactNode }) {
   const [client, setClient] = useState<RpcClient | null>(null);
@@ -18,10 +15,27 @@ export function ApiProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     let active = true;
+    let disposeMock: (() => void) | undefined;
     const load = async (): Promise<RpcClient> => {
-      if (usesMockApi) {
-        const { createMockApi } = await import("../dev/mock-api");
-        return adaptLegacyApi(createMockApi());
+      if (
+        import.meta.env.DEV &&
+        new URLSearchParams(location.search).has("marketScenario")
+      ) {
+        const [
+          { createMarketMock },
+          { parseMarketScenario },
+          { runMarketScenario },
+        ] = await Promise.all([
+          import("../dev/market/create-market-mock"),
+          import("../dev/market/market-scenarios"),
+          import("../dev/market/run-market-scenario"),
+        ]);
+        const scenario = parseMarketScenario(
+          new URLSearchParams(location.search).get("marketScenario"),
+        );
+        const mock = createMarketMock(scenario);
+        if (active) disposeMock = runMarketScenario(mock, scenario);
+        return mock.client;
       }
       if (!env.VITE_SERVER_URL)
         throw new Error("نشانی سرویس برای این محیط تنظیم نشده است.");
@@ -45,6 +59,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       });
     return () => {
       active = false;
+      disposeMock?.();
     };
   }, []);
   if (error)

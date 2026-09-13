@@ -25,17 +25,6 @@ export function TradersPage() {
 
   return (
     <section className="space-y-4 pb-12">
-      {/* Header */}
-      <div className="space-y-1">
-        <h1 className="text-foreground text-xl font-bold tracking-tight">
-          فعالان و نهنگ‌های بازار
-        </h1>
-        <p className="text-muted text-xs leading-5">
-          رتبه‌بندی عملکرد ۷ روز گذشته بر اساس حواله‌های معامله قطعی گروه تلگرام
-        </p>
-      </div>
-
-      {/* Sorting Toolbar */}
       <TraderSortBar
         sortBy={sortBy}
         sortOrder={sortOrder}

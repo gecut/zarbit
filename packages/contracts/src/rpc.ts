@@ -1,12 +1,12 @@
-import { oc, type ContractRouterClient } from "@orpc/contract";
+import { eventIterator, oc, type ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import {
   createRequestInputSchema,
   updateRequestInputSchema,
   requestDetailSchema,
   requestHistoryPageSchema,
-  quoteDashboardSchema,
-  quotePointSchema,
+  marketSnapshotSchema,
+  marketLiveEventSchema,
   telegramSessionStatusSchema,
   sessionCommandSchema,
   participantAnalyticsSummarySchema,
@@ -47,13 +47,13 @@ export const rpcContract = {
         .strict(),
     ),
   },
-  quote: {
-    latest: base
-      .route({ method: "GET", path: "/quote/latest" })
-      .output(quotePointSchema.nullable()),
-    dashboard: base
-      .route({ method: "GET", path: "/quote/dashboard" })
-      .output(quoteDashboardSchema),
+  market: {
+    snapshot: base
+      .route({ method: "GET", path: "/market/snapshot" })
+      .output(marketSnapshotSchema),
+    live: base
+      .route({ method: "GET", path: "/market/live" })
+      .output(eventIterator(marketLiveEventSchema)),
   },
   telegram: {
     status: base

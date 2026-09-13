@@ -2,7 +2,7 @@
 
 ## Scope
 
-Private Persian/RTL Telegram Mini App that displays the latest gold quote and market intelligence from one fixed group and authoritative group bot. Up to 20 simultaneous Telegram clients support login, recovery, and message observation. Phase 1 focuses strictly on data collection and market data foundation: persisting `Participant`, `TradingAction`, `Trade`, and `QuoteHistory`. No public signup, billing, admin, portfolio, participant lists, leaderboards, whale cards, or follow execution are exposed in this phase.
+Private Persian/RTL Telegram Mini App that displays the latest gold quote and market intelligence from one fixed group and authoritative group bot. Up to 20 simultaneous Telegram clients support login, recovery, and message observation. Phase 1 focuses strictly on data collection and market data foundation: persisting `Participant`, `TradingAction`, `Trade`, and `QuoteHistory`. No public signup, billing, admin, portfolio, whale cards or Follow execution is introduced by Home. Existing trader/analytics navigation remains independent.
 
 ## Access and login
 
@@ -20,13 +20,13 @@ Stored states: PENDING_OTP, ACTIVE, NOT_IN_GROUP, REVOKING, REVOKED, ERROR. DISC
 
 ## Screens
 
-Dashboard displays the latest official group quote (with announcement time) and the latest completed trade price (derived efficiently from `Trade`); Telegram connection with phone/code/password, expiry, resend, cancellation, membership recheck and confirmed disconnect.
+Home displays the latest official Quote and latest completed Trade as full Toman figures, their signed compact-price difference, and real announcement timestamp. Header status means the current user’s Telegram connection, never global market health. Active Requests show their count and an explicit «درخواست جدید» action. Bottom navigation remains خانه / سوابق / معامله‌گران / تنظیمات. Market stream and Telegram errors remain local. Settings preserve the existing Telegram login/session lifecycle.
 
 The existing compact mobile layout, RTL and Vazirmatn font remain. HeroUI semantic tokens define colors, surfaces, states, focus, shadows and radii. Theme can follow Telegram/system or be set manually to light/dark. The update prompt never forces a reload.
 
 ## Quote and market data
 
-Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other internal prices remain compact. `QuoteHistory` is persisted in PostgreSQL to provide both latest-quote resolution and chart trendlines. Completed trades are recorded strictly from authoritative bot receipts into `Trade` and retained permanently.
+Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other internal prices remain compact. `QuoteHistory` is persisted in PostgreSQL to provide authoritative latest-quote resolution, auditability, and historical analysis. Completed trades are recorded strictly from authoritative bot receipts into `Trade` and retained permanently.
 
 ## Release validation
 

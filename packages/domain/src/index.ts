@@ -26,6 +26,13 @@ export type {
   TradingSide,
 } from "./types";
 export * from "./analytics";
+export {
+  downsampleQuoteHistory,
+  type DownsampleQuoteOptions,
+  type DownsampledQuotePoint,
+  type QuoteHistoryInputPoint,
+} from "./downsample-quote-history";
+export { compareTradeToQuote } from "./compare-trade-quote";
 
 export const compactQuoteMultiplier = 1_000;
 

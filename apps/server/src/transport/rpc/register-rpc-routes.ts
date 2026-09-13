@@ -18,6 +18,8 @@ export function registerRpcRoutes(
   router: ReturnType<typeof createOrpcRouter>,
 ) {
   const rpc = new RPCHandler(router, {
+    eventIteratorKeepAliveEnabled: true,
+    eventIteratorKeepAliveInterval: 15_000,
     plugins: [
       new CompressionPlugin(),
       new BodyLimitPlugin({ maxBodySize: 16_384 }),

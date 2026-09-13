@@ -1,3 +1,5 @@
+import { createMarketHeadsStore } from "./market-heads";
+import { notifyMarketChange } from "./market-notifications";
 import { createMarketDataStore } from "./market-data";
 import { createAnalyticsDataStore } from "./analytics";
 import { createRequestStore } from "./requests";
@@ -38,6 +40,7 @@ export function createStore(
     db: prisma,
     ...createRequestStore(prisma, now),
     ...createMarketDataStore(prisma, now),
+    ...createMarketHeadsStore(prisma),
     ...createAnalyticsDataStore(prisma),
     user: (identity: Identity) =>
       prisma.telegramUser.upsert({
@@ -234,6 +237,12 @@ export function createStore(
             input.sourceMessageId > currentLatest.sourceMessageId);
         const latestUpdated = historyRecorded && isNewer;
 
+        if (historyRecorded) {
+          await notifyMarketChange(tx, {
+            type: "QUOTE",
+            sourceMessageId: input.sourceMessageId,
+          });
+        }
         return { historyRecorded, latestUpdated };
       }),
   };

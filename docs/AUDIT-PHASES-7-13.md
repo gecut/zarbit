@@ -29,7 +29,7 @@ Once the targeted remediation roadmap (§8) is executed, ZarBit will be fully ve
 | Phase                                          |         Status         | Summary Reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | :--------------------------------------------- | :--------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Phase 7 — Market Snapshot API**              | **PASS WITH CONCERNS** | Pure, clean separation between official Quote and Trade history; indexed backward scan via `findFirst({ orderBy: { sourceMessageId: "desc" } })`; zero singleton/duplicate tables; in-memory single-flight cache (`MarketSnapshotService`) prevents DB stampedes; contract-first oRPC route `market.snapshot`. **Concern:** Dead, unmounted legacy REST routes in `apps/server/src/legacy/rest/` and dead client calls in `apps/web/src/shared/api/legacy-api.ts`.             |
-| **Phase 8 — Web Market Snapshot**              | **PASS WITH CONCERNS** | Responsive, Persian-first RTL UI using `@heroui/react` tokens; clean separation between `QuoteCard` and `TradeReceiptCard`; proper handling of `latestTrade: null` empty state; React Query caching matches server TTL. **Concern:** Mock scenario generator in `quote-scenarios.ts` lacks an explicit scenario for active quote with `latestTrade = null`.                                                                                                                    |
+| **Phase 8 — Web Market Snapshot**              | **PASS WITH CONCERNS** | Responsive, Persian-first RTL UI using `@heroui/react` tokens; clean separation between `QuoteCard` and `TradeReceiptCard`; proper handling of `latestTrade: null` empty state; React Query caching matches server TTL. Historical mock scenario concerns were removed when development switched to the real server API.                                                                                                                                                       |
 | **Phase 9 — Production Data Audit**            |        **FAIL**        | No Phase 9 audit artifact existed prior to this review. Forensic evaluation of 3,820 real Telegram messages in `worker-messages.txt` reveals: 167 trade receipts parsed, 77 unique participant aliases, 1,269 canonical orders, and 443 context commands. **Failure:** Over 77% of active trading aliases lack Telegram user ID resolution due to strict consecutive message correlation failure, exposing an unresolved gap between read-only analytics and automated Follow. |
 | **Phase 10 — Analytics Architecture**          | **PASS WITH CONCERNS** | Strict 7-day rolling window (`7 * 24 * 60 * 60 * 1000`); pure deterministic FIFO inventory accounting (`calculatePositionTransition`); explicit matched vs. unmatched trade separation; multi-factor confidence scoring (`calculateIdentityConfidence`). **Concerns:** 10x Toman multiplier contradiction; dead `unmatchedUnits` field; unrounded floating-point points.                                                                                                       |
 | **Phase 11 — Accounting Engine & Data Access** | **PASS WITH CONCERNS** | Clean, immutable domain calculations in `@zarbit/domain`; comprehensive unit tests for FIFO, short positions, and reversals; fast indexed database queries in `@zarbit/db`. **Concerns:** `Math.min` date bug in sample span calculation; unbounded full-history trade query in `getParticipantAnalytics` replays entire trade history on every request instead of utilizing cached snapshots.                                                                                 |
@@ -192,16 +192,10 @@ Total Automated Tests:                 132 PASS / 0 FAIL (100% passing)
 - **Details:** In `orpc.ts`, `createRpcUtils` is configured with `experimental_defaults: { market: { ... } }`. There are no default options configured for `analytics`. Consequently, analytics queries do not share unified stale time / retry policies.
 - **Remediation:** Add `analytics: { staleTime: 30_000, retry: 2 }` to `experimental_defaults`.
 
-### Finding P2-5: Mock Scenario Generator Limitations
+### Finding P2-5: Historical Mock Scenario Limitation
 
-- **Severity:** P2
-- **Files:**
-  - `apps/web/src/shared/mock/quote-scenarios.ts`
-  - `apps/web/src/shared/mock/trader-scenarios.ts`
-- **Details:**
-  1. `quote-scenarios.ts` contains scenarios for `NORMAL`, `WIDE_SPREAD`, `VOLATILE`, but lacks an explicit test state for an active quote where `latestTrade` is `null` (market open, no trades yet).
-  2. `trader-scenarios.ts` ignores the `limit` parameter when returning top participants.
-- **Remediation:** Add `NO_TRADES` scenario and apply `.slice(0, input.limit)` in the mock router.
+- **Status:** Resolved by removal.
+- **Details:** The runtime mock API and its quote/trader scenario generators were removed when web development was changed to use the real server API. UI behavior is now validated against the contract and transport boundaries instead of synthetic runtime scenarios.
 
 ---
 
@@ -298,5 +292,5 @@ To transition from `READY WITH FIXES` to `READY FOR FOLLOW PLANNING`, the follow
 3. **Round Floating-Point Points:** Apply integer rounding to `realizedPnlPoints` in `packages/domain`.
 4. **Prune Dead REST Code:** Remove unmounted `apps/server/src/legacy/` and `apps/web/src/shared/api/legacy-api.ts`.
 5. **Configure Analytics Query Defaults:** Add `analytics` prefix defaults in `apps/web/src/shared/api/orpc.ts`.
-6. **Enhance Mock Scenarios:** Add active quote with `latestTrade = null` to `quote-scenarios.ts`; enforce `limit` in `trader-scenarios.ts`.
+6. **Use Real Development API:** Runtime mock scenarios have been removed; keep contract and transport-boundary coverage for the real server API.
 7. **Document Follow Identity Requirement:** Update `docs/ROADMAP.md` and Follow planning docs to account for the reality that whale following must either support alias-based execution or resolve the 77% Telegram identity gap via Level 1 reply linking.\n

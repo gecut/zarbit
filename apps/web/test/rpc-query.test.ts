@@ -29,7 +29,15 @@ function fixture() {
     async (_request, init) => {
       calls++;
       if (init?.signal) signals.push(init.signal);
-      return Response.json({ json: { latest: null, points: [] } });
+      return Response.json({
+        json: {
+          quote: null,
+          trade: null,
+          revision: 0,
+          tradeQuoteDifference: null,
+          asOf: "2026-09-13T12:00:00.000Z",
+        },
+      });
     },
   );
   return { rpc, signals, calls: () => calls };
@@ -40,8 +48,8 @@ test("generated keys isolate accounts, deduplicate and invalidate by procedure",
   const a = createRpcUtils(f.rpc, "alice");
   const b = createRpcUtils(f.rpc, "bob");
   assert.notDeepEqual(
-    a.quote.dashboard.queryKey(),
-    b.quote.dashboard.queryKey(),
+    a.market.snapshot.queryKey(),
+    b.market.snapshot.queryKey(),
   );
   const client = createQueryClient();
   client.setDefaultOptions({
@@ -50,12 +58,12 @@ test("generated keys isolate accounts, deduplicate and invalidate by procedure",
   });
   try {
     await Promise.all([
-      client.fetchQuery(a.quote.dashboard.queryOptions()),
-      client.fetchQuery(a.quote.dashboard.queryOptions()),
+      client.fetchQuery(a.market.snapshot.queryOptions()),
+      client.fetchQuery(a.market.snapshot.queryOptions()),
     ]);
     assert.equal(f.calls(), 1);
-    await client.invalidateQueries({ queryKey: a.quote.key() });
-    await client.fetchQuery(a.quote.dashboard.queryOptions());
+    await client.invalidateQueries({ queryKey: a.market.key() });
+    await client.fetchQuery(a.market.snapshot.queryOptions());
     assert.equal(f.calls(), 2);
   } finally {
     client.clear();
@@ -85,10 +93,10 @@ test("cancellation reaches transport rather than replacing the caller signal", a
   });
   try {
     const request = client
-      .fetchQuery(api.quote.dashboard.queryOptions())
+      .fetchQuery(api.market.snapshot.queryOptions())
       .catch(() => undefined);
     await delay(20);
-    await client.cancelQueries({ queryKey: api.quote.key() });
+    await client.cancelQueries({ queryKey: api.market.key() });
     await request;
     assert.equal(signal?.aborted, true);
   } finally {
@@ -108,7 +116,7 @@ test("background polling, focus refresh and offline/reconnect use Query lifecycl
   onlineManager.setOnline(true);
   const observer = new QueryObserver(
     client,
-    api.quote.dashboard.queryOptions({
+    api.market.snapshot.queryOptions({
       ...fastQuery,
       staleTime: 0,
       refetchInterval: 30,
@@ -116,7 +124,7 @@ test("background polling, focus refresh and offline/reconnect use Query lifecycl
   );
   const unsubscribe = observer.subscribe(() => undefined);
   try {
-    await delay(100);
+    await delay(140);
     assert.ok(f.calls() >= 2, "polls while hidden");
     onlineManager.setOnline(false);
     await delay(20);
@@ -157,7 +165,7 @@ test("validation and auth never retry; transient reads respect retry deadlines",
     ) >= 4900,
   );
 });
-test("session polling stops for terminal disconnection and accelerates transitions", () => {
+test("session polling uses stable cadence and accelerates transitions", () => {
   const state = {
     state: "REVOKED",
     connection: "OFFLINE",
@@ -168,11 +176,11 @@ test("session polling stops for terminal disconnection and accelerates transitio
     membershipCheckedAt: null,
     error: null,
   } as const;
-  assert.equal(sessionInterval(state), false);
+  assert.equal(sessionInterval(state), 15_000);
   assert.equal(sessionInterval({ ...state, state: "REVOKING" }), 2000);
   assert.equal(
     sessionInterval({ ...state, state: "ACTIVE", connection: "CONNECTED" }),
-    5000,
+    15_000,
   );
 });
 
@@ -264,15 +272,21 @@ test("quote dashboard query delivers both official quote and completed trade in 
       calls++;
       return Response.json({
         json: {
-          latest: {
-            quote: 105_020,
+          quote: {
+            compactPrice: 105_020,
             announcedAt: "2026-09-12T07:00:00.000Z",
+            sourceMessageId: 1,
           },
-          latestTrade: {
-            price: 105_120,
+          trade: {
+            id: "trade-1",
+            compactPrice: 105_120,
+            quantity: 1,
             announcedAt: "2026-09-12T07:01:00.000Z",
+            sourceMessageId: 2,
           },
-          points: [{ quote: 105_000, announcedAt: "2026-09-12T06:00:00.000Z" }],
+          revision: 2,
+          tradeQuoteDifference: 100,
+          asOf: "2026-09-12T07:01:00.000Z",
         },
       });
     },
@@ -280,11 +294,11 @@ test("quote dashboard query delivers both official quote and completed trade in 
   const api = createRpcUtils(rpc, "market-snapshot");
   const client = createQueryClient();
   try {
-    const data = await client.fetchQuery(api.quote.dashboard.queryOptions());
+    const data = await client.fetchQuery(api.market.snapshot.queryOptions());
     assert.equal(calls, 1, "only a single query network call was made");
-    assert.equal(data.latest?.quote, 105_020);
-    assert.equal(data.latestTrade?.price, 105_120);
-    assert.notEqual(data.latest?.quote, data.latestTrade?.price);
+    assert.equal(data.quote?.compactPrice, 105_020);
+    assert.equal(data.trade?.compactPrice, 105_120);
+    assert.notEqual(data.quote?.compactPrice, data.trade?.compactPrice);
   } finally {
     client.clear();
   }

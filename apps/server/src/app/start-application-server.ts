@@ -6,10 +6,13 @@ import type { AppEnv } from "../transport/http/app-env";
 import { createTelegramBot } from "../integrations/telegram-bot/create-telegram-bot";
 import { probeWorker } from "../integrations/worker/probe-worker";
 import { serverLog } from "../platform/observability/server-log";
+import { assertTelegramBotConfiguration } from "./telegram-bot-config";
 
-export function startApplicationServer(app: Hono<AppEnv>) {
-  if (!env.TELEGRAM_BOT_TOKEN)
-    throw new Error("TELEGRAM_BOT_TOKEN is required.");
+export function startApplicationServer(
+  app: Hono<AppEnv>,
+  stopMarket: () => Promise<void> = async () => undefined,
+) {
+  assertTelegramBotConfiguration(env.NODE_ENV, env.TELEGRAM_BOT_TOKEN);
 
   serverLog.info(
     {
@@ -20,16 +23,25 @@ export function startApplicationServer(app: Hono<AppEnv>) {
     "server.starting",
   );
 
-  const bot = createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL);
+  const bot = env.TELEGRAM_BOT_TOKEN
+    ? createTelegramBot(env.TELEGRAM_BOT_TOKEN, env.WEB_APP_URL)
+    : undefined;
 
-  void bot
-    .start()
-    .catch((error) =>
-      serverLog.error(
-        { event: "telegram.bot.failed", err: error },
-        "telegram.bot.failed",
-      ),
+  if (bot) {
+    void bot
+      .start()
+      .catch((error) =>
+        serverLog.error(
+          { event: "telegram.bot.failed", err: error },
+          "telegram.bot.failed",
+        ),
+      );
+  } else {
+    serverLog.warn(
+      { event: "telegram.bot.disabled", environment: env.NODE_ENV },
+      "telegram.bot.disabled",
     );
+  }
 
   const server = serve({ fetch: app.fetch, port: 3000 });
 
@@ -59,7 +71,8 @@ export function startApplicationServer(app: Hono<AppEnv>) {
     stopping = true;
     serverLog.info({ event: "server.stopping" }, "server.stopping");
 
-    if (bot.isRunning()) await bot.stop();
+    await stopMarket();
+    if (bot?.isRunning()) await bot.stop();
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await prisma.$disconnect();

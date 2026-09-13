@@ -1,9 +1,10 @@
 import { useQuery, skipToken } from "@tanstack/react-query";
-import { Card, Chip, cn } from "@heroui/react";
+import { Card, Chip, cn, ScrollShadow } from "@heroui/react";
 import { useIdentity } from "../../shared/auth/auth";
 import { useApi } from "../../shared/api/api-context";
 import { DrawerSheet } from "../../shared/ui/drawer";
 import { DataCoverageBadge } from "./_data-coverage-badge";
+import TomanIcon from "@/shared/ui/_toman-icon";
 
 function formatPersianNumber(value: number): string {
   return new Intl.NumberFormat("fa-IR").format(value);
@@ -16,6 +17,17 @@ function formatTime(isoString: string): string {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+    }).format(d);
+  } catch {
+    return isoString;
+  }
+}
+function formatDate(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    return new Intl.DateTimeFormat("fa-IR", {
+      day: "numeric",
+      month: "long",
     }).format(d);
   } catch {
     return isoString;
@@ -76,18 +88,15 @@ export function TraderDetailDrawer({
               <div className="text-left">
                 <span
                   className={cn(
-                    "dir-ltr text-lg font-bold",
+                    "flex items-center gap-1 text-lg font-bold",
                     isProfitable && "text-success",
                     isLoss && "text-danger",
                     !isProfitable && !isLoss && "text-muted",
                   )}
                 >
+                  {formatPersianNumber(summary.realizedPnlTomans)}
                   {isProfitable ? "+" : ""}
-                  {formatPersianNumber(summary.realizedPnlTomans)} تومان
-                </span>
-                <span className="text-muted dir-ltr block text-xs">
-                  ({isProfitable ? "+" : ""}
-                  {formatPersianNumber(summary.realizedPnlPoints)} پوینت)
+                  <TomanIcon className="text-muted mb-1" />
                 </span>
               </div>
             </div>
@@ -161,38 +170,47 @@ export function TraderDetailDrawer({
               </p>
             )}
 
-            <div className="max-h-56 space-y-1.5 overflow-y-auto">
-              {detail?.recentTrades.map((t) => (
-                <div
-                  key={t.id}
-                  className="border-border bg-surface/60 flex items-center justify-between rounded-xl border p-2.5 text-xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <Chip
-                      size="sm"
-                      variant="soft"
-                      color={t.side === "BUY" ? "success" : "danger"}
-                      className="text-[11px]"
-                    >
-                      {t.side === "BUY" ? "خرید" : "فروش"}
-                    </Chip>
-                    <span className="text-foreground font-medium">
-                      {formatPersianNumber(t.quantity)} واحد
-                    </span>
-                    <span className="text-muted">با {t.counterpartyAlias}</span>
-                  </div>
+            <ScrollShadow orientation="vertical" className="max-h-56">
+              <div className="space-y-1.5">
+                {detail?.recentTrades.map((t) => (
+                  <div
+                    key={t.id}
+                    className="border-border bg-surface/60 flex items-center justify-between rounded-xl border p-2.5 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Chip
+                        size="sm"
+                        variant="soft"
+                        color={t.side === "BUY" ? "success" : "danger"}
+                        className="min-w-10 justify-center text-xs font-light"
+                      >
+                        {t.side === "BUY" ? "خرید" : "فروش"}
+                      </Chip>
 
-                  <div className="text-left">
-                    <span className="text-foreground dir-ltr block font-semibold">
-                      {formatPersianNumber(t.compactPrice)}
-                    </span>
-                    <span className="text-muted block text-[10px]">
-                      {formatTime(t.announcedAt)}
-                    </span>
+                      <span className="text-foreground font-medium">
+                        {formatPersianNumber(t.quantity)} واحد
+                      </span>
+                      <span className="text-muted">با مظنه</span>
+                      <span className="text-foreground">
+                        {formatPersianNumber(t.compactPrice)}
+                      </span>
+                      <span className="text-muted">
+                        با {t.counterpartyAlias}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-muted block text-xs">
+                        {formatDate(t.announcedAt)}
+                      </span>
+                      <span className="text-muted block text-xs tracking-wider">
+                        {formatTime(t.announcedAt)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </ScrollShadow>
           </div>
 
           {/* Transparent Protocol Disclosure */}

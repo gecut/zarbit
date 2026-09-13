@@ -26,7 +26,13 @@ export function RequestList({
   const api = useApi(useIdentity().telegramUserId);
   const client = useQueryClient();
   const active = useQuery(
-    api.requests.active.queryOptions({ enabled: !history }),
+    api.requests.active.queryOptions({
+      enabled: !history,
+      refetchInterval: (query) => (query.state.data?.length ? 4_000 : false),
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: "always",
+      refetchOnReconnect: "always",
+    }),
   );
   const historyOptions = api.requests.history.infiniteOptions({
     input: (cursor: string | undefined) => ({ cursor }),
@@ -58,25 +64,32 @@ export function RequestList({
     null,
   );
 
-  const load = async () => {
-    await client.invalidateQueries({ queryKey: api.requests.key() });
-  };
-
   return (
-    <section className="grid gap-4">
+    <section
+      className={
+        history
+          ? "grid gap-4"
+          : "border-accent/20 bg-surface shadow-surface grid gap-4 rounded-3xl border p-4 sm:p-5"
+      }
+    >
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">
           {history ? "سوابق درخواست‌ها" : "درخواست‌های فعال"}
+          {!history && active.data && (
+            <span className="bg-surface-secondary text-muted ms-2 rounded-full px-2 py-1 text-xs">
+              {new Intl.NumberFormat("fa-IR").format(active.data.length)}
+            </span>
+          )}
         </h2>
 
         {!history ? (
           <Button
             onPress={() => setCreateOpen(true)}
-            variant="secondary"
-            isIconOnly
+            variant="primary"
             size="sm"
           >
-            <AddIcon className="size-5" />
+            <AddIcon className="size-4" />
+            درخواست جدید
           </Button>
         ) : null}
       </div>
@@ -84,8 +97,6 @@ export function RequestList({
       <RequestFormDrawer
         onDone={async () => {
           setCreateOpen(false);
-
-          await load();
         }}
         onOpenChange={setCreateOpen}
         open={createOpen}
@@ -110,7 +121,9 @@ export function RequestList({
         ))
       ) : !query.isPending && !query.error ? (
         <Card variant="tertiary" className="p-5 text-center text-sm">
-          {history ? "هنوز سابقه‌ای ثبت نشده است." : "درخواست فعالی ندارید."}
+          {history
+            ? "هنوز سابقه‌ای ثبت نشده است."
+            : "درخواست فعالی نیست. با ساخت درخواست جدید، زربیت بازار را برایتان بررسی می‌کند."}
         </Card>
       ) : null}
       {history && past.hasNextPage ? (
@@ -135,7 +148,6 @@ export function RequestList({
           setSelectedRequest(null);
           if (requestId) onCloseLinkedRequest?.();
         }}
-        onRefresh={load}
         request={requestId ? null : selectedRequest}
         requestId={requestId}
       />

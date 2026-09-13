@@ -2,22 +2,22 @@
 
 ## Boundaries
 
-| Component          | Responsibility                                                                         |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI, quote & trade dashboard     |
-| apps/server        | Hono API, Mini App identity/allowlist, quote/trade dashboard API, worker proxy         |
-| apps/worker        | All MTProto clients, OTP, membership, session files, reply extraction, data ingestion  |
-| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                  |
-| packages/domain    | Integer quote conversion, group trading grammar, receipt/action parsers                |
-| packages/db        | Prisma/PostgreSQL: sessions, requests, QuoteHistory, Trade, TradingAction, Participant |
-| packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references                  |
-| packages/env       | Service-specific environment contracts and independent database configuration          |
+| Component          | Responsibility                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| apps/web           | React/Vite, HeroUI, TanStack Router/Query, Persian RTL UI, quote & trade dashboard      |
+| apps/server        | Hono API, Mini App identity/allowlist, shared Market snapshot/history/SSE, worker proxy |
+| apps/worker        | All MTProto clients, OTP, membership, session files, reply extraction, data ingestion   |
+| packages/contracts | Shared strict Zod commands and public TypeScript DTOs                                   |
+| packages/domain    | Integer quote conversion, group trading grammar, receipt/action parsers                 |
+| packages/db        | Prisma/PostgreSQL: sessions, requests, QuoteHistory, Trade, TradingAction, Participant  |
+| packages/logger    | Shared Pino JSON logging, redaction and opaque correlation references                   |
+| packages/env       | Service-specific environment contracts and independent database configuration           |
 
 There is no MTProto client or session volume on the server. Server, worker, and migration job use one PostgreSQL user. The worker alone owns its protected per-user session volume; the stopped-service migration job mounts it only for ownership and locking maintenance.
 
 ## Database access
 
-The migration job receives only `MIGRATION_DATABASE_URL` and runs `prisma migrate deploy` before runtime services start. Server and worker receive only `DATABASE_URL`; both values use the same PostgreSQL user. Each runtime process owns one Prisma client backed by one direct `pg` pool, capped at five connections with five-second checkout and 30-second idle timeouts. PostgreSQL handles concurrency; no PgBouncer or shared application pool is used.
+The migration job receives only `MIGRATION_DATABASE_URL` and runs `prisma migrate deploy` before runtime services start. Server and worker receive only `DATABASE_URL`; both values use the same PostgreSQL user. Each runtime process owns one Prisma client backed by one direct `pg` pool, capped at five connections with five-second checkout and 30-second idle timeouts. The Server additionally owns one dedicated `pg.Client` for LISTEN, outside the Prisma pool (Server 5 + listener 1; Worker 5). PostgreSQL handles concurrency; no PgBouncer or shared application pool is used.
 
 Worker logs include safe pool totals/idle/waiting counts with database failures. The server root health endpoint and worker private health endpoint both execute `SELECT 1`, so a healthy process without a usable database is not reported ready.
 
@@ -35,15 +35,17 @@ A local SQLite OS lock on `.worker-owner.sqlite` prevents another current-versio
 
 ## Market data and PostgreSQL
 
-Market data is ingested continuously by connected worker sessions. All observed group entities (`QuoteHistory`, `Trade`, `TradingAction`) enforce database-level `UNIQUE(sourceMessageId)` to ensure idempotent writes despite multiple worker sessions observing the same group messages simultaneously.
+Market data is ingested continuously by connected worker sessions. QuoteHistory enforces `UNIQUE(sourceMessageId)`; Trade and TradingAction enforce `(chatId, sourceMessageId)` uniqueness to ensure idempotent writes despite multiple worker sessions observing the same group messages simultaneously.
 
-Canonical bot quote messages (`🟡 مظنه: <price> 🟡`) serve as the authoritative quote source in `QuoteHistory`. Authoritative bot receipts (`حواله`) create `Trade` records, which are permanently retained. The dashboard derives the latest completed trade price efficiently via indexed backward scan on `Trade(announcedAt DESC, sourceMessageId DESC)` with zero duplicate table overhead. Database writes remain short and contain no Telegram calls. See [MARKET-DATA.md](MARKET-DATA.md) for full ingestion, entity, and identity resolution rules.
+Canonical bot quote messages (`🟡 مظنه: <price> 🟡`) serve as the authoritative quote source in `QuoteHistory`. Authoritative bot receipts (`حواله`) create `Trade` records, which are permanently retained. Market heads use indexed source-ID order. There is no duplicate LatestTrade table. Database writes remain short and contain no Telegram calls. See [MARKET-DATA.md](MARKET-DATA.md) for full ingestion, entity, and identity resolution rules.
 
 ## Web state
 
-Private queries use the shared oRPC v1 contract and its official TanStack Query integration. Quote/dashboard (exposing the latest official quote and latest completed trade price) and active requests poll every three seconds in foreground/background; changing session states poll every two seconds, stable sessions every five seconds, and disconnected/revoked sessions stop polling. Identity/history use five-minute freshness. Focus/reconnect refresh stale queries. Mutations never retry automatically. OTP mutation data is cleared after each response and is never persisted.
+Market is a shared authenticated plane (`market.snapshot/live`); identity, Requests and Telegram remain independent private procedures. Worker insert transactions call `pg_notify` only for new Quote/Trade rows. One dedicated listener confirms LISTEN before hydration and buffers signals during startup. It reads authoritative committed rows, advances each head independently and fans out through a bounded hub. Failures disconnect streams, back off, re-LISTEN and rehydrate; notifications are never assumed replayable. SIGTERM/SIGINT close the hub/listener before HTTP and Prisma shutdown.
 
-Hono exposes authenticated `/rpc/*` and `/openapi/*` adapters over one contract-first router. Bounded process-local caches, single-flight reads, separate read capacity and per-user rate budgets protect PostgreSQL and the worker. Session checks for writes are always live. Legacy HTTP routes remain for the explicit build-time rollback flag. See [RPC.md](RPC.md) for limits, stale bounds, compatibility, metrics and browser background constraints.
+`MarketState` contains heads/revision/readiness only. TanStack owns the market snapshot query. Healthy snapshot polling is disabled; degraded streams use fallback reads. QuoteHistory and Trade remain separate canonical datasets. User polling and mutation invalidation never depend on Worker availability for Market. See [RPC.md](RPC.md) for exact cache owners, revision ordering, timeout and recovery policies.
+
+Hono exposes authenticated `/rpc/*` and `/openapi/*` adapters over one contract-first router. The old browser rollback transport and public quote namespace have been removed; unmapped legacy files must not be extended. One server and one worker remain supported. No outbox, event table, Redis, broker, WebSocket or Follow implementation is introduced.
 
 API/login responses use no-store. `VITE_SERVER_URL` is a required build-time URL; production rejects HTTP and loopback. Nginx serves hashed assets immutably, but revalidates index.html and sw.js. PWA updates require explicit user action.
 

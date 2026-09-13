@@ -4,9 +4,7 @@ import { z } from "zod";
 declare global {
   interface ImportMetaEnv {
     readonly [key: string]: string | undefined;
-    readonly VITE_API_MODE?: string;
     readonly VITE_SERVER_URL?: string;
-    readonly VITE_RPC_TRANSPORT?: string;
   }
 
   interface ImportMeta {
@@ -17,22 +15,15 @@ declare global {
 export const env = createEnv({
   clientPrefix: "VITE_",
   client: {
-    VITE_RPC_TRANSPORT: z.enum(["rpc", "legacy"]).default("rpc"),
-    VITE_API_MODE: z
-      .enum(["mock", "server"])
-      .default(import.meta.env.DEV ? "mock" : "server")
-      .refine(
-        (value) => import.meta.env.DEV || value === "server",
-        "VITE_API_MODE must be server outside Vite development.",
-      ),
     VITE_SERVER_URL: z
       .url()
-      .optional()
+      .default(
+        import.meta.env?.DEV ? "http://localhost:3000" : (undefined as never),
+      )
       .refine((value) => {
-        if (!value) return import.meta.env.DEV;
         const url = new URL(value);
         return (
-          import.meta.env.MODE !== "production" ||
+          import.meta.env?.MODE !== "production" ||
           (url.protocol === "https:" &&
             !["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname))
         );

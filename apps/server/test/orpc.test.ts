@@ -45,9 +45,9 @@ function fixture() {
       userReads++;
       return { id: identity.telegramUserId };
     },
-    latestQuote: async () => {
+    marketHeads: async () => {
       quoteReads++;
-      return null;
+      return { quote: null, trade: null };
     },
     latestTrade: async () => null,
     quotesSince: async () => [],
@@ -115,7 +115,7 @@ function fixture() {
 test("every RPC route authenticates, cold reads coalesce and user caches stay isolated", async () => {
   const f = fixture();
   await assert.rejects(
-    f.client("").quote.dashboard(),
+    f.client("").market.snapshot(),
     (error: unknown) => error instanceof ORPCError && error.status === 401,
   );
   assert.equal(f.counts().quoteReads, 0);
@@ -124,11 +124,9 @@ test("every RPC route authenticates, cold reads coalesce and user caches stay is
   const timings = await Promise.all(
     Array.from({ length: 20 }, async () => {
       const before = performance.now();
-      assert.deepEqual(await a.quote.dashboard(), {
-        latest: null,
-        latestTrade: null,
-        points: [],
-      });
+      const snapshot = await a.market.snapshot();
+      assert.equal(snapshot.quote, null);
+      assert.equal(snapshot.trade, null);
       return performance.now() - before;
     }),
   );
@@ -155,12 +153,12 @@ test("batched calls keep authentication, CORS and no-store", async () => {
   const client = f.client("alice", true);
   const results = await Promise.all([
     client.auth.identity(),
-    client.quote.dashboard(),
+    client.market.snapshot(),
     client.telegram.status(),
     client.requests.active(),
   ]);
   assert.equal(results[0].telegramUserId, "alice");
-  const response = await f.app.request("http://server/rpc/quote/dashboard", {
+  const response = await f.app.request("http://server/rpc/market/snapshot", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -169,7 +167,7 @@ test("batched calls keep authentication, CORS and no-store", async () => {
     body: "{}",
   });
   assert.equal(response.headers.get("cache-control"), "no-store");
-  const options = await f.app.request("http://server/rpc/quote/dashboard", {
+  const options = await f.app.request("http://server/rpc/market/snapshot", {
     method: "OPTIONS",
     headers: {
       Origin: "http://localhost:3001",

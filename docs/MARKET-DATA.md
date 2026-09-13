@@ -262,39 +262,11 @@ stateDiagram-v2
 
 ---
 
-## 5. Phase 1B Serving & Web Architecture
+## 5. Market serving
 
-### 5.1 Dashboard Scope
+The current Home reads `market.snapshot` and `market.live`. QuoteHistory is the authoritative Quote source; completed bot receipts remain Trade. Heads are projected by source-ID order. The signed comparison is latest Trade compact price minus latest Quote compact price, not execution-time slippage or P&L. Only headline metrics convert to full Toman.
 
-In Phase 1B, the web dashboard exposes only:
-
-1. **Latest official group quote** (compact integer converted to display Toman + announcement time).
-2. **Latest completed trade price** (compact integer converted to display Toman + execution time).
-
-No participants, leaderboards, whale cards, or raw trade logs are exposed in Phase 1B.
-
-### 5.2 Deriving Latest Trade Price
-
-Zarbit **DOES NOT create a duplicate `LatestTrade` table**. Maintaining a separate table or singleton row introduces synchronization anomalies and dual-write hazards.
-
-Instead, the latest completed trade is derived efficiently from the indexed `Trade` table:
-
-```sql
-SELECT "compactPrice", "announcedAt"
-FROM "Trade"
-ORDER BY "announcedAt" DESC, "sourceMessageId" DESC
-LIMIT 1;
-```
-
-With the index `@@index([announcedAt, sourceMessageId])`, this query is executed as a backward B-tree index scan in sub-millisecond time.
-
-### 5.3 Transport & Caching Architecture
-
-Phase 1B **preserves the existing polling and response-cache architecture**:
-
-- **Browser Polling:** The web client continues polling `quote.dashboard` via oRPC v1 every 3 seconds.
-- **Server Cache:** The server retains a 1-second process-local cache (`ResponseCache<QuoteDashboard>`) with stale-while-revalidate protection.
-- **Realtime Transports:** No WebSocket or Server-Sent Events (SSE) infrastructure is introduced in Phase 1. The existing polling architecture is well within capacity bounds and avoids unnecessary operational overhead.
+Each new Quote/Trade insert calls transaction-local `pg_notify('zarbit_market_changed', metadata)`. PostgreSQL sends the signal after commit; duplicate inserts emit nothing. The signal contains type and sourceMessageId only. It is not an event log, queue or data source. Server uses one dedicated listener with recovery and rehydration. Worker ingestion, matching and Telegram ownership are unchanged. See [ARCHITECTURE.md](ARCHITECTURE.md) and [RPC.md](RPC.md) for current delivery/cache contracts.
 
 ---
 
@@ -314,8 +286,6 @@ A strict distinction is maintained between **database retention** and **analytic
 - **Rule:** The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) for computing rolling leaderboards, trader win rates, and active whale rankings.
 - **Warning:** 7 days must NEVER be configured as a database pruning TTL for trades.
 
-### 6.3 QuoteHistory Retention
+### 6.3 QuoteHistory retention
 
-- **Policy:** **PERMANENT RETENTION**.
-- **Rule:** Historical `QuoteHistory` records are **NEVER deleted or pruned**.
-- **Rationale:** Canonical quote history is retained permanently alongside `Trade` to preserve the complete tick-by-tick market price record. Query filtering (e.g. the 3-day dashboard chart) is applied strictly at query time without database pruning.
+QuoteHistory and Trade are retained permanently. Retaining raw QuoteHistory preserves canonical reference data for audit, debugging, and analytics. The two heads and their revision never replace the Quote used by Request matching.

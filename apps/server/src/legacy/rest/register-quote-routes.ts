@@ -43,4 +43,14 @@ export function registerQuoteRoutes(app: Hono<AppEnv>, deps: AppDependencies) {
       },
     });
   });
+
+  app.get("/api/quote/history", async (c) => {
+    const now = new Date();
+    const since = new Date(now.getTime() - 72 * 60 * 60 * 1_000);
+    const quotes = await deps.store.quotesSince(since);
+    const { downsampleQuoteHistory } = await import("@zarbit/domain");
+    return c.json({
+      data: downsampleQuoteHistory(quotes, { now }),
+    });
+  });
 }

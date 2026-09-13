@@ -2,9 +2,10 @@ import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { AppError } from "@zarbit/contracts";
+import { mergeMarketSnapshot } from "./merge-market-snapshot";
+import { AppError, marketSnapshotSchema } from "@zarbit/contracts";
 import { rpcErrorDataSchema, type RpcClient } from "@zarbit/contracts/rpc";
-import { fastQuery, slowQuery } from "./query-policy";
+import { marketSnapshotQuery, fastQuery, slowQuery } from "./query-policy";
 
 export function createRpcClient(
   url: string,
@@ -19,9 +20,7 @@ export function createRpcClient(
         groups: [
           {
             condition: ({ path }) =>
-              !["command", "create", "update", "cancel", "forceSend"].includes(
-                path.at(-1) ?? "",
-              ),
+              ["market.snapshot", "requests.active"].includes(path.join(".")),
             context: {},
           },
         ],
@@ -32,7 +31,9 @@ export function createRpcClient(
       transport(request, {
         ...init,
         cache: "no-store",
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
+        signal: new URL(request.url).pathname.endsWith("/market/live")
+          ? request.signal
+          : AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
       }),
     interceptors: [
       async ({ next }) => {
@@ -64,16 +65,16 @@ export function createRpcClient(
   return createORPCClient(link);
 }
 
-export function createRpcUtils(client: RpcClient, scope: string) {
-  return createTanstackQueryUtils(client, {
+export function createRpcUtils(
+  client: RpcClient,
+  scope: string,
+  marketScope = scope,
+) {
+  const utils = createTanstackQueryUtils(client, {
     path: ["zarbit", scope],
     experimental_defaults: {
       auth: {
         identity: { queryOptions: { ...slowQuery, meta: { authGate: true } } },
-      },
-      quote: {
-        dashboard: { queryOptions: fastQuery },
-        latest: { queryOptions: fastQuery },
       },
       analytics: {
         traders: { queryOptions: slowQuery },
@@ -93,5 +94,27 @@ export function createRpcUtils(client: RpcClient, scope: string) {
       },
     },
   });
+  const market = createTanstackQueryUtils(client.market, {
+    path: ["zarbit", marketScope, "market"],
+    experimental_defaults: {
+      snapshot: {
+        queryOptions: {
+          ...marketSnapshotQuery,
+          structuralSharing: (previous: unknown, incoming: unknown) =>
+            mergeMarketSnapshot(
+              marketSnapshotSchema.safeParse(previous).data,
+              marketSnapshotSchema.parse(incoming),
+            ),
+        },
+      },
+    },
+  });
+  return {
+    auth: utils.auth,
+    telegram: utils.telegram,
+    requests: utils.requests,
+    analytics: utils.analytics,
+    market,
+  };
 }
 export type RpcUtils = ReturnType<typeof createRpcUtils>;

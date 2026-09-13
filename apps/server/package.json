@@ -8,12 +8,15 @@
     "format": "prettier --ignore-path ../../.prettierignore --write .",
     "format:check": "prettier --ignore-path ../../.prettierignore --check .",
     "check-types": "tsc -b",
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --env-file=.env src/main.ts",
     "start": "node dist/index.mjs",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
+    "@orpc/openapi": "1.15.0",
+    "@orpc/server": "1.15.0",
+    "@orpc/zod": "1.15.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@t3-oss/env-core": "^0.13.11",
@@ -22,23 +25,21 @@
     "@zarbit/domain": "workspace:*",
     "@zarbit/env": "workspace:*",
     "@zarbit/logger": "workspace:*",
+    "@zarbit/messages": "workspace:*",
     "dotenv": "catalog:",
     "grammy": "^1.42.0",
     "hono": "^4.12.32",
     "pg": "^8.16.3",
     "pino": "^10.3.1",
-    "zod": "catalog:",
-    "@orpc/server": "1.15.0",
-    "@orpc/openapi": "1.15.0",
-    "@orpc/zod": "1.15.0",
-    "@zarbit/messages": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@orpc/client": "1.15.0",
     "@types/node": "catalog:",
+    "@types/pg": "^8.23.1",
     "@zarbit/config": "workspace:*",
     "tsdown": "^0.22.14",
     "tsx": "^4.23.1",
-    "typescript": "catalog:",
-    "@orpc/client": "1.15.0"
+    "typescript": "catalog:"
   }
 }

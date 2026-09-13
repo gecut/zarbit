@@ -21,12 +21,10 @@ export function RequestDetailsDrawer({
   request: initialRequest,
   requestId,
   onClose,
-  onRefresh,
 }: {
   request: RequestDetail | null;
   requestId?: string;
   onClose: () => void;
-  onRefresh: () => Promise<void>;
 }) {
   const api = useApi(useIdentity().telegramUserId);
   const { cancel, forceSend } = useRequestActions();
@@ -56,7 +54,6 @@ export function RequestDetailsDrawer({
     try {
       if (action === "send") await forceSend.mutateAsync({ id: request.id });
       else await cancel.mutateAsync({ id: request.id });
-      await onRefresh();
       onClose();
     } catch (actionError) {
       setError(userMessage(actionError));

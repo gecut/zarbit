@@ -25,3 +25,12 @@ Up to 20 simultaneous Telegram clients including OTP and recovery; one worker, g
 ## Validation policy
 
 TypeScript, production builds and native dependency checks remain automated. Real Telegram and UI acceptance is performed manually by the owner.
+
+## Home Market invariants
+
+- Official Quote comes only from QuoteHistory; completed Trade comes only from an authoritative receipt in Trade. Request matching continues to use the official Quote and existing freshness/claim rules.
+- `tradeQuoteDifference = latest Trade compact price - latest Quote compact price`. It is a comparison of current heads, not historical slippage, profit or execution-time comparison.
+- Telegram message IDs order each stream in the supported single group. Gaps are expected; event identity includes Quote/Trade type. A later Trade must not suppress a valid lower-ID Quote.
+- `announcedAt` remains Telegram time. API/stream receipt and cache times do not make an old Quote fresh. Persian display uses Asia/Tehran.
+- Only the two headline prices convert compact thousands of Toman to full Toman using Domain conversion. Request prices stay compact.
+- Home does not implement Follow, auto-trading from Trade events, candles or a new Request model.

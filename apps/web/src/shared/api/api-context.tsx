@@ -10,7 +10,7 @@ export function useApi(userId = "auth") {
   const value = useContext(ApiContext);
   if (!value) throw new Error("API client boundary is missing");
   return useMemo(
-    () => createRpcUtils(value.client, `${value.scope}:${userId}`),
+    () => createRpcUtils(value.client, `${value.scope}:${userId}`, value.scope),
     [value.client, value.scope, userId],
   );
 }

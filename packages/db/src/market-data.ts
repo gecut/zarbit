@@ -1,3 +1,4 @@
+import { notifyMarketChange } from "./market-notifications";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "../prisma/generated/client";
 import type {
@@ -161,6 +162,12 @@ export function createMarketDataStore(
           skipDuplicates: true,
         });
 
+        if (result.count === 1) {
+          await notifyMarketChange(tx, {
+            type: "TRADE",
+            sourceMessageId: input.sourceMessageId,
+          });
+        }
         return { tradeRecorded: result.count === 1 };
       });
     },

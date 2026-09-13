@@ -19,10 +19,7 @@ for (const strict of [false, true]) {
     await page.route(endpoint, (route) => {
       paths.push(new URL(route.request().url()).pathname);
       return route.fulfill({
-        json:
-          info.project.name === "legacy"
-            ? { data: { telegramUserId: "101" } }
-            : { json: { telegramUserId: "101" } },
+        json: { json: { telegramUserId: "101" } },
       });
     });
     await page.goto(`/e2e/harness.html${strict ? "?strict" : ""}`);
@@ -36,7 +33,6 @@ for (const strict of [false, true]) {
     expect(paths).not.toContain("/rpc");
     if (info.project.name === "rpc")
       expect(paths).toContain("/rpc/auth/identity");
-    if (info.project.name === "mock") expect(paths).toEqual([]);
     await expect(page.locator("html")).not.toHaveAttribute(
       "data-rejection",
       "true",
@@ -50,25 +46,19 @@ for (const [status, code, message] of [
   [503, "SERVICE_UNAVAILABLE", "سرویس موقتاً"],
   [404, "NOT_FOUND", "پاسخ سرویس معتبر نیست"],
 ] as const) {
-  test(`HTTP ${status} stays inside authentication gate`, async ({
-    page,
-  }, info) => {
-    test.skip(info.project.name === "mock");
+  test(`HTTP ${status} stays inside authentication gate`, async ({ page }) => {
     await page.route(endpoint, (route) =>
       route.fulfill({
         status,
-        json:
-          info.project.name === "legacy"
-            ? { error: { code, message: "private-error" } }
-            : {
-                json: {
-                  defined: false,
-                  code,
-                  status,
-                  message: "private-error",
-                  data: { appCode: code },
-                },
-              },
+        json: {
+          json: {
+            defined: false,
+            code,
+            status,
+            message: "private-error",
+            data: { appCode: code },
+          },
+        },
       }),
     );
     await page.goto("/e2e/harness.html");
@@ -135,34 +125,6 @@ for (const kind of ["broken", "router"]) {
     await expect(page.getByRole("alert")).not.toContainText("private-error");
   });
 }
-test("late legacy loader after unmount cannot publish a client", async ({
-  page,
-}, info) => {
-  test.skip(info.project.name !== "legacy");
-  let release!: () => void;
-  const blocked = new Promise<void>((resolve) => (release = resolve));
-  let started!: () => void;
-  const requested = new Promise<void>((resolve) => (started = resolve));
-  await page.route("**/shared/api/legacy-api.ts", async (route) => {
-    started();
-    await blocked;
-    await route.continue();
-  });
-  const paths: string[] = [];
-  await page.route(endpoint, (route) => {
-    paths.push(route.request().url());
-    return route.fulfill({ json: { data: { telegramUserId: "101" } } });
-  });
-  await page.goto("/e2e/harness.html", { waitUntil: "domcontentloaded" });
-  await requested;
-  await page.getByRole("button", { name: "toggle", exact: true }).click();
-  release();
-  await expect(page.getByTestId("identity")).toHaveCount(0);
-  await page.getByRole("button", { name: "toggle", exact: true }).click();
-  await expect(page.getByTestId("identity")).toHaveText("101");
-  expect(paths).toHaveLength(1);
-});
-
 test("authentication deadline returns a recoverable network error", async ({
   page,
 }, info) => {

@@ -1,6 +1,8 @@
 import { implement, ORPCError } from "@orpc/server";
 import {
   AppError,
+  TELEGRAM_CONTRACT_HEADER,
+  TELEGRAM_CONTRACT_VERSION,
   type RequestDetail,
   telegramSessionStatusSchema,
 } from "@zarbit/contracts";
@@ -75,13 +77,24 @@ export function createOrpcRouter(
             identity = deps.authenticate(
               context.headers.get("X-Telegram-Init-Data") ?? undefined,
             );
-          } catch {
+          } catch (error) {
+            if (error instanceof AppError) throw error;
             throw new AppError(
               "UNAUTHORIZED",
               "ورود معتبر نیست؛ برنامه را از تلگرام دوباره باز کنید.",
               401,
             );
           }
+          if (
+            path[0] === "telegram" &&
+            context.headers.get(TELEGRAM_CONTRACT_HEADER) !==
+              String(TELEGRAM_CONTRACT_VERSION)
+          )
+            throw new AppError(
+              "CLIENT_UPDATE_REQUIRED",
+              "نسخه برنامه قدیمی است؛ برنامه را به‌روز کنید.",
+              409,
+            );
           const mutation = [
             "create",
             "update",
@@ -137,6 +150,7 @@ export function createOrpcRouter(
     telegram: createTelegramRouter(os.telegram, {
       store: deps.store,
       command: deps.command,
+      acceptCommand: deps.acceptCommand,
       sessions,
       active,
       workerCapacity,

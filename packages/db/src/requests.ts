@@ -166,9 +166,16 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         return tx.request.findUniqueOrThrow({ where: { id } });
       }),
     cancelRequest: (userId: string, id: string) =>
-      connected(userId, async (tx) => {
+      db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
         const result = await tx.request.updateMany({
-          where: { id, userId, status: "ACTIVE", claimToken: null },
+          where: {
+            id,
+            userId,
+            status: "ACTIVE",
+            deliveryStartedAt: null,
+            executionPhase: { in: ["WAITING_QUOTE", "CLAIMED"] },
+          },
           data: {
             status: "CANCELLED",
             executionPhase: "CANCELLED",
@@ -251,9 +258,28 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         },
       }),
     markSending: (id: string, claimToken: string, startedAt = now()) =>
-      db.request.updateMany({
-        where: { id, claimToken, status: "ACTIVE" },
-        data: { executionPhase: "SENDING", deliveryStartedAt: startedAt },
+      db.$transaction(async (tx) => {
+        const row = await tx.request.findUnique({
+          where: { id },
+          select: { userId: true },
+        });
+        if (!row) return { count: 0 };
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${row.userId} FOR UPDATE`;
+        const session = await tx.telegramSession.findUnique({
+          where: { userId: row.userId },
+        });
+        if (!session || session.state !== "ACTIVE" || !session.runtimeReady)
+          return { count: 0 };
+        return tx.request.updateMany({
+          where: {
+            id,
+            claimToken,
+            status: "ACTIVE",
+            executionPhase: "CLAIMED",
+            deliveryStartedAt: null,
+          },
+          data: { executionPhase: "SENDING", deliveryStartedAt: startedAt },
+        });
       }),
     recoverRequests: () =>
       db.request.updateManyAndReturn({

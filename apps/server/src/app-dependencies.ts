@@ -3,19 +3,28 @@ import { store } from "@zarbit/db";
 import { env } from "@zarbit/env/server";
 import type {
   Identity,
+  TelegramCommandInput,
+  TelegramCommandReceipt,
   TelegramSessionStatus,
   WorkerCommand,
 } from "@zarbit/contracts";
 import { authenticateTelegramRequest } from "./security/telegram/authenticate-telegram-request";
+import { sendWorkerOperation } from "./integrations/worker/send-worker-operation";
 import { createSessionCommand } from "./modules/telegram/create-session-command";
 import { serverLog } from "./platform/observability/server-log";
 
 export interface AppDependencies {
   store: Store;
+  acceptCommand: (
+    id: string,
+    input: TelegramCommandInput,
+    requestId: string,
+  ) => Promise<TelegramCommandReceipt>;
   authenticate: (initData: string | undefined) => Identity;
   command: (
     id: string,
     command: WorkerCommand,
+    requestId?: string,
   ) => Promise<TelegramSessionStatus>;
 }
 
@@ -34,11 +43,13 @@ export function createProductionDependencies(): AppDependencies {
         { event, ...details },
         event,
       ),
-    store: { session: async (userId) => store.session(userId) },
+    store,
   });
 
   return {
     store,
+    acceptCommand: (id, input, requestId) =>
+      sendWorkerOperation(transport, id, input, requestId),
     authenticate: authenticateTelegramRequest,
     command,
   };

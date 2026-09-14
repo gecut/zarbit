@@ -13,7 +13,7 @@ export default defineConfig({
   projects: [
     ...modes.map((mode, i) => ({
       name: mode,
-      testMatch: "auth.spec.ts",
+      testMatch: ["auth.spec.ts", "telegram.spec.ts"],
       use: { baseURL: `http://127.0.0.1:${4171 + i}` },
     })),
     {

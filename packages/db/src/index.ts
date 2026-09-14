@@ -1,3 +1,4 @@
+import { createTelegramOperationStore } from "./telegram-operations";
 import { createMarketHeadsStore } from "./market-heads";
 import { createMarketDataStore } from "./market-data";
 import { createAnalyticsDataStore } from "./analytics";
@@ -38,6 +39,7 @@ export function createStore(
   return {
     db: prisma,
     ...createRequestStore(prisma, now),
+    ...createTelegramOperationStore(prisma, now),
     ...createMarketDataStore(prisma, now),
     ...createMarketHeadsStore(prisma),
     ...createAnalyticsDataStore(prisma),
@@ -52,7 +54,8 @@ export function createStore(
     session,
     consumeSend: (keys: string[], now: Date) =>
       prisma.$transaction(async (tx) => {
-        for (const key of keys) {
+        for (const key of [...keys].sort()) {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
           const current = await tx.loginRateLimit.findUnique({
             where: { key },
           });
@@ -83,57 +86,119 @@ export function createStore(
         }
       }),
     blockLogin: (keys: string[], until: Date) =>
-      prisma.$transaction(
-        keys.map((key) =>
-          prisma.loginRateLimit.upsert({
+      prisma.$transaction(async (tx) => {
+        for (const key of [...keys].sort()) {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
+          const current = await tx.loginRateLimit.findUnique({
             where: { key },
-            create: { key, windowStartedAt: new Date(), blockedUntil: until },
+          });
+          if (current?.blockedUntil && current.blockedUntil >= until) continue;
+          await tx.loginRateLimit.upsert({
+            where: { key },
+            create: { key, windowStartedAt: now(), blockedUntil: until },
             update: { blockedUntil: until },
-          }),
-        ),
-      ),
+          });
+        }
+      }),
     sessions: () =>
       prisma.telegramSession.findMany({ include: { user: true } }),
-    beginSession: (userId: string, storageKey: string) =>
-      prisma.telegramSession.upsert({
-        where: { userId },
-        create: { userId, storageKey },
-        update: {
-          storageKey,
-          state: "PENDING_OTP",
-          connectedTelegramUserId: null,
-          revision: { increment: 1 },
-          runtimeReady: false,
-          connectionState: "OFFLINE",
-          reasonCode: "LOGIN_REQUIRED",
-          lastErrorCode: null,
-          revokedAt: null,
-          membershipCheckedAt: null,
-          lastError: null,
-          stateChangedAt: new Date(),
-        },
+    beginSession: (userId: string, storageKey: string, loginId?: string) =>
+      prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "TelegramUser" WHERE "id" = ${userId} FOR UPDATE`;
+        const current = await tx.telegramSession.findUnique({
+          where: { userId },
+        });
+        if (
+          current &&
+          (current.connectedTelegramUserId ||
+            ["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(current.state))
+        )
+          throw new AppError(
+            "SESSION_EXISTS",
+            "اتصال فعلی هنوز پایان نیافته است.",
+          );
+        return tx.telegramSession.upsert({
+          where: { userId },
+          create: {
+            userId,
+            storageKey,
+            loginId,
+            revision: 1,
+            reasonCode: "LOGIN_REQUIRED",
+          },
+          update: {
+            storageKey,
+            loginId,
+            state: "PENDING_OTP",
+            connectedTelegramUserId: null,
+            revision: { increment: 1 },
+            version: { increment: 1 },
+            runtimeReady: false,
+            connectionState: "OFFLINE",
+            reasonCode: "LOGIN_REQUIRED",
+            lastErrorCode: null,
+            revokedAt: null,
+            membershipCheckedAt: null,
+            lastError: null,
+            stateChangedAt: now(),
+          },
+        });
       }),
     updateSession: (
       userId: string,
       revision: number,
       data: Prisma.TelegramSessionUpdateManyMutationInput,
     ) =>
-      prisma.telegramSession.updateMany({
-        where: { userId, revision },
-        data: { ...data, lastObservedAt: new Date() },
+      prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
+        const current = await tx.telegramSession.findUnique({
+          where: { userId },
+          select: { state: true },
+        });
+        return tx.telegramSession.updateMany({
+          where: {
+            userId,
+            revision,
+            ...(data.state && data.state !== "REVOKED"
+              ? { state: { notIn: ["REVOKING", "REVOKED"] } }
+              : {}),
+          },
+          data: {
+            ...data,
+            lastObservedAt: now(),
+            version: { increment: 1 },
+            ...(data.state && current?.state !== data.state
+              ? { stateChangedAt: now() }
+              : {}),
+          },
+        });
       }),
     activateSession: (
       userId: string,
       revision: number,
       data: Prisma.TelegramSessionUpdateManyMutationInput,
     ) =>
-      prisma.telegramSession.updateMany({
-        where: {
-          userId,
-          revision,
-          state: { in: ["ACTIVE", "PENDING_OTP", "NOT_IN_GROUP"] },
-        },
-        data: { ...data, lastObservedAt: new Date() },
+      prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
+        const current = await tx.telegramSession.findUnique({
+          where: { userId },
+          select: { state: true },
+        });
+        return tx.telegramSession.updateMany({
+          where: {
+            userId,
+            revision,
+            state: { in: ["ACTIVE", "PENDING_OTP", "NOT_IN_GROUP"] },
+          },
+          data: {
+            ...data,
+            lastObservedAt: now(),
+            version: { increment: 1 },
+            ...(data.state && current?.state !== data.state
+              ? { stateChangedAt: now() }
+              : {}),
+          },
+        });
       }),
     disableSession: (
       userId: string,
@@ -147,7 +212,7 @@ export function createStore(
           where: {
             userId,
             ...(revision === undefined ? {} : { revision }),
-            ...(state === "NOT_IN_GROUP"
+            ...(["NOT_IN_GROUP", "ERROR"].includes(state)
               ? { state: { notIn: ["REVOKING", "REVOKED"] } }
               : {}),
           },
@@ -159,7 +224,8 @@ export function createStore(
             reasonCode: reasonCode ?? null,
             lastErrorCode: reasonCode ?? null,
             ...(state === "REVOKED" ? { revokedAt: new Date() } : {}),
-            stateChangedAt: new Date(),
+            stateChangedAt: now(),
+            version: { increment: 1 },
           },
         })
         .then((changed) => changed.count === 1),
@@ -190,8 +256,10 @@ export function createStore(
       await prisma.telegramSession.updateMany({
         where: { state: "PENDING_OTP", connectedTelegramUserId: null },
         data: {
-          state: "ERROR",
+          state: "REVOKING",
           lastError: "ورود نیمه‌تمام منقضی شد؛ دوباره وارد شوید.",
+          reasonCode: "LOGIN_EXPIRED",
+          loginId: null,
         },
       });
     },

@@ -4,7 +4,8 @@ import { retryDelay, retryQuery, slowQuery } from "./query-policy";
 
 export function createQueryClient() {
   const unauthorized = (error: unknown) => {
-    if (!(error instanceof AppError) || error.status !== 401) return;
+    if (!(error instanceof AppError) || ![401, 403].includes(error.status))
+      return;
     // Discard private snapshots and force the authentication gate to recheck.
     void client.cancelQueries();
     client.removeQueries({

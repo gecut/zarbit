@@ -27,7 +27,7 @@ export async function sendWorkerCommand(
   deps: WorkerTransportDependencies,
   userId: string,
   command: WorkerCommand,
-  requestId = randomUUID(),
+  requestId: string = randomUUID(),
 ) {
   const started = Date.now();
   const diagnostic: WorkerDiagnostic = {

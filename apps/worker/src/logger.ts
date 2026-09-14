@@ -1,4 +1,9 @@
 import { correlationRef, createLogger, type LogContext } from "@zarbit/logger";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const contextStorage = new AsyncLocalStorage<LogContext>();
+export const withWorkerContext = <T>(context: LogContext, work: () => T): T =>
+  contextStorage.run(context, work);
 
 import { errorDetails, stringProperty } from "./errors";
 
@@ -33,7 +38,7 @@ const write = (
   level: "debug" | "info" | "warn" | "error",
   event: string,
   context?: LogContext,
-) => logger[level]({ event, ...context }, event);
+) => logger[level]({ event, ...contextStorage.getStore(), ...context }, event);
 
 export const workerLog = {
   debug: (event: string, context?: LogContext) =>
@@ -44,7 +49,13 @@ export const workerLog = {
     write("error", event, context),
   failure: (event: string, error: unknown, context?: LogContext) =>
     logger.error(
-      { event, ...context, ...errorContext(error), err: error },
+      {
+        event,
+        ...contextStorage.getStore(),
+        ...context,
+        ...errorContext(error),
+        err: error,
+      },
       event,
     ),
   diagnostic: (event: string, error: unknown, context?: LogContext) =>

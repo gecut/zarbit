@@ -10,6 +10,7 @@ const store = createStore(prisma, () => currentTime);
 async function clean() {
   await prisma.quoteHistory.deleteMany();
   await prisma.request.deleteMany();
+  await prisma.telegramOperation.deleteMany();
   await prisma.telegramSession.deleteMany();
   await prisma.loginRateLimit.deleteMany();
   await prisma.telegramUser.deleteMany();
@@ -166,5 +167,266 @@ test("request recovery atomically returns only newly uncertain executions", asyn
     (await prisma.request.findUniqueOrThrow({ where: { id: "finished" } }))
       .status,
     "DONE",
+  );
+});
+
+test("operation admission serializes duplicate IDs and stores no credentials", async () => {
+  const owner = await store.user({ telegramUserId: "operation-owner" });
+  const input = {
+    operationId: crypto.randomUUID(),
+    command: { type: "login" as const, phone: "+989121234567" },
+  };
+  const results = await Promise.all(
+    Array.from({ length: 5 }, () =>
+      store.acceptTelegramOperation(
+        owner.id,
+        input,
+        "trace",
+        currentTime.getTime() + 5000,
+      ),
+    ),
+  );
+  assert.equal(results.filter((r) => r.created).length, 1);
+  const rows = await prisma.telegramOperation.findMany();
+  assert.equal(rows.length, 1);
+  assert.equal(JSON.stringify(rows).includes(input.command.phone), false);
+  await assert.rejects(
+    store.acceptTelegramOperation(
+      owner.id,
+      { operationId: crypto.randomUUID(), command: input.command },
+      "trace",
+      currentTime.getTime() + 5000,
+    ),
+    { code: "OPERATION_PENDING" },
+  );
+  await assert.rejects(
+    store.acceptTelegramOperation(
+      owner.id,
+      { operationId: input.operationId, command: { type: "revoke" } },
+      "trace",
+      currentTime.getTime() + 5000,
+    ),
+    { code: "OPERATION_CONFLICT" },
+  );
+  assert.equal(
+    await store.telegramOperation("another-owner", input.operationId),
+    null,
+  );
+});
+
+test("revoke and send share an atomic boundary and preserve actual sending outcomes", async () => {
+  for (let i = 0; i < 12; i++) {
+    const owner = await store.user({ telegramUserId: `race-${i}` });
+    await prisma.telegramSession.create({
+      data: {
+        userId: owner.id,
+        state: "ACTIVE",
+        runtimeReady: true,
+        connectedTelegramUserId: owner.telegramUserId,
+      },
+    });
+    const row = await store.createRequest(owner.id, {
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 96000,
+      units: null,
+    });
+    await store.claimRequest(row.id, owner.id, `claim-${i}`);
+    const input = {
+      operationId: crypto.randomUUID(),
+      command: { type: "revoke" as const },
+    };
+    const [sending, accepted] = await Promise.all([
+      store.markSending(row.id, `claim-${i}`),
+      store.acceptTelegramOperation(
+        owner.id,
+        input,
+        "trace",
+        currentTime.getTime() + 5000,
+      ),
+    ]);
+    const final = await store.request(owner.id, row.id);
+    assert.equal((await store.session(owner.id))?.state, "REVOKING");
+    if (sending.count) {
+      assert.equal(final?.executionPhase, "SENDING");
+      assert.equal(accepted.operation.sendingRequests, 1);
+      assert.equal(accepted.operation.cancelledRequests, 0);
+      await store.completeRequest(row.id, `claim-${i}`, {
+        status: "UNKNOWN",
+        failureReason: "test timeout",
+      });
+      assert.equal((await store.request(owner.id, row.id))?.status, "UNKNOWN");
+    } else {
+      assert.equal(final?.status, "CANCELLED");
+      assert.equal(final?.deliveryStartedAt, null);
+      assert.equal(accepted.operation.cancelledRequests, 1);
+    }
+    assert.equal((await store.markSending(row.id, `claim-${i}`)).count, 0);
+  }
+});
+
+test("manual cancellation works without Telegram and cannot cancel sending", async () => {
+  const owner = await store.user({ telegramUserId: "offline-cancel" });
+  const row = await prisma.request.create({
+    data: {
+      userId: owner.id,
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 96000,
+      executionPhase: "CLAIMED",
+      claimToken: "claim",
+    },
+  });
+  await assert.rejects(store.cancelRequest("other-owner", row.id));
+  assert.equal(
+    (await store.cancelRequest(owner.id, row.id)).status,
+    "CANCELLED",
+  );
+  const sending = await prisma.request.create({
+    data: {
+      userId: owner.id,
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 96000,
+      executionPhase: "SENDING",
+      deliveryStartedAt: currentTime,
+    },
+  });
+  await assert.rejects(store.cancelRequest(owner.id, sending.id));
+});
+
+test("session fences reject stale activation and heartbeat preserves change time", async () => {
+  const owner = await store.user({ telegramUserId: "generation" });
+  const session = await store.beginSession(
+    owner.id,
+    "a".repeat(64),
+    crypto.randomUUID(),
+  );
+  currentTime = new Date(currentTime.getTime() + 10000);
+  await store.updateSession(owner.id, session.revision, {
+    state: "PENDING_OTP",
+    runtimeCheckedAt: currentTime,
+  });
+  assert.equal(
+    (await store.session(owner.id))?.stateChangedAt.getTime(),
+    session.stateChangedAt.getTime(),
+  );
+  await store.acceptTelegramOperation(
+    owner.id,
+    { operationId: crypto.randomUUID(), command: { type: "revoke" } },
+    "trace",
+    currentTime.getTime() + 5000,
+  );
+  assert.equal(
+    (
+      await store.activateSession(owner.id, session.revision, {
+        state: "ACTIVE",
+        runtimeReady: true,
+      })
+    ).count,
+    0,
+  );
+  assert.equal(
+    await store.disableSession(
+      owner.id,
+      "ERROR",
+      "late failure",
+      session.revision,
+    ),
+    false,
+  );
+  assert.equal((await store.session(owner.id))?.state, "REVOKING");
+});
+
+test("rate limit admission is atomic and longer Telegram bans never shrink", async () => {
+  const results = await Promise.allSettled(
+    Array.from({ length: 10 }, () =>
+      store.consumeSend(["user:one", "phone:one"], currentTime),
+    ),
+  );
+  assert.equal(
+    results.filter((r) => r.status === "fulfilled").length,
+    3,
+    String(results.find((r) => r.status === "rejected")?.reason),
+  );
+  const long = new Date(currentTime.getTime() + 3600000);
+  await Promise.all([
+    store.blockLogin(["user:one"], long),
+    store.blockLogin(["user:one"], new Date(currentTime.getTime() + 60000)),
+  ]);
+  assert.equal(
+    (
+      await prisma.loginRateLimit.findUniqueOrThrow({
+        where: { key: "user:one" },
+      })
+    ).blockedUntil?.getTime(),
+    long.getTime(),
+  );
+});
+
+test("restart interrupts credentials, preserves authorization, and retains cleanup intents", async () => {
+  const owner = await store.user({ telegramUserId: "restart-pending" });
+  const id = crypto.randomUUID();
+  await store.acceptTelegramOperation(
+    owner.id,
+    { operationId: id, command: { type: "login", phone: "+989121234567" } },
+    "trace",
+    currentTime.getTime() + 5000,
+  );
+  await store.beginSession(owner.id, "a".repeat(64), id);
+  const authorized = await store.user({ telegramUserId: "restart-authorized" });
+  await prisma.telegramSession.create({
+    data: {
+      userId: authorized.id,
+      state: "PENDING_OTP",
+      storageKey: "b".repeat(64),
+      connectedTelegramUserId: authorized.telegramUserId,
+    },
+  });
+  await store.recover();
+  await store.recoverTelegramOperations();
+  assert.equal(
+    (await store.telegramOperation(owner.id, id))?.status,
+    "INTERRUPTED",
+  );
+  assert.equal((await store.session(owner.id))?.state, "REVOKING");
+  assert.equal((await store.session(owner.id))?.storageKey, "a".repeat(64));
+  assert.equal((await store.session(authorized.id))?.state, "ACTIVE");
+  assert.equal(
+    (await store.session(authorized.id))?.storageKey,
+    "b".repeat(64),
+  );
+});
+
+test("retention removes completed metadata after 24h and never drops pending cleanup", async () => {
+  const owner = await store.user({ telegramUserId: "retention" });
+  await prisma.telegramOperation.createMany({
+    data: [
+      {
+        userId: owner.id,
+        id: crypto.randomUUID(),
+        type: "login",
+        requestId: "trace",
+        status: "FAILED",
+        revision: 0,
+        acceptedAt: currentTime,
+        completedAt: currentTime,
+      },
+      {
+        userId: owner.id,
+        id: crypto.randomUUID(),
+        type: "revoke",
+        requestId: "trace",
+        status: "ACCEPTED",
+        revision: 0,
+        acceptedAt: currentTime,
+      },
+    ],
+  });
+  currentTime = new Date(currentTime.getTime() + 86400001);
+  assert.equal((await store.pruneTelegramOperations()).count, 1);
+  assert.equal(
+    (await prisma.telegramOperation.findFirstOrThrow()).type,
+    "revoke",
   );
 });

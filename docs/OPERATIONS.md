@@ -47,6 +47,8 @@ Begin with a controlled group. Open from the allowlisted account, enter its own 
 
 Telegram decides code delivery; an unsupported delivery flow produces an error instead of QR fallback. Start the bot once so notifications can be delivered. Never send OTP or 2FA to the bot or in a bug report.
 
+For a rollout of Telegram contract v3, apply the additive migration before starting the coordinated server/worker/web release. Confirm exactly one worker owns the session volume, query `telegram.operation` until revoke cleanup is terminal, and keep any REVOKING record when Telegram is unreachable. A 409 client-version response means the web client must be refreshed through the normal deployment path; no forced reload is required.
+
 ## Troubleshooting and rollback
 
 - Missing config: worker logs missing **key names**. Check explicit Dokploy values and recreate/restart; changing `.env` does not update a running container.

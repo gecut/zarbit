@@ -1,3 +1,4 @@
+import { sessionFixture } from "./telegram-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -89,18 +90,13 @@ function requestApp() {
         requestRow("LTE", id),
     } as unknown as AppDependencies["store"],
     authenticate: () => ({ telegramUserId: "telegram-user-1" }),
+    acceptCommand: async (_id, input) => ({
+      operationId: input.operationId,
+      acceptedAt: new Date().toISOString(),
+    }),
     command: async (_userId, command) => {
       commands.push(command);
-      return {
-        state: "ACTIVE",
-        connection: "CONNECTED",
-        groupId: null,
-        quoteSenderId: null,
-        connectedTelegramUserId: "telegram-user-1",
-        membershipCheckedAt: null,
-        error: null,
-        login: null,
-      };
+      return sessionFixture();
     },
   });
   return { app, commands, inputs };

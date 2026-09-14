@@ -1,5 +1,7 @@
 import {
   AppError,
+  presentTelegramSession,
+  TELEGRAM_CONTRACT_VERSION,
   type WorkerCommand,
   type TelegramSessionStatus,
 } from "@zarbit/contracts";
@@ -34,41 +36,47 @@ async function offlineStatus(
   userId: string,
   dependencies: SessionCommandDependencies,
   diagnostic: WorkerDiagnostic,
-  degraded: boolean,
 ): Promise<TelegramSessionStatus> {
   try {
     const session = await dependencies.store.session(userId);
-    const base = {
-      connection: "OFFLINE" as const,
-      observedAt: new Date().toISOString(),
-      stateChangedAt: new Date().toISOString(),
+    const operation = await dependencies.store.activeTelegramOperation(userId);
+    const observedAt = new Date().toISOString();
+    return presentTelegramSession({
+      contractVersion: TELEGRAM_CONTRACT_VERSION,
+      authorization: !session
+        ? "DISCONNECTED"
+        : session.state === "REVOKING"
+          ? "REVOKING"
+          : session.state === "REVOKED"
+            ? "REVOKED"
+            : session.connectedTelegramUserId
+              ? "AUTHORIZED"
+              : session.state === "PENDING_OTP"
+                ? "LOGIN_PENDING"
+                : "ERROR",
+      worker: "UNAVAILABLE",
+      source: "STORED",
+      connection: "UNKNOWN",
+      membership:
+        session?.state === "NOT_IN_GROUP"
+          ? "NOT_MEMBER"
+          : session?.membershipCheckedAt && session.connectedTelegramUserId
+            ? "MEMBER"
+            : "UNKNOWN",
+      revision: session?.revision ?? 0,
+      version: session?.version ?? 0,
+      observedAt,
+      stateChangedAt: session?.stateChangedAt.toISOString() ?? observedAt,
       retryAt: null,
-      capabilities: {
-        canLogin: true,
-        canCreateRequest: false,
-        canCheckMembership: false,
-        canRevoke: false,
-      },
+      activeOperationId: operation?.id ?? null,
+      challengeId: session?.state === "PENDING_OTP" ? session.loginId : null,
       groupId: null,
       quoteSenderId: null,
       connectedTelegramUserId: session?.connectedTelegramUserId ?? null,
       membershipCheckedAt: session?.membershipCheckedAt?.toISOString() ?? null,
       login: null,
-      error: offlineMessage,
-    };
-    return degraded
-      ? {
-          ...base,
-          kind: "DEGRADED" as const,
-          state: "DEGRADED" as const,
-          reasonCode: "WORKER_UNAVAILABLE" as const,
-        }
-      : {
-          ...base,
-          kind: "DISCONNECTED" as const,
-          state: "DISCONNECTED" as const,
-          reasonCode: "LOGIN_REQUIRED" as const,
-        };
+      issue: { code: "WORKER_UNAVAILABLE", message: offlineMessage },
+    });
   } catch (err) {
     dependencies.log("worker.command.failed", {
       ...diagnostic,
@@ -86,8 +94,14 @@ export function createSessionCommand(dependencies: SessionCommandDependencies) {
   return async (
     userId: string,
     command: WorkerCommand,
+    requestId?: string,
   ): Promise<TelegramSessionStatus> => {
-    const result = await sendWorkerCommand(dependencies, userId, command);
+    const result = await sendWorkerCommand(
+      dependencies,
+      userId,
+      command,
+      requestId,
+    );
     if (result.ok) {
       if (command.type === "status" && lastStatusFailure)
         dependencies.observe?.(
@@ -111,12 +125,7 @@ export function createSessionCommand(dependencies: SessionCommandDependencies) {
       if (command.type === "status") lastStatusFailure = { key, at: now };
     }
     if (command.type === "status")
-      return offlineStatus(
-        userId,
-        dependencies,
-        diagnostic,
-        failure === "worker_error",
-      );
+      return offlineStatus(userId, dependencies, diagnostic);
     if (
       "error" in result &&
       result.error &&

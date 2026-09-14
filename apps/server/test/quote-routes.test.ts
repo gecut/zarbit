@@ -112,6 +112,10 @@ test("requires Telegram authentication", async () => {
     authenticate: () => {
       throw new Error("ورود نامعتبر است.");
     },
+    acceptCommand: async (_id, input) => ({
+      operationId: input.operationId,
+      acceptedAt: new Date().toISOString(),
+    }),
     command: async () => {
       throw new Error("not called");
     },

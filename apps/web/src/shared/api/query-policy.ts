@@ -16,31 +16,13 @@ export const slowQuery = {
   refetchOnReconnect: true,
 } as const;
 export function sessionInterval(data?: TelegramSessionStatus): number | false {
-  if (data && "kind" in data) {
-    if (data.retryAt)
-      return Math.max(1000, Date.parse(data.retryAt) - Date.now());
-    if (data.kind === "LOGIN_PENDING" || data.kind === "REVOKING") return 2000;
-    if (data.kind === "DEGRADED" || data.kind === "NOT_IN_GROUP") return 15_000;
-    if (
-      data.kind === "DISCONNECTED" ||
-      data.kind === "REVOKED" ||
-      data.kind === "ERROR"
-    )
-      return 15_000;
-    return 15_000;
-  }
-  if (
-    data?.login ||
-    data?.state === "REVOKING" ||
-    data?.connection === "CONNECTING"
-  )
-    return 2000;
-  if (data?.state === "DISCONNECTED" || data?.state === "REVOKED")
-    return 15_000;
-  if (data?.connection === "OFFLINE" || data?.connection === "DEGRADED")
-    return 15_000;
-  return 15_000;
+  return data?.activeOperationId ||
+    data?.authorization === "LOGIN_PENDING" ||
+    data?.authorization === "REVOKING"
+    ? 2000
+    : 15_000;
 }
+
 export function retryQuery(count: number, error: unknown): boolean {
   if (count >= 2) return false;
   if (error instanceof AppError)

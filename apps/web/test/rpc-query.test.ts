@@ -1,3 +1,4 @@
+import { sessionFixture } from "./telegram-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AppError } from "@zarbit/contracts";
@@ -166,20 +167,18 @@ test("validation and auth never retry; transient reads respect retry deadlines",
   );
 });
 test("session polling uses stable cadence and accelerates transitions", () => {
-  const state = {
-    state: "REVOKED",
-    connection: "OFFLINE",
-    login: null,
-    groupId: null,
-    quoteSenderId: null,
+  const state = sessionFixture({
+    authorization: "REVOKED",
     connectedTelegramUserId: null,
-    membershipCheckedAt: null,
-    error: null,
-  } as const;
+  });
   assert.equal(sessionInterval(state), 15_000);
-  assert.equal(sessionInterval({ ...state, state: "REVOKING" }), 2000);
+  assert.equal(sessionInterval({ ...state, authorization: "REVOKING" }), 2000);
   assert.equal(
-    sessionInterval({ ...state, state: "ACTIVE", connection: "CONNECTED" }),
+    sessionInterval({
+      ...state,
+      authorization: "AUTHORIZED",
+      connection: "CONNECTED",
+    }),
     15_000,
   );
 });
@@ -250,9 +249,15 @@ test("mutations fail once while offline instead of queuing or replaying", async 
       client,
       api.telegram.command.mutationOptions(),
     );
-    await assert.rejects(observer.mutate({ type: "revoke" }), {
-      code: "NETWORK",
-    });
+    await assert.rejects(
+      observer.mutate({
+        operationId: crypto.randomUUID(),
+        command: { type: "revoke" },
+      }),
+      {
+        code: "NETWORK",
+      },
+    );
     onlineManager.setOnline(true);
     await delay(10);
     assert.equal(calls, 1);

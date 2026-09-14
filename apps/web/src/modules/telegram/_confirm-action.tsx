@@ -19,10 +19,15 @@ export function ConfirmAction({
   title,
 }: ConfirmActionProps) {
   const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <AlertDialog isOpen={open} onOpenChange={setOpen}>
-      <Button isDisabled={pending || isDisabled} variant="danger-soft">
+      <Button
+        isDisabled={pending || submitting || isDisabled}
+        variant="danger-soft"
+      >
         {label}
       </Button>
       <AlertDialog.Backdrop>
@@ -31,22 +36,34 @@ export function ConfirmAction({
             <AlertDialog.Header>
               <AlertDialog.Heading>{title}</AlertDialog.Heading>
             </AlertDialog.Header>
-            <AlertDialog.Body>{description}</AlertDialog.Body>
+            <AlertDialog.Body>
+              {description}
+              {error ? (
+                <p role="alert" className="text-danger mt-3">
+                  {error}
+                </p>
+              ) : null}
+            </AlertDialog.Body>
             <AlertDialog.Footer>
               <Button
-                isDisabled={pending || isDisabled}
+                isDisabled={pending || submitting || isDisabled}
                 slot="close"
                 variant="secondary"
               >
                 انصراف
               </Button>
               <Button
-                isDisabled={isDisabled}
-                isPending={pending}
+                isDisabled={isDisabled || submitting}
+                isPending={pending || submitting}
                 onPress={() => {
+                  setSubmitting(true);
+                  setError(null);
                   void onConfirm()
                     .then(() => setOpen(false))
-                    .catch(() => undefined);
+                    .catch(() =>
+                      setError("ثبت قطع اتصال تأیید نشد؛ وضعیت را بررسی کنید."),
+                    )
+                    .finally(() => setSubmitting(false));
                 }}
                 variant="danger"
               >

@@ -23,7 +23,7 @@ export async function probeWorker(
     requestId,
   );
   // Only a validated live response proves the worker contract is available.
-  const healthy = result.ok && result.data.kind === "ACTIVE";
+  const healthy = result.ok && result.data.worker === "AVAILABLE";
   if (result.ok && !healthy)
     Object.assign(result.diagnostic, {
       failure: "worker_error",

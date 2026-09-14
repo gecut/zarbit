@@ -1,3 +1,4 @@
+import { sessionFixture } from "./telegram-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AppError, type TelegramSessionStatus } from "@zarbit/contracts";
@@ -10,36 +11,20 @@ import { registerTelegramSessionRoutes } from "../src/legacy/rest/register-teleg
 
 const storedSession = {
   state: "ACTIVE" as const,
+  loginId: null,
+  revision: 1,
+  version: 1,
+  stateChangedAt: new Date("2026-09-05T16:00:00.000Z"),
   connectedTelegramUserId: "123456",
   membershipCheckedAt: new Date("2026-09-05T16:00:00.000Z"),
 };
 
-const onlineStatus: TelegramSessionStatus = {
-  kind: "ACTIVE",
-  state: "ACTIVE",
-  connection: "CONNECTED",
-  reasonCode: "NONE",
-  groupId: -1001234567890,
-  quoteSenderId: "123456789",
-  connectedTelegramUserId: "123456",
-  membershipCheckedAt: "2026-09-05T16:00:00.000Z",
-  observedAt: "2026-09-05T16:00:00.000Z",
-  stateChangedAt: "2026-09-05T16:00:00.000Z",
-  retryAt: null,
-  capabilities: {
-    canLogin: true,
-    canCreateRequest: true,
-    canCheckMembership: true,
-    canRevoke: true,
-  },
-  error: null,
-  login: null,
-};
+const onlineStatus = sessionFixture();
 
 function statusStore(
   session: SessionReader["session"] = async () => storedSession,
 ): SessionReader {
-  return { session };
+  return { session, activeTelegramOperation: async () => null };
 }
 
 function commandWith(options?: {
@@ -66,9 +51,9 @@ function commandWith(options?: {
 
 async function assertOffline(command: ReturnType<typeof createSessionCommand>) {
   const status = await command("user-1", { type: "status" });
-  assert.equal(status.connection, "OFFLINE");
+  assert.equal(status.connection, "UNKNOWN");
   assert.equal(status.login, null);
-  assert.equal(status.state, "DISCONNECTED");
+  assert.equal(status.authorization, "AUTHORIZED");
 }
 
 function statusRouteApp(command: ReturnType<typeof createSessionCommand>) {
@@ -103,7 +88,7 @@ test("keeps the status endpoint successful while the worker is offline", async (
   const body = (await response.json()) as { data: TelegramSessionStatus };
 
   assert.equal(response.status, 200);
-  assert.equal(body.data.connection, "OFFLINE");
+  assert.equal(body.data.connection, "UNKNOWN");
 });
 
 test("returns offline status for network, malformed JSON, invalid envelopes, and forbidden worker responses", async () => {

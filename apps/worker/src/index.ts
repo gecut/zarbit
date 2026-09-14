@@ -14,6 +14,7 @@ import {
   notifyRecoveredRequests,
 } from "./notifications";
 import { Sessions } from "./sessions";
+import { SessionOperations } from "./session-operations";
 import { SessionFiles } from "./session-files";
 import { mtcuteFactory } from "./mtcute";
 import { createWorkerApp } from "./http";
@@ -75,6 +76,7 @@ export async function startWorker() {
     },
   });
   const initializeStartedAt = Date.now();
+  const operations = new SessionOperations(store, sessions);
   try {
     await sessions.initialize();
   } catch (error) {
@@ -106,6 +108,7 @@ export async function startWorker() {
       sessions,
       env.WORKER_INTERNAL_TOKEN!,
       checkDatabaseHealth,
+      operations,
     ).fetch,
     port: 3002,
   });
@@ -167,6 +170,7 @@ export async function startWorker() {
     clearInterval(pruneTimer);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await sessions.stop();
+    await operations.stop();
     await prisma.$disconnect();
     releaseOwnership();
     workerLog.info("worker.stopped");

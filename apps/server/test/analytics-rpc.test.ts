@@ -72,6 +72,10 @@ function fixture() {
   const deps: AppDependencies = {
     store,
     authenticate: () => ({ telegramUserId: "1001", firstName: "Tester" }),
+    acceptCommand: async (_id, input) => ({
+      operationId: input.operationId,
+      acceptedAt: new Date().toISOString(),
+    }),
     command: async () => ({}) as any,
   };
 

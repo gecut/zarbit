@@ -25,7 +25,10 @@ export function registerRequestRoutes(
 ) {
   const requireSession = async (id: string) => {
     const session = await deps.command(id, { type: "status" });
-    if (session.state !== "ACTIVE" || session.connection !== "CONNECTED")
+    if (
+      session.authorization !== "AUTHORIZED" ||
+      session.connection !== "CONNECTED"
+    )
       throw new AppError(
         "SESSION_REQUIRED",
         "ابتدا اتصال تلگرام را برقرار کنید.",

@@ -81,7 +81,12 @@ test("missing, invalid, expired and non-allowlisted identities never reach the s
       },
     },
   } as unknown as AppDependencies);
-  for (const value of ["", "invalid", signed(101, 86401), signed(999)]) {
+  for (const [value, expected] of [
+    ["", 401],
+    ["invalid", 401],
+    [signed(101, 86401), 401],
+    [signed(999), 403],
+  ] as const) {
     const client: RpcClient = createORPCClient(
       new RPCLink({
         url: "http://test/rpc",
@@ -91,7 +96,7 @@ test("missing, invalid, expired and non-allowlisted identities never reach the s
     );
     await assert.rejects(
       client.auth.identity(),
-      (e) => e instanceof ORPCError && e.status === 401,
+      (e) => e instanceof ORPCError && e.status === expected,
     );
   }
   assert.equal(reads, 0);

@@ -1,129 +1,101 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sessionFixture, loginFixture, fixtureTime } from "./telegram-fixture";
+import {
+  presentTelegramSession,
+  telegramSessionStatusSchema,
+} from "@zarbit/contracts";
+import { resolveTelegramSessionPresentation as present } from "../src/modules/telegram/_session-view-model";
 
-import type { LoginStatus, TelegramSessionStatus } from "@zarbit/contracts";
-
-import { resolveTelegramSessionPresentation } from "../src/modules/telegram/_session-view-model";
-
-function createSession(
-  overrides: Partial<TelegramSessionStatus> = {},
-): TelegramSessionStatus {
-  return {
-    connectedTelegramUserId: "10000001",
-    connection: "CONNECTED",
-    error: null,
-    groupId: -1001234567890,
-    login: null,
-    membershipCheckedAt: "2026-09-07T12:00:00.000Z",
-    quoteSenderId: "10000002",
-    state: "ACTIVE",
-    ...overrides,
-  };
-}
-
-function createLogin(step: LoginStatus["step"]): LoginStatus {
-  return {
-    codeLength: step === "CODE" ? 5 : null,
-    delivery: "app",
-    expiresAt: "2026-09-07T12:05:00.000Z",
-    id: "7f23a13b-9d84-4d31-8b52-fb647b92cc83",
-    maskedPhone: "+989121234567",
-    resendAvailableAt: "2026-09-07T12:01:00.000Z",
-    step,
-    error: null,
-  };
-}
-
-test("maps an active connected session to manageable healthy state", () => {
-  const presentation = resolveTelegramSessionPresentation(createSession());
-
-  assert.deepEqual(presentation.chip, {
-    color: "success",
-    label: "دریافت مظنه فعال",
-  });
-  assert.equal(presentation.canManageConnection, true);
-  assert.equal(presentation.canStartLogin, false);
-  assert.equal(presentation.showConnectionActions, true);
-});
-
-test("keeps an offline session readable but disables connection actions", () => {
-  const presentation = resolveTelegramSessionPresentation(
-    createSession({ connection: "OFFLINE" }),
-  );
-
-  assert.equal(presentation.isUnavailable, true);
-  assert.equal(presentation.canManageConnection, false);
-  assert.equal(presentation.showConnectionActions, true);
-  assert.deepEqual(presentation.chip, {
-    color: "warning",
-    label: "دریافت مظنه غیرفعال",
-  });
-});
-
-test("maps membership loss to a dangerous but recoverable connection state", () => {
-  const presentation = resolveTelegramSessionPresentation(
-    createSession({ state: "NOT_IN_GROUP" }),
-  );
-
-  assert.deepEqual(presentation.chip, {
-    color: "danger",
-    label: "عضویت تأیید نشده",
-  });
-  assert.equal(presentation.canManageConnection, true);
-  assert.equal(presentation.showConnectionActions, true);
-});
-
-test("keeps OTP, password, and verification challenges out of the login-start flow", () => {
-  for (const step of ["CODE", "PASSWORD", "VERIFYING"] as const) {
-    const presentation = resolveTelegramSessionPresentation(
-      createSession({
-        login: createLogin(step),
-        state: "PENDING_OTP",
-      }),
-    );
-
-    assert.deepEqual(presentation.chip, {
-      color: "warning",
-      label: "در حال ورود",
-    });
-    assert.equal(presentation.canStartLogin, false);
-    assert.equal(presentation.showConnectionActions, false);
+test("ready requires authorization, live transport, and membership", () => {
+  assert.equal(present(sessionFixture()).chip.color, "success");
+  for (const change of [
+    { connection: "OFFLINE" },
+    { membership: "NOT_MEMBER" },
+    { worker: "UNAVAILABLE", source: "STORED", connection: "UNKNOWN" },
+  ] as const) {
+    const s = sessionFixture(change);
+    assert.notEqual(present(s).chip.color, "success");
+    assert.equal(s.capabilities.canCreateRequest, false);
+    assert.equal(s.capabilities.canRevoke, true);
+    assert.equal(s.capabilities.canLogin, false);
   }
 });
-
-test("maps revoking and error states to their explicit operational policy", () => {
-  const revoking = resolveTelegramSessionPresentation(
-    createSession({ state: "REVOKING" }),
-  );
-  const failed = resolveTelegramSessionPresentation(
-    createSession({
+test("first login and re-login are independent of MTProto connection", () => {
+  for (const authorization of ["DISCONNECTED", "REVOKED", "ERROR"] as const) {
+    const s = sessionFixture({
+      authorization,
       connectedTelegramUserId: null,
-      state: "ERROR",
+      connection: "OFFLINE",
+      membership: "UNKNOWN",
+    });
+    assert.equal(present(s).canStartLogin, true);
+    assert.equal(s.capabilities.canCheckMembership, false);
+    assert.equal(s.capabilities.canRevoke, false);
+    assert.equal(
+      sessionFixture({ ...s, worker: "UNAVAILABLE", source: "STORED" })
+        .capabilities.canLogin,
+      false,
+    );
+  }
+});
+test("each challenge phase grants only its own credential action and keeps cancellation", () => {
+  for (const step of [
+    "SENDING_CODE",
+    "CODE",
+    "VERIFYING_CODE",
+    "PASSWORD",
+    "VERIFYING_PASSWORD",
+  ] as const) {
+    const s = sessionFixture({
+      authorization: "LOGIN_PENDING",
+      connectedTelegramUserId: null,
+      membership: "UNKNOWN",
+      login: loginFixture(step),
+    });
+    assert.equal(s.capabilities.canSubmitCode, step === "CODE");
+    assert.equal(s.capabilities.canSubmitPassword, step === "PASSWORD");
+    assert.equal(s.capabilities.canResend, step === "CODE");
+    assert.equal(s.capabilities.canCancelLogin, true);
+    assert.equal(s.capabilities.canLogin, false);
+    assert.equal(present(s).showConnectionActions, false);
+    const blocked = sessionFixture({
+      ...s,
+      login: {
+        ...s.login!,
+        retryAt: new Date(fixtureTime + 60000).toISOString(),
+      },
+    });
+    assert.equal(blocked.capabilities.canSubmitCode, false);
+    assert.equal(blocked.capabilities.canSubmitPassword, false);
+    assert.equal(blocked.capabilities.canResend, false);
+    assert.equal(blocked.capabilities.canCancelLogin, true);
+  }
+});
+test("schema rejects invalid authorization/challenge combinations", () => {
+  assert.throws(() =>
+    sessionFixture({
+      authorization: "AUTHORIZED",
+      connectedTelegramUserId: null,
     }),
   );
-
-  assert.deepEqual(revoking.chip, {
-    color: "warning",
-    label: "در حال قطع اتصال",
+  assert.throws(() => sessionFixture({ login: loginFixture("CODE") }));
+  assert.throws(() =>
+    sessionFixture({ authorization: "LOGIN_PENDING", login: null }),
+  );
+  assert.equal(
+    telegramSessionStatusSchema.safeParse({ state: "ACTIVE" }).success,
+    false,
+  );
+  const s = sessionFixture({ authorization: "REVOKING" });
+  assert.equal(Object.values(s.capabilities).some(Boolean), false);
+  const { capabilities: _, ...facts } = sessionFixture({
+    authorization: "LOGIN_PENDING",
+    login: loginFixture("CODE"),
   });
-  assert.equal(revoking.canManageConnection, false);
-  assert.equal(failed.chip.color, "danger");
-  assert.equal(failed.canStartLogin, true);
-});
-
-test("first login is available without an MTProto session but not during service failure", () => {
-  for (const state of ["DISCONNECTED", "REVOKED", "ERROR"] as const) {
-    const healthy = resolveTelegramSessionPresentation(
-      createSession({ state, connectedTelegramUserId: null }),
-    );
-    assert.equal(healthy.canStartLogin, true);
-    assert.notEqual(healthy.chip.label, "دریافت مظنه فعال");
-    for (const connection of ["OFFLINE", "DEGRADED"] as const) {
-      assert.equal(
-        resolveTelegramSessionPresentation(createSession({ state, connection }))
-          .canStartLogin,
-        false,
-      );
-    }
-  }
+  assert.equal(
+    presentTelegramSession(facts, fixtureTime + 600001).capabilities
+      .canSubmitCode,
+    false,
+  );
 });

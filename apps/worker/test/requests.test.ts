@@ -32,10 +32,15 @@ test("matches compact requests and sends their compact target price", async () =
       return row;
     },
     completeRequest: async () => ({ count: 1 }),
+    markSending: async () => ({ count: 1 }),
     owner: async () => ({ telegramUserId: "telegram-user-1" }),
   } as unknown as Pick<
     Store,
-    "requestCandidates" | "claimRequest" | "completeRequest" | "owner"
+    | "requestCandidates"
+    | "claimRequest"
+    | "completeRequest"
+    | "owner"
+    | "markSending"
   >;
 
   const requests = createRequestExecutor(store, {
@@ -106,6 +111,7 @@ function setup(
   const results: Array<Parameters<ExecutorStore["completeRequest"]>[2]> = [];
   const row = options.row ?? example;
   const store: ExecutorStore = {
+    markSending: async () => ({ count: 1 }),
     owner: async () => ({
       id: "user-1",
       telegramUserId: "100",

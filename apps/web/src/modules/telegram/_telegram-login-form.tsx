@@ -1,12 +1,18 @@
 import {
   Button,
+  FieldError,
   Input,
   InputOTP,
   Label,
   ProgressCircle,
   TextField,
 } from "@heroui/react";
-import { normalizeDigits, type LoginStatus } from "@zarbit/contracts";
+import {
+  normalizeDigits,
+  type LoginStatus,
+  type SessionCapabilities,
+  type TelegramIssue,
+} from "@zarbit/contracts";
 
 const deliveryLabels: Record<string, string> = {
   app: "پیام تلگرام",
@@ -18,6 +24,10 @@ const deliveryLabels: Record<string, string> = {
 
 type TelegramLoginFormProps = {
   isPending: boolean;
+  isAdmitting: boolean;
+  capabilities: SessionCapabilities;
+  fieldIssue?: TelegramIssue | null;
+  retryWait: number;
   isUnavailable: boolean;
   login: LoginStatus | null | undefined;
   onCancel: (loginId: string) => void;
@@ -33,6 +43,7 @@ type TelegramLoginFormProps = {
 
 type LoginCredentialFieldProps = {
   isDisabled: boolean;
+  error?: string;
   login: LoginStatus;
   onSecretChange: (secret: string) => void;
   secret: string;
@@ -40,6 +51,7 @@ type LoginCredentialFieldProps = {
 
 function LoginCredentialField({
   isDisabled,
+  error,
   login,
   onSecretChange,
   secret,
@@ -64,6 +76,8 @@ function LoginCredentialField({
         <div className="mx-auto w-min" dir="ltr">
           <InputOTP
             aria-labelledby="otp-label"
+            aria-invalid={!!error}
+            aria-describedby={error ? "otp-error" : undefined}
             inputMode="numeric"
             isDisabled={isDisabled}
             maxLength={otpLength}
@@ -79,6 +93,11 @@ function LoginCredentialField({
             </InputOTP.Group>
           </InputOTP>
         </div>
+        {error ? (
+          <p id="otp-error" role="alert" className="text-danger text-sm">
+            {error}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -88,6 +107,7 @@ function LoginCredentialField({
   return (
     <TextField
       isDisabled={isDisabled}
+      isInvalid={!!error}
       isRequired
       name={isPassword ? "password" : "code"}
       onChange={onSecretChange}
@@ -100,6 +120,7 @@ function LoginCredentialField({
         dir="ltr"
         maxLength={1024}
       />
+      {error ? <FieldError>{error}</FieldError> : null}
       {isPassword ? (
         <p className="text-muted mt-2 text-xs leading-6">
           رمز دوم فقط برای ورود به تلگرام استفاده می‌شود و ذخیره نمی‌شود.
@@ -111,6 +132,10 @@ function LoginCredentialField({
 
 export function TelegramLoginForm({
   isPending,
+  isAdmitting,
+  capabilities,
+  fieldIssue,
+  retryWait,
   isUnavailable,
   login,
   onCancel,
@@ -123,12 +148,28 @@ export function TelegramLoginForm({
   resendWait,
   secret,
 }: TelegramLoginFormProps) {
-  const isVerifying = login?.step === "VERIFYING";
+  const isVerifying = !!login && !["CODE", "PASSWORD"].includes(login.step);
   const isCredentialDisabled =
-    isPending || isUnavailable || remaining === 0 || isVerifying;
+    isPending ||
+    isUnavailable ||
+    remaining === 0 ||
+    isVerifying ||
+    retryWait > 0;
   const isSubmitDisabled = login
-    ? isPending || isUnavailable || !secret || !remaining || isVerifying
-    : isPending || isUnavailable || !phone;
+    ? isPending ||
+      isUnavailable ||
+      !secret ||
+      !remaining ||
+      isVerifying ||
+      retryWait > 0 ||
+      (login.step === "PASSWORD"
+        ? !capabilities.canSubmitPassword
+        : !capabilities.canSubmitCode)
+    : isPending ||
+      isUnavailable ||
+      !phone ||
+      !capabilities.canLogin ||
+      retryWait > 0;
   const submitLabel = !login
     ? "ارسال کد ورود"
     : login.step === "PASSWORD"
@@ -137,10 +178,11 @@ export function TelegramLoginForm({
 
   return (
     <form
+      noValidate
       className="border-separator mt-6 grid gap-5 border-t pt-6"
       onSubmit={(event) => {
         event.preventDefault();
-        if (isPending || isUnavailable) return;
+        if (isSubmitDisabled) return;
         onSubmit();
       }}
     >
@@ -156,6 +198,7 @@ export function TelegramLoginForm({
           </div>
           <TextField
             isDisabled={isPending || isUnavailable}
+            isInvalid={fieldIssue?.field === "phone"}
             isRequired
             name="phone"
             onChange={onPhoneChange}
@@ -170,6 +213,9 @@ export function TelegramLoginForm({
               inputMode="tel"
               placeholder="+989121234567"
             />
+            {fieldIssue?.field === "phone" ? (
+              <FieldError>{fieldIssue.message}</FieldError>
+            ) : null}
           </TextField>
           <p className="text-muted text-xs leading-6">
             کد ورود را در چت بات نفرستید. محل دریافت کد را تلگرام تعیین می‌کند.
@@ -200,14 +246,14 @@ export function TelegramLoginForm({
               role="status"
             >
               <ProgressCircle
-                aria-label="در حال بررسی حساب و عضویت"
+                aria-label="در حال انجام مرحله ورود"
                 color="accent"
                 isIndeterminate
                 size="sm"
               />
               <div>
                 <p className="text-foreground text-sm font-semibold">
-                  در حال بررسی حساب و عضویت
+                  در حال انجام مرحله ورود
                 </p>
                 <p className="text-muted mt-1 text-xs leading-6">
                   تا پایان بررسی، اقدام دیگری انجام ندهید.
@@ -217,6 +263,9 @@ export function TelegramLoginForm({
           ) : (
             <LoginCredentialField
               isDisabled={isCredentialDisabled}
+              error={
+                fieldIssue?.field !== "phone" ? fieldIssue?.message : undefined
+              }
               login={login}
               onSecretChange={onSecretChange}
               secret={secret}
@@ -237,7 +286,7 @@ export function TelegramLoginForm({
       {login ? (
         <div className="flex flex-wrap items-center justify-between gap-[0.55rem]">
           <Button
-            isDisabled={isPending || isUnavailable || isVerifying}
+            isDisabled={isAdmitting || !capabilities.canCancelLogin}
             onPress={() => onCancel(login.id)}
             variant="secondary"
           >
@@ -249,6 +298,8 @@ export function TelegramLoginForm({
                 isPending ||
                 isUnavailable ||
                 isVerifying ||
+                !capabilities.canResend ||
+                retryWait > 0 ||
                 resendWait !== 0 ||
                 !remaining
               }

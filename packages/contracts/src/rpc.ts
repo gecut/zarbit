@@ -7,7 +7,9 @@ import {
   requestHistoryPageSchema,
   marketSnapshotSchema,
   telegramSessionStatusSchema,
-  sessionCommandSchema,
+  telegramCommandInputSchema,
+  telegramCommandReceiptSchema,
+  telegramOperationSchema,
   participantAnalyticsSummarySchema,
   participantAnalyticsDetailSchema,
   traderListQuerySchema,
@@ -20,7 +22,8 @@ export const rpcErrorDataSchema = z
     reasonCode: z.string(),
     messageKey: z.string(),
     requestId: z.string().min(1),
-    retryAt: z.string().optional(),
+    retryAt: z.string().datetime().optional(),
+    field: z.enum(["phone", "code", "password"]).optional(),
     retryAfter: z.number().nonnegative().optional(),
   })
   .strict();
@@ -52,13 +55,17 @@ export const rpcContract = {
       .output(marketSnapshotSchema),
   },
   telegram: {
+    operation: base
+      .route({ method: "GET", path: "/telegram/operation/{id}" })
+      .input(z.object({ id: z.string().uuid() }).strict())
+      .output(telegramOperationSchema.nullable()),
     status: base
       .route({ method: "GET", path: "/telegram/status" })
       .output(telegramSessionStatusSchema),
     command: base
       .route({ method: "POST", path: "/telegram/command" })
-      .input(sessionCommandSchema)
-      .output(telegramSessionStatusSchema),
+      .input(telegramCommandInputSchema)
+      .output(telegramCommandReceiptSchema),
   },
   requests: {
     active: base

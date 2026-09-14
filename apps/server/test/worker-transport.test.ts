@@ -1,3 +1,4 @@
+import { sessionFixture } from "./telegram-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { probeWorker } from "../src/integrations/worker/probe-worker";
@@ -8,27 +9,8 @@ import type {
 } from "../src/integrations/worker/worker-types";
 import { createSessionCommand } from "../src/modules/telegram/create-session-command";
 
-const status = {
-  kind: "ACTIVE" as const,
-  state: "ACTIVE" as const,
-  connection: "CONNECTED" as const,
-  reasonCode: "NONE" as const,
-  groupId: 1,
-  quoteSenderId: "123",
-  connectedTelegramUserId: null,
-  membershipCheckedAt: null,
-  observedAt: "2026-09-05T16:00:00.000Z",
-  stateChangedAt: "2026-09-05T16:00:00.000Z",
-  retryAt: null,
-  capabilities: {
-    canLogin: true,
-    canCreateRequest: true,
-    canCheckMembership: true,
-    canRevoke: true,
-  },
-  error: null,
-  login: null,
-};
+const status = sessionFixture();
+
 function dependencies(
   fetch: typeof globalThis.fetch,
 ): WorkerTransportDependencies {
@@ -171,11 +153,17 @@ test("reachable worker errors degrade status; recovery resets suppression", asyn
             { status: 503 },
           ),
     ),
-    store: { session: async () => null },
+    store: {
+      session: async () => null,
+      activeTelegramOperation: async () => null,
+    },
     log: (event) => events.push(event),
     observe: (event) => events.push(event),
   });
-  assert.equal((await command("user", { type: "status" })).kind, "DEGRADED");
+  assert.equal(
+    (await command("user", { type: "status" })).worker,
+    "UNAVAILABLE",
+  );
   await command("user", { type: "status" });
   assert.deepEqual(events, ["worker.command.failed"]);
   healthy = true;

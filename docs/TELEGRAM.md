@@ -25,6 +25,10 @@ The worker subscribes to incoming messages in `TELEGRAM_GROUP_ID` and extracts c
 
 Network outage retains the authorization file and uses bounded reconnect backoff. Revocation invalidates the session. Disconnect first stores REVOKING even while the worker is offline; worker then logs out, closes storage, removes recognized files and reports REVOKED.
 
+## Contract v3 and operations
+
+Public Telegram procedures use contract version 3 (`X-Zarbit-Telegram-Contract: 3`). Session authorization, worker availability, MTProto connection, membership and operation state are independent facts. `telegram.command` accepts an operation UUID and returns immediately; `telegram.operation` is the owner-scoped durable result. Completed operation metadata is retained for 24 hours and contains no phone, OTP, password or session hash. Login attempts expire after ten minutes, allow five invalid code/password attempts, and are never replayed after a worker restart. Cancellation and revocation are accepted before worker connectivity is available; unsent `WAITING_QUOTE`/`CLAIMED` requests are cancelled under the session row lock, while `SENDING` requests keep their real outcome.
+
 ## Logs and manual verification
 
 Operational logs use shared Pino JSON events and opaque session/challenge references, not raw Telegram errors or credentials. The owner verifies OTP/2FA, identity mismatch rejection, private-group access, quote persistence/display, membership loss, revocation and disconnect with real accounts.

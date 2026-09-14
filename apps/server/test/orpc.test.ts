@@ -1,13 +1,10 @@
+import { sessionFixture } from "./telegram-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
-import {
-  AppError,
-  type WorkerCommand,
-  type TelegramSessionStatus,
-} from "@zarbit/contracts";
+import { AppError, type WorkerCommand } from "@zarbit/contracts";
 import type { RpcClient } from "@zarbit/contracts/rpc";
 import { createApp } from "../src/app/create-app";
 import type { AppDependencies } from "../src/app-dependencies";
@@ -19,27 +16,7 @@ function fixture() {
     activeReads = 0;
   const commands: string[] = [];
   const events: string[] = [];
-  const status: TelegramSessionStatus = {
-    kind: "ACTIVE",
-    state: "ACTIVE",
-    connection: "CONNECTED",
-    reasonCode: "NONE",
-    groupId: null,
-    quoteSenderId: null,
-    connectedTelegramUserId: "alice",
-    membershipCheckedAt: null,
-    observedAt: "2026-09-05T16:00:00.000Z",
-    stateChangedAt: "2026-09-05T16:00:00.000Z",
-    retryAt: null,
-    capabilities: {
-      canLogin: true,
-      canCreateRequest: true,
-      canCheckMembership: true,
-      canRevoke: true,
-    },
-    error: null,
-    login: null,
-  };
+  const status = sessionFixture();
   const store = {
     user: async (identity: { telegramUserId: string }) => {
       userReads++;
@@ -64,6 +41,17 @@ function fixture() {
       events.push(`detail:${id}`);
       return null;
     },
+    telegramOperation: async () => null,
+    acceptTelegramOperation: async (
+      _id: string,
+      input: { operationId: string },
+    ) => {
+      events.push("disable");
+      return {
+        operation: { id: input.operationId, acceptedAt: new Date() },
+        created: true,
+      };
+    },
     disableSession: async () => {
       events.push("disable");
     },
@@ -80,6 +68,16 @@ function fixture() {
       if (!value) throw new Error("not allowed");
       return { telegramUserId: value };
     },
+    acceptCommand: async (
+      _id: string,
+      input: { operationId: string; command: WorkerCommand },
+    ) => {
+      events.push(input.command.type);
+      return {
+        operationId: input.operationId,
+        acceptedAt: new Date().toISOString(),
+      };
+    },
     command: async (_id: string, command: WorkerCommand) => {
       commands.push(command.type);
       events.push(command.type);
@@ -90,7 +88,10 @@ function fixture() {
     createORPCClient(
       new RPCLink({
         url: "http://server/rpc",
-        headers: { "X-Telegram-Init-Data": identity },
+        headers: {
+          "X-Telegram-Init-Data": identity,
+          "X-Zarbit-Telegram-Contract": "3",
+        },
         plugins: batch
           ? [
               new BatchLinkPlugin({
@@ -205,9 +206,7 @@ test("mutations bypass cached readiness; revoke persists before worker command",
   const client = f.client();
   await client.telegram.status();
   Object.assign(f.status, {
-    kind: "DEGRADED",
     connection: "OFFLINE",
-    reasonCode: "WORKER_UNAVAILABLE",
   });
   await assert.rejects(
     client.requests.create({
@@ -219,7 +218,10 @@ test("mutations bypass cached readiness; revoke persists before worker command",
     (error: unknown) => error instanceof ORPCError && error.code === "CONFLICT",
   );
   assert.deepEqual(f.commands, ["status", "status"]);
-  await client.telegram.command({ type: "revoke" });
+  await client.telegram.command({
+    operationId: crypto.randomUUID(),
+    command: { type: "revoke" },
+  });
   assert.ok(f.events.indexOf("disable") < f.events.indexOf("revoke"));
   await client.telegram.status();
   assert.equal(f.commands.at(-1), "status");
@@ -290,6 +292,16 @@ test("request writes preserve compact values, conditions, dates and invalidate a
   const writes: string[] = [];
   const app = createApp({
     authenticate: () => ({ telegramUserId: "alice" }),
+    acceptCommand: async (
+      _id: string,
+      input: { operationId: string; command: WorkerCommand },
+    ) => {
+      writes.push(input.command.type);
+      return {
+        operationId: input.operationId,
+        acceptedAt: new Date().toISOString(),
+      };
+    },
     command: async (_id: string, command: WorkerCommand) => {
       writes.push(command.type);
       return f.status;

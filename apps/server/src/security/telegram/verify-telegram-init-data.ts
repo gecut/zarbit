@@ -1,14 +1,23 @@
+import { AppError } from "@zarbit/contracts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "@zarbit/env/server";
 import type { TelegramIdentity } from "./telegram-identity";
 
 function invalidInitData(): never {
-  throw new Error("اطلاعات ورود تلگرام معتبر نیست.");
+  throw new AppError(
+    "INIT_DATA_INVALID",
+    "اطلاعات ورود تلگرام معتبر نیست.",
+    401,
+  );
 }
 
 export function verifyTelegramInitData(initData: string): TelegramIdentity {
   if (!env.TELEGRAM_BOT_TOKEN)
-    throw new Error("اعتبارسنجی تلگرام روی سرور پیکربندی نشده است.");
+    throw new AppError(
+      "AUTH_UNAVAILABLE",
+      "سرویس ورود موقتاً در دسترس نیست.",
+      503,
+    );
 
   const params = new URLSearchParams(initData);
   if (

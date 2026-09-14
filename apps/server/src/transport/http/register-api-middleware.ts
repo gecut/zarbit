@@ -25,7 +25,11 @@ export function registerApiMiddleware(
     "*",
     cors({
       origin: env.CORS_ORIGIN,
-      allowHeaders: ["Content-Type", "X-Telegram-Init-Data"],
+      allowHeaders: [
+        "Content-Type",
+        "X-Telegram-Init-Data",
+        "X-Zarbit-Telegram-Contract",
+      ],
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     }),
   );

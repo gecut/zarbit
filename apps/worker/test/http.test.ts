@@ -105,7 +105,7 @@ test("worker preserves safe command failures", async () => {
   assert.ok(body.error.requestId);
 });
 
-test("worker returns the PASSWORD login state as a successful code command", async () => {
+test("worker rejects legacy credential commands without execution", async () => {
   const twoFactorSessions = {
     command: async () => ({
       state: "PENDING_OTP",
@@ -145,8 +145,7 @@ test("worker returns the PASSWORD login state as a successful code command", asy
     }),
   });
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 409);
   const body = await response.json();
-  assert.equal(body.data.login.step, "PASSWORD");
-  assert.equal(body.data.login.error, null);
+  assert.equal(body.error.code, "CLIENT_UPDATE_REQUIRED");
 });

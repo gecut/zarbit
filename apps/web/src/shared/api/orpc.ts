@@ -2,7 +2,11 @@ import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { AppError } from "@zarbit/contracts";
+import {
+  AppError,
+  TELEGRAM_CONTRACT_HEADER,
+  TELEGRAM_CONTRACT_VERSION,
+} from "@zarbit/contracts";
 import { rpcErrorDataSchema, type RpcClient } from "@zarbit/contracts/rpc";
 import { marketPolling, fastQuery, slowQuery } from "./query-policy";
 
@@ -13,7 +17,10 @@ export function createRpcClient(
 ): RpcClient {
   const link = new RPCLink({
     url,
-    headers: () => ({ "X-Telegram-Init-Data": initData() }),
+    headers: () => ({
+      "X-Telegram-Init-Data": initData(),
+      [TELEGRAM_CONTRACT_HEADER]: String(TELEGRAM_CONTRACT_VERSION),
+    }),
     plugins: [
       new BatchLinkPlugin({
         groups: [
@@ -48,6 +55,9 @@ export function createRpcClient(
                 : "پاسخ سرویس معتبر نیست؛ دوباره تلاش کنید.",
               error.status,
               parsed.success ? parsed.data.retryAt : undefined,
+              parsed.success
+                ? { field: parsed.data.field, requestId: parsed.data.requestId }
+                : undefined,
             );
           }
           if (error instanceof Error && error.name === "AbortError")

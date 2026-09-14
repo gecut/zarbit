@@ -1,3 +1,4 @@
+import { AppError } from "@zarbit/contracts";
 import { allowedTelegramUserIds, env } from "@zarbit/env/server";
 import type { TelegramIdentity } from "./telegram-identity";
 import { verifyTelegramInitData } from "./verify-telegram-init-data";
@@ -23,10 +24,14 @@ export function createTelegramAuthenticator({
       : nodeEnv === "development" && devTelegramUserId
         ? { telegramUserId: devTelegramUserId, firstName: "کاربر توسعه" }
         : (() => {
-            throw new Error("برای ورود، برنامه را از داخل تلگرام باز کنید.");
+            throw new AppError(
+              "INIT_DATA_MISSING",
+              "برای ورود، برنامه را از داخل تلگرام باز کنید.",
+              401,
+            );
           })();
     if (!allowedTelegramUserIds.has(identity.telegramUserId))
-      throw new Error("دسترسی این حساب تلگرام مجاز نیست.");
+      throw new AppError("FORBIDDEN", "دسترسی این حساب تلگرام مجاز نیست.", 403);
     return identity;
   };
 }

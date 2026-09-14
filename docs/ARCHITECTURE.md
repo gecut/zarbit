@@ -27,6 +27,8 @@ Authenticated browser → Hono server → bearer-authenticated worker HTTP on pr
 
 Worker has no public port/domain or Dokploy proxy route. Its private Compose network retains outbound Internet access for Telegram and managed PostgreSQL. One server and one worker remain the supported topology; PostgreSQL does not authorize concurrent Telegram workers.
 
+Telegram login uses a versioned asynchronous command contract. PostgreSQL owns operation admission, idempotency, cancellation intent and safe outcome metadata; the worker owns MTProto credentials and challenge state in memory. The web client derives actions from separate authorization, worker, connection and membership facts, so a worker timeout never masquerades as logout.
+
 ## Session ownership
 
 One runtime client and one serialized operation stream per user. Runtime reservations include pending login/recovery and are capped at 20. Synchronization cannot overlap, and work for different users runs independently. I/O has a 20-second deadline; failed reconnects back off from 10 seconds to a five-minute ceiling.

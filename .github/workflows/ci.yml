@@ -65,6 +65,17 @@ jobs:
       - name: Test workspace
         run: pnpm run test
 
+      - name: Test Telegram service chain on isolated PostgreSQL
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/zarbit_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/zarbit_test
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/zarbit_test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -c 'CREATE DATABASE zarbit_test'
+          pnpm --filter @zarbit/db exec prisma migrate deploy
+          pnpm --filter worker exec tsx --test test/telegram-integration.test.ts
+
       - name: Typecheck workspace
         run: pnpm run check-types
 

@@ -5,10 +5,11 @@ import {
   AppError,
   type LoginStatus,
   type TelegramSessionStatus,
-  type TelegramSessionStatusV2,
+  presentTelegramSession,
+  TELEGRAM_CONTRACT_VERSION,
   type WorkerCommand,
 } from "@zarbit/contracts";
-import { safeError, rpcCode, isRevoked } from "./errors";
+import { safeError, rpcCode, isRevoked, errorDetails } from "./errors";
 import { SessionFiles } from "./session-files";
 import { challengeRef, sessionRef, workerLog } from "./logger";
 import type {
@@ -19,32 +20,6 @@ import type {
   QuoteEvent,
   TelegramLifecycleEvent,
 } from "./transport";
-
-const sessionReason = (
-  value: string | null | undefined,
-  fallback: TelegramSessionStatusV2["reasonCode"],
-): TelegramSessionStatusV2["reasonCode"] =>
-  value &&
-  [
-    "NONE",
-    "LOGIN_REQUIRED",
-    "LOGIN_EXPIRED",
-    "TELEGRAM_LOGGED_OUT",
-    "SESSION_EXPIRED",
-    "AUTH_KEY_UNREGISTERED",
-    "AUTH_KEY_DUPLICATED",
-    "SESSION_REVOKED",
-    "USER_DEACTIVATED",
-    "USER_DEACTIVATED_BAN",
-    "NETWORK_UNAVAILABLE",
-    "GROUP_MEMBERSHIP_REQUIRED",
-    "IDENTITY_MISMATCH",
-    "WORKER_UNAVAILABLE",
-    "RATE_LIMITED",
-    "UNKNOWN_FAILURE",
-  ].includes(value)
-    ? (value as TelegramSessionStatusV2["reasonCode"])
-    : fallback;
 
 const LOGIN_TTL = 600_000;
 const supportedDeliveries = new Set([
@@ -71,6 +46,8 @@ interface SessionRecord {
   connectedTelegramUserId: string | null;
   state: SessionState;
   revision: number;
+  version?: number;
+  loginId?: string | null;
   runtimeReady: boolean;
   runtimeCheckedAt: Date | null;
   membershipCheckedAt: Date | null;
@@ -93,6 +70,7 @@ interface SessionUpdate {
   runtimeReady?: boolean;
   state?: SessionState;
   storageKey?: string | null;
+  loginId?: string | null;
   reasonCode?: string | null;
   lastErrorCode?: string | null;
   revokedAt?: Date | null;
@@ -143,12 +121,20 @@ export interface SynchronizeResult {
 }
 
 export interface SessionStore {
+  finishTelegramCleanup(userId: string): Promise<unknown>;
+  recoverTelegramOperations(): Promise<unknown>;
+  pruneTelegramOperations(): Promise<unknown>;
+  activeTelegramOperation(userId: string): Promise<{ id: string } | null>;
   activateSession(
     userId: string,
     revision: number,
     data: SessionUpdate,
   ): Promise<{ count: number }>;
-  beginSession(userId: string, storageKey: string): Promise<SessionRecord>;
+  beginSession(
+    userId: string,
+    storageKey: string,
+    loginId?: string,
+  ): Promise<SessionRecord>;
   blockLogin(keys: string[], until: Date): Promise<unknown>;
   consumeSend(keys: string[], now: Date): Promise<unknown>;
   disableSession(
@@ -241,6 +227,9 @@ export class Sessions {
     if (!owner || !this.options.allowlist.has(owner.telegramUserId))
       throw new AppError("FORBIDDEN", "دسترسی این حساب مجاز نیست.", 403);
     return owner;
+  }
+  async authorizeOwner(userId: string): Promise<void> {
+    await this.authorize(userId);
   }
   private async open(record: SessionRecord): Promise<Runtime> {
     const old = this.runtimes.get(record.userId);
@@ -424,6 +413,7 @@ export class Sessions {
   async initialize() {
     await this.options.files.prepare();
     await this.store.recover();
+    await this.store.recoverTelegramOperations();
     const records = await this.store.sessions();
     for (const record of records) {
       if (
@@ -455,130 +445,75 @@ export class Sessions {
     const record = await this.store.session(userId);
     const rt = this.runtimes.get(userId);
     const challenge = this.challenges.get(userId);
+    const activeOperation = await this.store.activeTelegramOperation(userId);
     const observedAt = new Date(this.now()).toISOString();
-    const stateChangedAt = record?.stateChangedAt?.toISOString() ?? observedAt;
-    const retryAt = this.retry.get(userId)?.at
-      ? new Date(this.retry.get(userId)!.at).toISOString()
-      : null;
-    const common = {
-      groupId: this.options.groupId,
-      quoteSenderId: this.options.quoteSenderId,
-      connectedTelegramUserId: record?.connectedTelegramUserId ?? null,
-      membershipCheckedAt: record?.membershipCheckedAt?.toISOString() ?? null,
-      observedAt,
-      stateChangedAt,
-      retryAt,
-      capabilities: {
-        canLogin: !challenge,
-        canCreateRequest: record?.state === "ACTIVE" && Boolean(rt?.online),
-        canCheckMembership: Boolean(record?.connectedTelegramUserId),
-        canRevoke:
-          Boolean(record?.connectedTelegramUserId) &&
-          record?.state !== "REVOKED",
+    const stopping = record?.state === "REVOKING";
+    const login =
+      !stopping && challenge && challenge.expires > this.now()
+        ? challenge.public
+        : null;
+    const authorization = stopping
+      ? "REVOKING"
+      : login
+        ? "LOGIN_PENDING"
+        : !record
+          ? "DISCONNECTED"
+          : record.state === "REVOKED"
+            ? "REVOKED"
+            : record.connectedTelegramUserId
+              ? "AUTHORIZED"
+              : record.reasonCode === "LOGIN_CANCELLED" ||
+                  record.state === "PENDING_OTP"
+                ? "DISCONNECTED"
+                : "ERROR";
+    const ready =
+      record?.state === "ACTIVE" &&
+      record.runtimeReady &&
+      rt?.online &&
+      !rt.abort.signal.aborted &&
+      rt.revision === record.revision;
+    const retryAt =
+      login?.retryAt ??
+      (this.retry.get(userId)?.at
+        ? new Date(this.retry.get(userId)!.at).toISOString()
+        : null);
+    return presentTelegramSession(
+      {
+        contractVersion: TELEGRAM_CONTRACT_VERSION,
+        authorization,
+        worker: "AVAILABLE",
+        source: "LIVE",
+        connection: ready ? "CONNECTED" : rt ? "CONNECTING" : "OFFLINE",
+        membership:
+          record?.state === "NOT_IN_GROUP"
+            ? "NOT_MEMBER"
+            : record?.membershipCheckedAt && record.connectedTelegramUserId
+              ? "MEMBER"
+              : "UNKNOWN",
+        revision: record?.revision ?? 0,
+        version: record?.version ?? 0,
+        observedAt,
+        stateChangedAt: record?.stateChangedAt?.toISOString() ?? observedAt,
+        retryAt,
+        activeOperationId: activeOperation?.id ?? null,
+        challengeId: stopping ? null : (record?.loginId ?? login?.id ?? null),
+        groupId: this.options.groupId,
+        quoteSenderId: this.options.quoteSenderId,
+        connectedTelegramUserId: record?.connectedTelegramUserId ?? null,
+        membershipCheckedAt: record?.membershipCheckedAt?.toISOString() ?? null,
+        login,
+        issue: record?.lastError
+          ? {
+              code: record.reasonCode ?? "UNKNOWN_FAILURE",
+              message: record.lastError,
+            }
+          : null,
       },
-      state:
-        record?.state === "PENDING_OTP"
-          ? "LOGIN_PENDING"
-          : (record?.state ?? "DISCONNECTED"),
-      error: record?.lastError ?? null,
-    };
-    if (challenge && challenge.expires > this.now())
-      return {
-        ...common,
-        kind: "LOGIN_PENDING",
-        state: "LOGIN_PENDING",
-        connection: "CONNECTING",
-        phase: challenge.public.step,
-        reasonCode: "LOGIN_REQUIRED",
-        login: challenge.public,
-      };
-    if (!record)
-      return {
-        ...common,
-        kind: "DISCONNECTED",
-        state: "DISCONNECTED",
-        connection: "OFFLINE",
-        reasonCode: "LOGIN_REQUIRED",
-        login: null,
-      };
-    if (record.state === "REVOKED") {
-      const persistedReason = sessionReason(
-        record.reasonCode,
-        "TELEGRAM_LOGGED_OUT",
-      );
-      const reasonCode = [
-        "TELEGRAM_LOGGED_OUT",
-        "SESSION_EXPIRED",
-        "AUTH_KEY_UNREGISTERED",
-        "AUTH_KEY_DUPLICATED",
-        "SESSION_REVOKED",
-        "USER_DEACTIVATED",
-        "USER_DEACTIVATED_BAN",
-        "IDENTITY_MISMATCH",
-      ].includes(persistedReason)
-        ? (persistedReason as
-            | "TELEGRAM_LOGGED_OUT"
-            | "SESSION_EXPIRED"
-            | "AUTH_KEY_UNREGISTERED"
-            | "AUTH_KEY_DUPLICATED"
-            | "SESSION_REVOKED"
-            | "USER_DEACTIVATED"
-            | "USER_DEACTIVATED_BAN"
-            | "IDENTITY_MISMATCH")
-        : "TELEGRAM_LOGGED_OUT";
-      return {
-        ...common,
-        kind: "REVOKED",
-        state: "REVOKED",
-        connection: "OFFLINE",
-        reasonCode,
-        login: null,
-      };
-    }
-    if (record.state === "NOT_IN_GROUP")
-      return {
-        ...common,
-        kind: "NOT_IN_GROUP",
-        state: "NOT_IN_GROUP",
-        connection: rt?.online ? "CONNECTED" : "OFFLINE",
-        reasonCode: "GROUP_MEMBERSHIP_REQUIRED",
-        login: null,
-      };
-    if (record.state === "REVOKING")
-      return {
-        ...common,
-        kind: "REVOKING",
-        state: "REVOKING",
-        connection: rt?.online ? "CONNECTED" : "OFFLINE",
-        reasonCode: "NONE",
-        login: null,
-      };
-    if (record.state === "ERROR")
-      return {
-        ...common,
-        kind: "ERROR",
-        state: "ERROR",
-        connection: rt ? "CONNECTING" : "OFFLINE",
-        reasonCode: "UNKNOWN_FAILURE",
-        login: null,
-      };
-    if (record.state === "ACTIVE" && rt?.online && record.runtimeReady)
-      return {
-        ...common,
-        kind: "ACTIVE",
-        state: "ACTIVE",
-        connection: "CONNECTED",
-        reasonCode: "NONE",
-        login: null,
-      };
-    return {
-      ...common,
-      kind: "DEGRADED",
-      state: "DEGRADED",
-      connection: rt ? "CONNECTING" : "OFFLINE",
-      reasonCode: "NETWORK_UNAVAILABLE",
-      login: null,
-    };
+      this.now(),
+    );
+  }
+  abortLogin(userId: string): void {
+    this.runtimes.get(userId)?.abort.abort();
   }
   private async discard(challenge: Challenge, message: string) {
     if (this.challenges.get(challenge.rt.userId) !== challenge) return;
@@ -589,12 +524,17 @@ export class Sessions {
     });
     this.challenges.delete(challenge.rt.userId);
     await this.close(challenge.rt, "login_discarded");
+    if ((await this.store.session(challenge.rt.userId))?.state === "REVOKING")
+      return;
     await this.options.files.remove(challenge.rt.key);
     await this.store.updateSession(challenge.rt.userId, challenge.rt.revision, {
       state: "ERROR",
       storageKey: null,
       runtimeReady: false,
-      lastError: message,
+      lastError: message === "ورود لغو شد." ? null : message,
+      loginId: null,
+      reasonCode:
+        message === "ورود لغو شد." ? "LOGIN_CANCELLED" : "LOGIN_EXPIRED",
     });
     workerLog.info("telegram.login.discarded", {
       challengeRef: challengeRef(challenge.id),
@@ -645,6 +585,7 @@ export class Sessions {
           "REVOKING",
           "حساب متفاوت رد شد؛ در حال ابطال اتصال هستیم.",
           rt.revision,
+          "IDENTITY_MISMATCH",
         );
         await this.close(rt, "identity_mismatch");
         throw new AppError(
@@ -661,21 +602,28 @@ export class Sessions {
         "حساب واردشده با حساب بازکننده مینی‌اپ یکسان نیست.",
       );
     }
-    challenge.public.step = "VERIFYING";
+    challenge.public.step = "VERIFYING_CODE";
     workerLog.info("telegram.login.authorized", {
       challengeRef: challengeRef(challenge.id),
       sessionRef: sessionRef(rt.userId),
     });
     await this.options.files.protect(rt.key);
-    await this.store.activateSession(rt.userId, rt.revision, {
-      connectedTelegramUserId: account.id,
-    });
+    const identitySaved = await this.store.activateSession(
+      rt.userId,
+      rt.revision,
+      {
+        connectedTelegramUserId: account.id,
+      },
+    );
+    if (!identitySaved.count)
+      throw new AppError("CANCELLED", "ورود لغو شده است.");
     const member = await this.io(rt, "membership", () =>
       rt.client.membership(),
     );
     // Membership errors after authorization retain the session for a safe retry.
     const activated = await this.store.activateSession(rt.userId, rt.revision, {
       state: "ACTIVE",
+      loginId: null,
       lastError: null,
     });
     this.challenges.delete(rt.userId);
@@ -716,16 +664,18 @@ export class Sessions {
     )
       return false;
     if (!rt.stop)
-      rt.stop = await rt.client.subscribe((event) => {
-        void this.serial(rt.userId, async () => {
-          if (rt.online && !this.stopped)
-            await this.onQuote?.(rt.userId, rt.revision, event);
-        }).catch((error) =>
-          workerLog.failure("telegram.quote.processing_failed", error, {
-            sessionRef: sessionRef(rt.userId),
-          }),
-        );
-      });
+      rt.stop = await this.io(rt, "subscribe", () =>
+        rt.client.subscribe((event) => {
+          void this.serial(rt.userId, async () => {
+            if (rt.online && !this.stopped)
+              await this.onQuote?.(rt.userId, rt.revision, event);
+          }).catch((error) =>
+            workerLog.failure("telegram.quote.processing_failed", error, {
+              sessionRef: sessionRef(rt.userId),
+            }),
+          );
+        }),
+      );
     const activated = await this.store.activateSession(rt.userId, rt.revision, {
       state: "ACTIVE",
       runtimeReady: true,
@@ -779,24 +729,49 @@ export class Sessions {
       });
     } catch (error) {
       await this.runtimeFailure(rt, error);
+      throw error;
     }
   }
   private async runtimeFailure(rt: Runtime, error: unknown) {
     rt.online = false;
-    if (isRevoked(error) || rpcCode(error) === "IDENTITY_MISMATCH") {
+    if (
+      error instanceof AppError &&
+      ["IDENTITY_MISMATCH", "FORBIDDEN"].includes(error.code)
+    ) {
+      await this.store.disableSession(
+        rt.userId,
+        "REVOKING",
+        safeError(error).message,
+        rt.revision,
+        error.code,
+      );
+      await this.close(rt, "identity_rejected");
+      await this.revoke(rt.userId);
+      return;
+    }
+    if (
+      isRevoked(error) ||
+      (error instanceof AppError && error.code === "IDENTITY_MISMATCH")
+    ) {
       this.outages.clear(rt.userId);
       await this.store.disableSession(
         rt.userId,
         "REVOKED",
         "اعتبار اتصال تلگرام پایان یافته است؛ دوباره وارد شوید.",
         rt.revision,
-        rpcCode(error) ?? "TELEGRAM_LOGGED_OUT",
+        (error instanceof AppError ? error.code : rpcCode(error)) ??
+          "TELEGRAM_LOGGED_OUT",
       );
       await this.close(rt, "session_revoked");
       await this.options.files.remove(rt.key);
       await this.store.updateSession(rt.userId, rt.revision, {
+        state: "REVOKED",
         storageKey: null,
-        reasonCode: rpcCode(error) ?? "TELEGRAM_LOGGED_OUT",
+        connectedTelegramUserId: null,
+        loginId: null,
+        reasonCode:
+          (error instanceof AppError ? error.code : rpcCode(error)) ??
+          "TELEGRAM_LOGGED_OUT",
         lastErrorCode: rpcCode(error),
         revokedAt: new Date(this.now()),
         connectionState: "OFFLINE",
@@ -810,7 +785,11 @@ export class Sessions {
       await this.store.updateSession(rt.userId, rt.revision, {
         runtimeReady: false,
         lastError: safeError(error).message,
-        reasonCode: "NETWORK_UNAVAILABLE",
+        reasonCode:
+          errorDetails(error).failureCategory === "network" ||
+          (error instanceof AppError && error.code === "TIMEOUT")
+            ? "NETWORK_UNAVAILABLE"
+            : "UNKNOWN_FAILURE",
         lastErrorCode: rpcCode(error),
         connectionState: "DEGRADED",
       });
@@ -837,9 +816,23 @@ export class Sessions {
       });
     }
   }
+  private async commandAttempt<T>(
+    userId: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    return this.serial(userId, async () => {
+      const timer = setTimeout(() => this.abortLogin(userId), 60_000);
+      try {
+        return await work();
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+  }
   async command(
     userId: string,
     command: WorkerCommand,
+    operationId?: string,
   ): Promise<TelegramSessionStatus> {
     await this.authorize(userId);
     if (command.type !== "status")
@@ -864,14 +857,15 @@ export class Sessions {
     }
     if (command.type === "revoke") {
       this.outages.clear(userId);
-      await this.store.disableSession(
-        userId,
-        "REVOKING",
-        "قطع اتصال درخواست شده است؛ وضعیت درخواست‌های خود را بررسی کنید.",
-      );
+      if ((await this.store.session(userId))?.state !== "REVOKING")
+        await this.store.disableSession(
+          userId,
+          "REVOKING",
+          "قطع اتصال درخواست شده است؛ وضعیت درخواست‌های خود را بررسی کنید.",
+        );
       this.challenges.get(userId)?.rt.abort.abort();
     }
-    return this.serial(userId, async () => {
+    return this.commandAttempt(userId, async () => {
       const existing = this.challenges.get(userId);
       if (existing && existing.expires <= this.now())
         await this.discard(existing, "زمان ورود تمام شد؛ دوباره شروع کنید.");
@@ -885,7 +879,8 @@ export class Sessions {
         const previous = await this.store.session(userId);
         if (
           previous &&
-          ["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(previous.state)
+          (previous.connectedTelegramUserId ||
+            ["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(previous.state))
         )
           throw new AppError(
             "SESSION_EXISTS",
@@ -900,6 +895,7 @@ export class Sessions {
         const record = await this.store.beginSession(
           userId,
           randomBytes(32).toString("hex"),
+          operationId,
         );
         let rt: Runtime;
         try {
@@ -913,7 +909,7 @@ export class Sessions {
           throw error;
         }
         const expires = this.now() + LOGIN_TTL;
-        const id = randomUUID();
+        const id = operationId ?? randomUUID();
         const challenge: Challenge = {
           id,
           rt,
@@ -924,7 +920,8 @@ export class Sessions {
           rateKeys,
           public: {
             id,
-            step: "VERIFYING",
+            step: "SENDING_CODE",
+            retryAt: null,
             expiresAt: new Date(expires).toISOString(),
             resendAvailableAt: null,
             delivery: "app",
@@ -954,7 +951,11 @@ export class Sessions {
         if (!record || !["ACTIVE", "NOT_IN_GROUP"].includes(record.state))
           throw new AppError("NO_SESSION", "ابتدا وارد تلگرام شوید.");
         await this.recoverRuntime(record);
-      } else if (command.type === "revoke") {
+      } else if (
+        command.type === "revoke" ||
+        (command.type === "cancel" &&
+          (await this.store.session(userId))?.state === "REVOKING")
+      ) {
         await this.revoke(userId);
       } else {
         const challenge = this.challenges.get(userId);
@@ -1013,6 +1014,10 @@ export class Sessions {
                   "WRONG_STEP",
                   "مرحله ورود تغییر کرده است؛ وضعیت را تازه کنید.",
                 );
+              challenge.public.step =
+                command.type === "code"
+                  ? "VERIFYING_CODE"
+                  : "VERIFYING_PASSWORD";
               const account = await this.io(
                 challenge.rt,
                 command.type === "code" ? "sign_in" : "password",
@@ -1037,9 +1042,13 @@ export class Sessions {
               error,
               command.type === "resend"
                 ? "resend_code"
-                : challenge.public.step === "PASSWORD"
+                : command.type === "password"
                   ? "password"
-                  : challenge.public.step === "VERIFYING"
+                  : [
+                        "SENDING_CODE",
+                        "VERIFYING_CODE",
+                        "VERIFYING_PASSWORD",
+                      ].includes(challenge.public.step)
                     ? "post_auth"
                     : "sign_in",
             );
@@ -1069,8 +1078,19 @@ export class Sessions {
       return;
     }
     const safe = safeError(error);
+    if (
+      loginPhase !== "send_code" &&
+      [
+        "PHONE_CODE_INVALID",
+        "PASSWORD_HASH_INVALID",
+        "RATE_LIMITED",
+        "RESEND_WAIT",
+      ].includes(safe.code)
+    )
+      challenge.public.step = loginPhase === "password" ? "PASSWORD" : "CODE";
     if (safe.retryAt) {
       challenge.blockedUntil = Date.parse(safe.retryAt);
+      challenge.public.retryAt = safe.retryAt;
       await this.store.blockLogin(challenge.rateKeys, new Date(safe.retryAt));
     }
     if (
@@ -1080,19 +1100,44 @@ export class Sessions {
     )
       challenge.attempts++;
     const record = await this.store.session(challenge.rt.userId);
-    if (record?.state === "REVOKING") throw safe;
+    if (record?.state === "REVOKING") {
+      this.challenges.delete(challenge.rt.userId);
+      await this.close(challenge.rt, "cancel_requested");
+      throw safe;
+    }
     if (record?.connectedTelegramUserId) {
       this.challenges.delete(challenge.rt.userId);
       await this.store.activateSession(record.userId, record.revision, {
         state: "ACTIVE",
+        loginId: null,
       });
       await this.runtimeFailure(challenge.rt, error);
+    } else if (
+      (["TIMEOUT", "CANCELLED"].includes(safe.code) ||
+        ["network", "unknown", "database"].includes(
+          errorDetails(error).failureCategory,
+        )) &&
+      ["SENDING_CODE", "VERIFYING_CODE", "VERIFYING_PASSWORD"].includes(
+        challenge.public.step,
+      )
+    ) {
+      this.challenges.delete(challenge.rt.userId);
+      await this.store.disableSession(
+        challenge.rt.userId,
+        "REVOKING",
+        "نتیجه ورود مشخص نیست؛ اتصال در حال پاک‌سازی است.",
+        challenge.rt.revision,
+        "LOGIN_INTERRUPTED",
+      );
+      await this.close(challenge.rt, "authorization_uncertain");
     } else if (
       challenge.attempts >= 5 ||
       ["TIMEOUT", "CANCELLED", "UNSUPPORTED_DELIVERY"].includes(safe.code) ||
       expiredLoginCodes.has(rpcCode(error) ?? safe.code) ||
       isRevoked(error) ||
-      challenge.public.step === "VERIFYING"
+      ["SENDING_CODE", "VERIFYING_CODE", "VERIFYING_PASSWORD"].includes(
+        challenge.public.step,
+      )
     )
       await this.discard(
         challenge,
@@ -1107,40 +1152,52 @@ export class Sessions {
     this.outages.clear(userId);
     const challenge = this.challenges.get(userId);
     if (challenge) {
-      await this.discard(challenge, "ورود لغو شد.");
-      await this.store.disableSession(userId, "REVOKED", "اتصال قطع شد.");
-      return;
+      this.challenges.delete(userId);
+      await this.close(challenge.rt, "cleanup_requested");
     }
     const record = await this.store.session(userId);
     if (!record) return;
-    if (!record.storageKey) {
-      await this.store.disableSession(userId, "REVOKED", "اتصال قطع شد.");
-      return;
-    }
-    const rt = await this.open(record);
-    try {
-      await this.io(rt, "logout", () => rt.client.logout());
-    } catch (error) {
-      if (!isRevoked(error)) {
-        await this.close(rt, "logout_failed");
-        throw safeError(error);
+    if (record.storageKey) {
+      const existing = this.runtimes.get(userId);
+      if (existing?.abort.signal.aborted)
+        await this.close(existing, "cleanup_reopen");
+      const rt = await this.open(record);
+      try {
+        await this.io(rt, "logout", () => rt.client.logout());
+      } catch (error) {
+        if (!isRevoked(error)) {
+          await this.close(rt, "logout_failed");
+          const count = (this.retry.get(userId)?.count ?? 0) + 1;
+          this.retry.set(userId, {
+            count,
+            at: this.now() + Math.min(300_000, 5000 * 2 ** Math.min(count, 6)),
+          });
+          throw safeError(error);
+        }
       }
+      await this.close(rt, "logout_completed");
+      await this.options.files.remove(rt.key);
     }
-    await this.close(rt, "logout_completed");
-    await this.options.files.remove(rt.key);
-    await this.store.updateSession(userId, rt.revision, {
+    const result = await this.store.updateSession(userId, record.revision, {
       state: "REVOKED",
       storageKey: null,
+      loginId: null,
       runtimeReady: false,
       connectedTelegramUserId: null,
       lastError: null,
+      connectionState: "OFFLINE",
+      reasonCode: record.reasonCode ?? "USER_DISCONNECTED",
+      revokedAt: new Date(this.now()),
     });
+    if (result.count) await this.store.finishTelegramCleanup(userId);
+    this.retry.delete(userId);
   }
   async synchronize(): Promise<SynchronizeResult> {
     if (this.syncing || this.stopped)
       return { failures: 0, recoveryAttempts: 0, revocations: 0, scanned: 0 };
     this.syncing = true;
     try {
+      await this.store.pruneTelegramOperations();
       const records = await this.store.sessions();
       let recoveryAttempts = 0;
       let revocations = 0;
@@ -1161,6 +1218,7 @@ export class Sessions {
             const current = await this.store.session(record.userId);
             if (!current) return;
             if (current.state === "REVOKING") {
+              if ((this.retry.get(record.userId)?.at ?? 0) > this.now()) return;
               await this.revoke(current.userId);
               return;
             }

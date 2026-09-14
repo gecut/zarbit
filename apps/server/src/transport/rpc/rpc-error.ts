@@ -1,4 +1,4 @@
-import { ORPCError } from "@orpc/server";
+import { ORPCError, ValidationError } from "@orpc/server";
 import { AppError } from "@zarbit/contracts";
 
 export function rpcError(
@@ -6,16 +6,50 @@ export function rpcError(
   requestId = "unknown",
 ): ORPCError<string, unknown> {
   if (error instanceof ORPCError) {
-    if (error.code === "BAD_REQUEST")
+    if (error.code === "BAD_REQUEST") {
+      const paths =
+        error.cause instanceof ValidationError
+          ? error.cause.issues.flatMap((issue) =>
+              (issue.path ?? []).map((part) =>
+                typeof part === "object" && part !== null ? part.key : part,
+              ),
+            )
+          : [];
+      const field = paths.includes("phone")
+        ? "phone"
+        : paths.includes("code")
+          ? "code"
+          : paths.includes("password")
+            ? "password"
+            : undefined;
+      const message =
+        field === "phone"
+          ? "شماره را با کد کشور وارد کنید؛ مثلاً +989121234567."
+          : field === "code"
+            ? "کد ورود را وارد کنید."
+            : field === "password"
+              ? "رمز دوم تلگرام را وارد کنید."
+              : "اطلاعات ارسالی را بررسی کنید.";
       return new ORPCError("BAD_REQUEST", {
-        message: "اطلاعات ارسالی را بررسی کنید.",
+        message,
         data: {
+          field,
           appCode: "INVALID_INPUT",
           reasonCode: "INVALID_INPUT",
           messageKey: "INVALID_INPUT",
           requestId,
         },
       });
+    }
+    if (error.code === "INTERNAL_SERVER_ERROR")
+      return rpcError(
+        new AppError(
+          "INVALID_RESPONSE",
+          "پاسخ سرویس معتبر نیست؛ کمی بعد تلاش کنید.",
+          503,
+        ),
+        requestId,
+      );
     return error;
   }
   const safe =
@@ -38,6 +72,7 @@ export function rpcError(
   return new ORPCError(codes[safe.status] ?? "SERVICE_UNAVAILABLE", {
     message: safe.message,
     data: {
+      field: safe.details?.field,
       appCode: safe.code,
       reasonCode: safe.code,
       messageKey: safe.code,

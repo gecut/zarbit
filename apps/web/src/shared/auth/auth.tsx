@@ -15,7 +15,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const api = useApi();
   const query = useQuery(api.auth.identity.queryOptions({ retry: false }));
   const unauthorized =
-    query.error instanceof AppError && query.error.status === 401;
+    query.error instanceof AppError && [401, 403].includes(query.error.status);
   if (query.isPending)
     return (
       <p

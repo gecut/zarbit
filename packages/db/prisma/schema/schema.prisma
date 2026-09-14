@@ -49,6 +49,7 @@ model TelegramUser {
   updatedAt       DateTime         @updatedAt
   telegramSession TelegramSession?
   requests        Request[]
+  telegramOperations TelegramOperation[]
 }
 
 model TelegramSession {
@@ -63,6 +64,8 @@ model TelegramSession {
   lastErrorCode           String?
   revokedAt               DateTime?
   revision                Int                  @default(0)
+  version                 Int                  @default(0)
+  loginId                 String?
   runtimeReady            Boolean              @default(false)
   runtimeCheckedAt        DateTime?
   membershipCheckedAt     DateTime?
@@ -74,6 +77,39 @@ model TelegramSession {
 
   @@index([state, updatedAt])
   @@index([state, connectionState])
+}
+
+enum TelegramOperationStatus {
+  ACCEPTED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCEL_REQUESTED
+  CANCELLED
+  INTERRUPTED
+}
+
+model TelegramOperation {
+  userId String
+  id String @db.Uuid
+  type String
+  status TelegramOperationStatus @default(ACCEPTED)
+  revision Int
+  challengeId String? @db.Uuid
+  requestId String
+  acceptedAt DateTime @default(now())
+  completedAt DateTime?
+  errorCode String?
+  errorMessage String?
+  errorField String?
+  retryAt DateTime?
+  cancelledRequests Int @default(0)
+  sendingRequests Int @default(0)
+  user TelegramUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, status, acceptedAt])
+  @@index([completedAt])
 }
 
 model LoginRateLimit {

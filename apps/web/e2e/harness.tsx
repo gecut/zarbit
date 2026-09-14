@@ -1,3 +1,4 @@
+import { TelegramPage } from "../src/modules/telegram/telegram-page";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -42,7 +43,7 @@ function Harness() {
             mounted && (
               <ApiProvider>
                 <AuthGate>
-                  <Identity />
+                  {params.has("telegram") ? <TelegramPage /> : <Identity />}
                 </AuthGate>
               </ApiProvider>
             )

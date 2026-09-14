@@ -14,8 +14,12 @@ import { workerLog } from "./logger";
 
 type RequestStore = Pick<
   Store,
-  "requestCandidates" | "claimRequest" | "completeRequest" | "owner"
-> & { markSending?: (id: string, claimToken: string) => Promise<unknown> };
+  | "requestCandidates"
+  | "claimRequest"
+  | "completeRequest"
+  | "owner"
+  | "markSending"
+>;
 type Quote = {
   compactQuote: number;
   sourceMessageId: number;
@@ -57,8 +61,13 @@ export function createRequestExecutor(
     try {
       await delivery.ready(userId);
       if (!owner) throw new AppError("NOT_FOUND", "صاحب درخواست پیدا نشد.");
+      const started = await store.markSending(id, token);
+      if (!started.count)
+        throw new AppError(
+          "REQUEST_CONFLICT",
+          "درخواست لغو شده یا اتصال آماده نیست.",
+        );
       sending = true;
-      await store.markSending?.(id, token);
       const price = row.targetPrice;
       const send =
         row.action === "ALERT"

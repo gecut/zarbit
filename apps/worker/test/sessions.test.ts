@@ -23,6 +23,10 @@ function createStore(): SessionStore {
     if (record) Object.assign(record, data);
   };
   return {
+    activeTelegramOperation: async () => null,
+    finishTelegramCleanup: async () => [],
+    recoverTelegramOperations: async () => ({ count: 0 }),
+    pruneTelegramOperations: async () => ({ count: 0 }),
     owner: async () => ({
       id: userId,
       telegramUserId,
@@ -36,11 +40,13 @@ function createStore(): SessionStore {
       record ? [{ ...record, user: { telegramUserId } }] : [],
     consumeSend: async () => undefined,
     blockLogin: async () => [],
-    beginSession: async (id, storageKey) => {
+    beginSession: async (id, storageKey, loginId) => {
       record = {
         id: "session-1",
         userId: id,
         storageKey,
+        loginId,
+        version: 1,
         connectedTelegramUserId: null,
         state: "PENDING_OTP",
         revision: 1,
@@ -54,11 +60,25 @@ function createStore(): SessionStore {
       };
       return record;
     },
-    updateSession: async (_, __, data) => {
+    updateSession: async (_, revision, data) => {
+      if (
+        !record ||
+        record.revision !== revision ||
+        (data.state &&
+          data.state !== "REVOKED" &&
+          ["REVOKING", "REVOKED"].includes(record.state))
+      )
+        return { count: 0 };
       applyUpdate(data);
       return { count: 1 };
     },
-    activateSession: async (_, __, data) => {
+    activateSession: async (_, revision, data) => {
+      if (
+        !record ||
+        record.revision !== revision ||
+        !["ACTIVE", "PENDING_OTP", "NOT_IN_GROUP"].includes(record.state)
+      )
+        return { count: 0 };
       applyUpdate(data);
       return { count: 1 };
     },
@@ -203,7 +223,7 @@ test("completes the existing challenge after a valid two-step password", async (
     password: "correct-password",
   });
   assert.equal(completed.login, null);
-  assert.equal(completed.state, "ACTIVE");
+  assert.equal(completed.authorization, "AUTHORIZED");
   assert.equal(completed.connection, "CONNECTED");
 });
 
@@ -371,7 +391,7 @@ test("preserves the authorized session but disables execution for non-members", 
     code: "12345",
   });
   assert.equal(completed.login, null);
-  assert.equal(completed.state, "NOT_IN_GROUP");
+  assert.equal(completed.membership, "NOT_MEMBER");
   assert.equal(completed.connection, "OFFLINE");
 });
 
@@ -502,7 +522,7 @@ test("an empty worker permits first login and reports available capacity", async
   const { directory, sessions } = await createSessions(baseTransport({}));
   t.after(async () => rm(directory, { recursive: true, force: true }));
   const status = await sessions.command(userId, { type: "status" });
-  assert.equal(status.state, "DISCONNECTED");
+  assert.equal(status.authorization, "DISCONNECTED");
   assert.equal(status.connection, "OFFLINE");
   assert.deepEqual(sessions.runtimeHealth(), {
     activeSessions: 0,

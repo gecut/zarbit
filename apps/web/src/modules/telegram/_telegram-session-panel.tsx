@@ -1,13 +1,8 @@
-import {
-  Accordion,
-  Alert,
-  Button,
-  Card,
-  Chip,
-  ProgressCircle,
-  Skeleton,
-} from "@heroui/react";
-import type { TelegramSessionStatus } from "@zarbit/contracts";
+import { Accordion, Alert, Button, Card, Chip, Skeleton } from "@heroui/react";
+import type {
+  TelegramSessionStatus,
+  TelegramOperation,
+} from "@zarbit/contracts";
 import type { ReactNode } from "react";
 
 import { ConfirmAction } from "./_confirm-action";
@@ -21,96 +16,19 @@ function formatDate(value: string): string {
 }
 
 function SessionAlert({ session }: { session: TelegramSessionStatus }) {
-  if ("kind" in session) {
-    if (session.kind === "REVOKED")
-      return (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>اتصال تلگرام قطع شد</Alert.Title>
-            <Alert.Description>
-              اتصال تلگرام توسط تلگرام قطع شده است؛ دوباره وارد شوید.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      );
-    if (session.kind === "LOGIN_PENDING")
-      return (
-        <Alert status="accent">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>ورود در حال تکمیل است</Alert.Title>
-            <Alert.Description>
-              کد یا رمز دومرحله‌ای تلگرام را وارد کنید.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      );
-    if (session.kind === "ERROR")
-      return (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>خطا در اتصال</Alert.Title>
-            <Alert.Description>
-              اتصال با خطا روبه‌رو شد؛ دوباره تلاش کنید.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      );
-  }
-  if (session.connection === "OFFLINE" || session.connection === "DEGRADED") {
-    return (
-      <Alert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Title>وضعیت ذخیره‌شده است</Alert.Title>
-          <Alert.Description>
-            سرویس دریافت مظنه در دسترس نیست. اطلاعات اتصال قابل مشاهده است، اما
-            فعلاً اقدامی انجام نمی‌شود.
-          </Alert.Description>
-        </Alert.Content>
-      </Alert>
-    );
-  }
-
-  if (session.state === "NOT_IN_GROUP") {
-    return (
-      <Alert status="danger">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Title>عضویت گروه تأیید نشد</Alert.Title>
-          <Alert.Description>
-            ابتدا عضویت این حساب در گروه هدف را بررسی کنید، سپس دوباره وضعیت را
-            بررسی کنید.
-          </Alert.Description>
-        </Alert.Content>
-      </Alert>
-    );
-  }
-
-  if (session.state === "REVOKING") {
-    return (
-      <Alert status="accent">
-        <Alert.Indicator>
-          <ProgressCircle
-            aria-label="در حال قطع اتصال تلگرام"
-            color="accent"
-            isIndeterminate
-            size="sm"
-          />
-        </Alert.Indicator>
-        <Alert.Content>
-          <Alert.Title>در حال قطع اتصال</Alert.Title>
-          <Alert.Description>
-            دریافت مظنه از این حساب پس از پایان عملیات متوقف می‌شود.
-          </Alert.Description>
-        </Alert.Content>
-      </Alert>
-    );
-  }
-
-  return null;
+  if (session.worker !== "UNAVAILABLE") return null;
+  return (
+    <Alert status="warning">
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title>وضعیت ذخیره‌شده است</Alert.Title>
+        <Alert.Description>
+          ارتباط با سرویس برقرار نیست. وضعیت حساب حفظ شده است؛ درخواست قطع اتصال
+          همچنان قابل ثبت و پیگیری است.
+        </Alert.Description>
+      </Alert.Content>
+    </Alert>
+  );
 }
 
 function ConnectionDetails({ session }: { session: TelegramSessionStatus }) {
@@ -169,13 +87,13 @@ function ConnectionDetails({ session }: { session: TelegramSessionStatus }) {
 }
 
 function MembershipSummary({ session }: { session: TelegramSessionStatus }) {
-  if (session.state !== "ACTIVE" && session.state !== "NOT_IN_GROUP") {
+  if (session.authorization !== "AUTHORIZED") {
     return null;
   }
 
-  const isMember = session.state === "ACTIVE" && !!session.membershipCheckedAt;
+  const isMember = session.membership === "MEMBER";
   const label =
-    session.state === "NOT_IN_GROUP"
+    session.membership === "NOT_MEMBER"
       ? "عضویت تأیید نشده"
       : isMember
         ? "عضویت تأیید شده"
@@ -205,6 +123,8 @@ function MembershipSummary({ session }: { session: TelegramSessionStatus }) {
 
 type TelegramSessionPanelProps = {
   commandError: string | null | undefined;
+  operation?: TelegramOperation | null;
+  retryWait?: number;
   isLoading: boolean;
   isPending: boolean;
   loadError: string | undefined;
@@ -217,6 +137,8 @@ type TelegramSessionPanelProps = {
 
 export function TelegramSessionPanel({
   commandError,
+  operation,
+  retryWait,
   isLoading,
   isPending,
   loadError,
@@ -229,7 +151,7 @@ export function TelegramSessionPanel({
   const presentation = session
     ? resolveTelegramSessionPresentation(session)
     : null;
-  const isActionDisabled = isPending || !presentation?.canManageConnection;
+  const isActionDisabled = !session?.capabilities.canRevoke;
 
   return (
     <article>
@@ -279,18 +201,38 @@ export function TelegramSessionPanel({
 
               <MembershipSummary session={session} />
 
-              {session.error || commandError ? (
+              {commandError ||
+              (!operation &&
+                session.issue &&
+                session.issue.code !== "WORKER_UNAVAILABLE") ? (
                 <Alert status="danger">
                   <Alert.Indicator />
                   <Alert.Content>
                     <Alert.Title>عملیات انجام نشد</Alert.Title>
                     <Alert.Description>
-                      {commandError ?? session.error}
+                      {commandError ?? session.issue?.message}
                     </Alert.Description>
                   </Alert.Content>
                 </Alert>
               ) : null}
 
+              {retryWait ? (
+                <p role="status" className="text-muted text-sm">
+                  امکان تلاش دوباره پس از {retryWait} ثانیه
+                </p>
+              ) : null}
+              {operation && ["cancel", "revoke"].includes(operation.type) ? (
+                <p role="status" className="text-muted text-sm leading-7">
+                  {operation.cancelledRequests} درخواست ارسال‌نشده لغو شد.{" "}
+                  {operation.sendingRequests} درخواست وارد مرحله ارسال شده؛
+                  نتیجه آن‌ها در سوابق پیگیری می‌شود.
+                </p>
+              ) : null}
+              {isPending ? (
+                <p role="status" className="text-muted text-sm">
+                  عملیات در حال پیگیری است…
+                </p>
+              ) : null}
               <ConnectionDetails session={session} />
               {loginForm}
             </>
@@ -302,7 +244,9 @@ export function TelegramSessionPanel({
             <div className="grid gap-2">
               <Button
                 fullWidth
-                isDisabled={isActionDisabled}
+                isDisabled={
+                  isPending || !session?.capabilities.canCheckMembership
+                }
                 isPending={isPending}
                 onPress={onCheckMembership}
                 variant="secondary"
@@ -315,21 +259,21 @@ export function TelegramSessionPanel({
               </p>
             </div>
 
-            <div className="border-separator grid gap-3 border-t pt-5" hidden>
+            <div className="border-separator grid gap-3 border-t pt-5">
               <div>
                 <p className="text-foreground text-sm font-semibold">
                   قطع اتصال
                 </p>
                 <p className="text-muted mt-1 text-xs leading-6">
-                  دریافت مظنه از این حساب متوقف می‌شود.
+                  دریافت مظنه متوقف و درخواست‌های ارسال‌نشده لغو می‌شوند.
                 </p>
               </div>
               <ConfirmAction
-                description="اتصال حساب تلگرام قطع می‌شود و دریافت مظنه از این حساب متوقف خواهد شد."
+                description="درخواست‌های ارسال‌نشده لغو و اتصال این حساب قطع می‌شود. مواردی که ارسالشان شروع شده، در سوابق تعیین تکلیف خواهند شد."
                 isDisabled={isActionDisabled}
                 label="قطع اتصال تلگرام"
                 onConfirm={onRevoke}
-                pending={isPending}
+                pending={false}
                 title="اتصال تلگرام قطع شود؟"
               />
             </div>

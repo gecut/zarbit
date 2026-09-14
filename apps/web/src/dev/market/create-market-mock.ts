@@ -1,10 +1,10 @@
+import { createTelegramMock } from "./telegram-mock";
 import { createORPCClient } from "@orpc/client";
 import {
   AppError,
   createRequestInputSchema,
   requestDetailSchema,
   requestHistoryPageSchema,
-  telegramSessionStatusSchema,
   marketSnapshotSchema,
   type MarketLiveEvent,
   type RequestDetail,
@@ -28,6 +28,7 @@ export function createMarketMock(
   let streamFailed = scenario === "fallback" || scenario === "recovery";
   let failure: string | undefined;
   let sequence = 0;
+  const telegram = createTelegramMock(scenario);
   const streams = new Set<ReturnType<typeof createMockLiveIterator>>();
   const rows: RequestDetail[] = [];
   const iso = () => new Date(clock).toISOString();
@@ -145,34 +146,18 @@ export function createMarketMock(
           return requestDetailSchema.parse(row);
         }
         case "telegram.status":
-        case "telegram.command": {
-          if (scenario === "telegram-unavailable")
-            throw new AppError(
-              "UNAVAILABLE",
-              "وضعیت تلگرام در دسترس نیست.",
-              503,
-            );
-          const transitional = scenario === "telegram-transitional";
-          return telegramSessionStatusSchema.parse({
-            kind: transitional ? "REVOKING" : "ACTIVE",
-            connection: "CONNECTED",
-            reasonCode: "NONE",
-            observedAt: iso(),
-            stateChangedAt: iso(),
-            retryAt: null,
-            capabilities: {
-              canLogin: false,
-              canCreateRequest: !transitional,
-              canCheckMembership: false,
-              canRevoke: !transitional,
-            },
-            groupId: null,
-            quoteSenderId: null,
-            connectedTelegramUserId: "mock-user",
-            membershipCheckedAt: iso(),
-            login: null,
-          });
-        }
+          return telegram.status();
+        case "telegram.command":
+          return telegram.command(input);
+        case "telegram.operation":
+          return telegram.operation(
+            typeof input === "object" &&
+              input !== null &&
+              "id" in input &&
+              typeof input.id === "string"
+              ? input.id
+              : "00000000-0000-4000-8000-000000000000",
+          );
         case "analytics.traders":
           return [];
         case "analytics.traderDetail":

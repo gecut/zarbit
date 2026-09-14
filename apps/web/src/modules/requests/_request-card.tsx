@@ -8,6 +8,7 @@ import {
   requestStatusLabel,
 } from "./_request-view-model";
 import TomanIcon from "@/shared/ui/_toman-icon";
+import { formatRelativeDateTime } from "@zarbit/format";
 
 export interface RequestCardProps {
   row: RequestDetail;
@@ -55,6 +56,7 @@ export function RequestCard({
             >
               <Chip.Label>{actionLabel}</Chip.Label>
             </Chip>
+
             {row.action !== "ALERT" && row.units != null && (
               <b className="tabular-nums">{formatNumber(row.units)} واحد</b>
             )}
@@ -101,44 +103,56 @@ export function RequestCard({
         }
       }}
       variant="secondary"
-      className="border-border/60 hover:bg-surface-secondary/90 hover:border-border focus-visible:outline-3 focus-visible:outline-focus cursor-pointer rounded-xl border p-2.5 transition-colors focus-visible:outline-offset-2 active:scale-[0.99] sm:p-3"
     >
-      <div className="flex w-full items-center justify-between gap-2.5">
-        {/* Left/Start Side: Action Chip, Units, Price Target */}
-        <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <Chip
-            size="sm"
-            color={
-              row.action === "BUY"
-                ? "success"
-                : row.action === "SELL"
-                  ? "danger"
-                  : "warning"
-            }
-            variant="soft"
-            className="h-5.5 px-1.5 text-[0.7rem] font-bold"
-          >
-            <ActionIcon className="me-1 inline-block size-3.5" />
-            <Chip.Label>{actionLabel}</Chip.Label>
-          </Chip>
+      <Card.Header className="flex w-full flex-row items-center justify-between">
+        <Chip
+          color={
+            row.action === "BUY"
+              ? "success"
+              : row.action === "SELL"
+                ? "danger"
+                : "warning"
+          }
+          variant="soft"
+        >
+          <ActionIcon className="me-1 inline-block size-4" />
+          <Chip.Label>{actionLabel}</Chip.Label>
+        </Chip>
 
+        <Chip
+          color={
+            row.status === "ACTIVE"
+              ? "accent"
+              : row.status === "DONE"
+                ? "success"
+                : "danger"
+          }
+          variant="soft"
+        >
+          <Chip.Label>{requestStatusLabel(row.status)}</Chip.Label>
+        </Chip>
+      </Card.Header>
+
+      <Card.Content className="flex w-full flex-row items-end justify-between gap-2.5">
+        <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           {row.action !== "ALERT" && row.units != null && (
-            <span className="text-foreground font-semibold tabular-nums">
+            <span className="text-foreground font-semibold">
               {formatNumber(row.units)} واحد
             </span>
           )}
 
           <div className="text-muted flex items-center gap-1">
             <span>مظنه {conditionLabel} از</span>
-            <strong className="text-foreground font-mono font-bold tabular-nums">
+
+            <strong className="text-foreground font-bold">
               {formatNumber(row.targetPrice)}
             </strong>
-            <TomanIcon className="size-3 opacity-80" />
+
+            <TomanIcon className="size-4 opacity-80" />
           </div>
         </div>
 
-        {/* Right/End Side: Quote Distance & Status */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-col items-center gap-2">
           {distance != null && row.status === "ACTIVE" && (
             <span
               className={`font-mono text-[0.68rem] tabular-nums ${
@@ -153,21 +167,13 @@ export function RequestCard({
             </span>
           )}
 
-          <Chip
-            color={
-              row.status === "ACTIVE"
-                ? "accent"
-                : row.status === "DONE"
-                  ? "success"
-                  : "danger"
-            }
-            variant="soft"
-            className="h-5.5 px-2 text-[0.68rem] font-semibold"
-          >
-            <Chip.Label>{requestStatusLabel(row.status)}</Chip.Label>
-          </Chip>
+          {row.completedAt && (
+            <time className="text-muted text-xs">
+              {formatRelativeDateTime(row.completedAt)}
+            </time>
+          )}
         </div>
-      </div>
+      </Card.Content>
     </Card>
   );
 }

@@ -3,16 +3,15 @@ import type {
   TelegramSessionStatus,
   TelegramOperation,
 } from "@zarbit/contracts";
+import { formatDateTime } from "@zarbit/format";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { ConfirmAction } from "./_confirm-action";
 import { resolveTelegramSessionPresentation } from "./_session-view-model";
 
 function formatDate(value: string): string {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString("fa-IR")
-    : "ثبت نشده";
+  const formatted = formatDateTime(value);
+  return formatted === "—" ? "ثبت نشده" : formatted;
 }
 
 function SessionAlert({ session }: { session: TelegramSessionStatus }) {

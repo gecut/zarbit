@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddIcon } from "@solar-icons/react/linear";
 import type { CreateRequestInput, RequestDetail } from "@zarbit/contracts";
+import { formatNumber } from "@zarbit/format";
 import {
   useQuery,
   useInfiniteQuery,
@@ -33,7 +34,7 @@ interface RequestListProps {
   currentQuote?: number;
 }
 
-export function RequestList({
+export function RequestsPage({
   history = false,
   requestId,
   onCloseLinkedRequest,
@@ -54,6 +55,7 @@ export function RequestList({
       refetchOnReconnect: "always",
     }),
   );
+
   const historyOptions = api.requests.history.infiniteOptions({
     input: (cursor: string | undefined) => ({ cursor }),
     initialPageParam: undefined,
@@ -65,6 +67,7 @@ export function RequestList({
           api.requests.history.call({ cursor: pageParam }, { signal }),
       }),
   });
+
   const past = useInfiniteQuery({ ...historyOptions, enabled: history });
   const rows = useMemo(
     () =>
@@ -75,12 +78,14 @@ export function RequestList({
   );
   const query = history ? past : active;
   const previousIds = useRef<string[]>([]);
+
   useEffect(() => {
     if (!active.data) return;
     const ids = active.data.map((row) => row.id);
     if (previousIds.current.some((id) => !ids.includes(id))) {
       void client.invalidateQueries({ queryKey: api.requests.history.key() });
     }
+
     previousIds.current = ids;
   }, [active.data, api, client]);
 
@@ -126,13 +131,12 @@ export function RequestList({
         <div className="border-separator/40 flex items-center justify-between gap-2 border-b pb-2.5">
           <div className="flex items-center gap-2">
             <h2 className="text-foreground text-sm font-bold sm:text-base">
-              {history ? "سوابق درخواست‌ها" : "درخواست‌های فعال"}
+              {history ? "سوابق درخواست‌ها" : ""}
             </h2>
+
             {!history && active.data && active.data.length > 0 && (
               <Chip color="accent" variant="soft" size="sm">
-                <Chip.Label>
-                  {new Intl.NumberFormat("fa-IR").format(active.data.length)}
-                </Chip.Label>
+                <Chip.Label>{formatNumber(active.data.length)}</Chip.Label>
               </Chip>
             )}
           </div>
@@ -155,7 +159,7 @@ export function RequestList({
             aria-label="فیلتر درخواست‌ها"
             selectionMode="single"
             disallowEmptySelection
-            size="sm"
+            fullWidth
             selectedKeys={[activeFilter]}
             onSelectionChange={(keys) => {
               const key = Array.from(keys)[0];
@@ -177,7 +181,7 @@ export function RequestList({
               ] as const
             ).map((tab) => (
               <ToggleButton key={tab.id} id={tab.id}>
-                {tab.label} {new Intl.NumberFormat("fa-IR").format(tab.count)}
+                {tab.label} {formatNumber(tab.count)}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
@@ -273,3 +277,6 @@ export function RequestList({
     </section>
   );
 }
+
+/** Compatibility export for existing route consumers. */
+export const RequestList = RequestsPage;

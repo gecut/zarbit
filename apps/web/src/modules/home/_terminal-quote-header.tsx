@@ -3,21 +3,18 @@ import {
   Button,
   Card,
   Chip,
+  cn,
   Separator,
   Skeleton,
   Spinner,
 } from "@heroui/react";
 import type { MarketSnapshot } from "@zarbit/contracts";
+import { formatTime, formatTomanFromCompactPrice } from "@zarbit/format";
 import { RefreshCircleIcon } from "@solar-icons/react/linear/refresh-circle";
 type MarketConnection = "connecting" | "healthy" | "degraded";
-import {
-  fullToman,
-  compactPriceFormat,
-  marketNumber,
-  marketTimePrecise,
-  marketDifferenceDetails,
-} from "./_market-format";
+import { marketDifferenceDetails } from "./_market-format";
 import { QuoteAge } from "./_quote-age";
+import TomanIcon from "@/shared/ui/_toman-icon";
 
 interface TerminalQuoteHeaderProps {
   data?: MarketSnapshot;
@@ -48,8 +45,9 @@ export function TerminalQuoteHeader({
     data?.tradeQuoteDifference != null
       ? marketDifferenceDetails(data.tradeQuoteDifference)
       : null;
+
   return (
-    <Card variant="secondary">
+    <Card variant="tertiary">
       <Card.Header>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Card.Title>مظنه رسمی طلا</Card.Title>
@@ -58,11 +56,18 @@ export function TerminalQuoteHeader({
               <Chip
                 size="sm"
                 variant="soft"
-                color={connection === "degraded" ? "warning" : "default"}
+                color={
+                  connection === "degraded"
+                    ? "warning"
+                    : connection === "healthy"
+                      ? "success"
+                      : "default"
+                }
               >
                 <Chip.Label>{connectionLabels[connection]}</Chip.Label>
               </Chip>
             </span>
+
             <Button
               size="sm"
               variant="ghost"
@@ -80,40 +85,38 @@ export function TerminalQuoteHeader({
           </div>
         </div>
       </Card.Header>
-      <Card.Content className="grid gap-3">
+      <Card.Content className="grid gap-6">
         {isPending && !data ? (
           <div className="grid gap-2" aria-label="در حال دریافت مظنه">
             <Skeleton className="h-10 w-3/4" />
             <Skeleton className="h-5 w-1/2" />
           </div>
         ) : (
-          <div className="grid gap-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <strong
-                className="text-3xl font-bold tabular-nums sm:text-4xl"
-                dir="ltr"
-              >
-                {quote ? fullToman(quote.compactPrice) : "ثبت‌نشده"}
-              </strong>
-              {quote && <span className="text-muted text-sm">تومان</span>}
-            </div>
-            {quote && (
-              <div className="text-muted flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span>
-                  مظنه فشرده{" "}
-                  <b className="text-foreground tabular-nums">
-                    {compactPriceFormat(quote.compactPrice)}
-                  </b>{" "}
-                  · هزار تومان
-                </span>
-                <time className="tabular-nums" dateTime={quote.announcedAt}>
-                  {marketTimePrecise(quote.announcedAt)}
-                </time>
+          <div className="items-baseline-last flex w-full justify-between">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-baseline gap-1">
+                <strong className="text-3xl font-bold sm:text-4xl">
+                  {quote
+                    ? formatTomanFromCompactPrice(quote.compactPrice)
+                    : "ثبت‌نشده"}
+                </strong>
+                {quote && <TomanIcon className="text-muted size-6" />}
               </div>
+
+              <QuoteAge announcedAt={quote?.announcedAt} asOf={data?.asOf} />
+            </div>
+
+            {quote && (
+              <time
+                className="text-muted text-xs tabular-nums"
+                dateTime={quote.announcedAt}
+              >
+                {formatTime(quote.announcedAt)}
+              </time>
             )}
           </div>
         )}
-        <QuoteAge announcedAt={quote?.announcedAt} asOf={data?.asOf} />
+
         {error && (
           <Alert status="danger">
             <Alert.Indicator />
@@ -124,40 +127,44 @@ export function TerminalQuoteHeader({
             </Alert.Content>
           </Alert>
         )}
+
         <Separator />
-        <div className="grid gap-1 text-xs">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="text-muted">آخرین معامله تأییدشده</span>
+
             {trade && (
               <time
                 className="text-muted tabular-nums"
                 dateTime={trade.announcedAt}
               >
-                {marketTimePrecise(trade.announcedAt)}
+                {formatTime(trade.announcedAt)}
               </time>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>
-              <b className="tabular-nums">
-                {trade ? fullToman(trade.compactPrice) : "در انتظار ثبت"}
+
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1 text-lg">
+              <b className="font-semibold">
+                {trade
+                  ? formatTomanFromCompactPrice(trade.compactPrice)
+                  : "در انتظار ثبت"}
               </b>
-              {trade && " تومان"}
+
+              {trade && <TomanIcon className="text-muted mb-0.5 size-4" />}
             </span>
-            {trade?.quantity != null && (
-              <span className="tabular-nums">
-                {marketNumber.format(trade.quantity)} واحد
-              </span>
-            )}
+
             {trade && difference && (
               <span
-                className={
+                className={cn(
+                  "text-sm",
                   difference.direction === "up"
                     ? "text-success"
                     : difference.direction === "down"
                       ? "text-danger"
-                      : "text-muted"
-                }
+                      : "text-muted",
+                )}
                 title="مقایسه با مظنه فعلی، نه مظنه زمان معامله"
               >
                 {difference.text}

@@ -308,3 +308,119 @@ test("quote dashboard query delivers both official quote and completed trade in 
     client.clear();
   }
 });
+
+test("creating a request seeds an empty active cache and invalidates every request query", async () => {
+  const { MutationObserver } = await import("@tanstack/react-query");
+  const { requestMutationOptions } =
+    await import("../src/modules/requests/_request-mutation-options");
+  const created = {
+    id: "new-request",
+    action: "ALERT",
+    condition: "GTE",
+    targetPrice: 95900,
+    units: null,
+    status: "ACTIVE",
+    executing: false,
+    triggeredQuote: null,
+    triggeredMessageId: null,
+    outgoingMessageId: null,
+    completedAt: null,
+    failureReason: null,
+    cancellationReason: null,
+    createdAt: "2026-09-14T00:00:00.000Z",
+    updatedAt: "2026-09-14T00:00:00.000Z",
+  } satisfies import("@zarbit/contracts").RequestDetail;
+  const rpc = createRpcClient(
+    "http://server/rpc",
+    () => "test",
+    async () => Response.json({ json: created }),
+  );
+  const api = createRpcUtils(rpc, "create-test");
+  const other = createRpcUtils(rpc, "other-account");
+  const client = createQueryClient();
+  client.setDefaultOptions({
+    queries: { retry: false, gcTime: Infinity },
+    mutations: { gcTime: 0 },
+  });
+  client.setQueryData(api.requests.active.queryKey(), []);
+  client.setQueryData(other.requests.active.queryKey(), []);
+  const history = api.requests.history.queryKey({ input: {} });
+  client.setQueryData(history, { items: [], nextCursor: null });
+  const infinite = api.requests.history.infiniteOptions({
+    input: (cursor: string | undefined) => ({ cursor }),
+    initialPageParam: undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+  }).queryKey;
+  client.setQueryData(infinite, {
+    pages: [{ items: [], nextCursor: null }],
+    pageParams: [undefined],
+  });
+  let activeReads = 0;
+  const active = new QueryObserver(
+    client,
+    api.requests.active.queryOptions({
+      queryFn: async () => {
+        activeReads++;
+        throw new Error("refetch unavailable");
+      },
+      refetchOnMount: false,
+      refetchInterval: (query) => (query.state.data?.length ? 4_000 : false),
+    }),
+  );
+  const unsubscribe = active.subscribe(() => undefined);
+  try {
+    await delay(30);
+    assert.equal(activeReads, 0, "empty cache does not poll");
+    const mutation = new MutationObserver(
+      client,
+      requestMutationOptions(api, client).create,
+    );
+    await mutation.mutate({
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 95900,
+      units: null,
+    });
+    assert.deepEqual(client.getQueryData(api.requests.active.queryKey()), [
+      created,
+    ]);
+    assert.equal(
+      active.getCurrentResult().isError,
+      true,
+      "failed refetch retains confirmed request for polling",
+    );
+    for (const key of [
+      api.requests.active.queryKey(),
+      history,
+      infinite,
+      api.requests.detail.queryKey({ input: { id: created.id } }),
+    ]) {
+      assert.equal(client.getQueryState(key)?.isInvalidated, true);
+    }
+    assert.equal(
+      client.getQueryState(other.requests.active.queryKey())?.isInvalidated,
+      false,
+    );
+    await mutation.mutate({
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 95900,
+      units: null,
+    });
+    assert.deepEqual(
+      client.getQueryData(api.requests.active.queryKey()),
+      [created],
+      "no duplicate cache entries",
+    );
+    const readsAfterCreate = activeReads;
+    await delay(4_200);
+    assert.ok(
+      activeReads > readsAfterCreate,
+      "polling resumes after creation despite refetch failures",
+    );
+    mutation.reset();
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
+});

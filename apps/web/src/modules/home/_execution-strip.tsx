@@ -15,16 +15,26 @@ export function ExecutionStrip({ onActionSelect }: ExecutionStripProps) {
     <div
       role="group"
       aria-label="عملیات معاملاتی سریع"
-      className="grid grid-cols-3 gap-2"
+      className="grid grid-cols-3 gap-4"
     >
+      <Button
+        variant="danger-soft"
+        onPress={() => onActionSelect("ALERT")}
+        size="lg"
+        fullWidth
+      >
+        <BellRingIcon className="size-5" />
+        <span className="text-sm">هشدار</span>
+      </Button>
+
       <Button
         onPress={() => onActionSelect("BUY")}
         variant="primary"
         size="lg"
         fullWidth
       >
-        <ImportIcon className="size-4" />
-        <span className="text-xs sm:text-sm">خرید</span>
+        <ImportIcon className="size-5" />
+        <span className="text-sm">خرید</span>
       </Button>
 
       <Button
@@ -33,18 +43,8 @@ export function ExecutionStrip({ onActionSelect }: ExecutionStripProps) {
         size="lg"
         fullWidth
       >
-        <ExportIcon className="size-4" />
-        <span className="text-xs sm:text-sm">فروش</span>
-      </Button>
-
-      <Button
-        variant="secondary"
-        onPress={() => onActionSelect("ALERT")}
-        size="lg"
-        fullWidth
-      >
-        <BellRingIcon className="text-warning size-4" />
-        <span className="text-xs sm:text-sm">هشدار</span>
+        <ExportIcon className="size-5" />
+        <span className="text-sm">فروش</span>
       </Button>
     </div>
   );

@@ -1,11 +1,8 @@
 import { Card, Chip, cn } from "@heroui/react";
 import type { ParticipantAnalyticsSummary } from "@zarbit/contracts";
+import { formatNumber } from "@zarbit/format";
 import { DataCoverageBadge } from "./_data-coverage-badge";
 import TomanIcon from "@/shared/ui/_toman-icon";
-
-function formatPersianNumber(value: number): string {
-  return new Intl.NumberFormat("fa-IR").format(value);
-}
 
 export function TraderCard({
   trader,
@@ -59,7 +56,7 @@ export function TraderCard({
               !isProfitable && !isLoss && "text-muted",
             )}
           >
-            {formatPersianNumber(trader.realizedPnlTomans)}
+            {formatNumber(trader.realizedPnlTomans)}
             {isProfitable ? "+" : ""}
 
             <TomanIcon className="text-muted mb-1 size-4" />
@@ -71,12 +68,12 @@ export function TraderCard({
         <div className="flex items-center gap-2">
           <span>حجم:</span>
           <span className="text-foreground font-semibold">
-            {formatPersianNumber(trader.totalVolume)} واحد
+            {formatNumber(trader.totalVolume)} واحد
           </span>
           <span className="text-border">|</span>
           <span>معاملات:</span>
           <span className="text-foreground font-semibold">
-            {formatPersianNumber(trader.totalTrades)}
+            {formatNumber(trader.totalTrades)}
           </span>
         </div>
 
@@ -97,7 +94,7 @@ export function TraderCard({
               color="success"
               className="px-2 text-xs font-light"
             >
-              خرید: {formatPersianNumber(trader.observedPosition)}+
+              خرید: {formatNumber(trader.observedPosition)}+
             </Chip>
           ) : (
             <Chip
@@ -106,7 +103,7 @@ export function TraderCard({
               color="danger"
               className="px-2 text-xs font-light"
             >
-              فروش: {formatPersianNumber(trader.observedPosition)}
+              فروش: {formatNumber(trader.observedPosition)}
             </Chip>
           )}
         </div>

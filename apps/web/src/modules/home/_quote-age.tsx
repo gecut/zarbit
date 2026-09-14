@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { relativeTimeFromNow } from "./_market-format";
+import { formatRelativeDateTime } from "@zarbit/format";
 
 interface QuoteAgeProps {
   announcedAt?: string;
@@ -16,7 +16,8 @@ export function QuoteAge({ announcedAt, asOf }: QuoteAgeProps) {
   return (
     <div className="text-muted grid gap-1 text-xs">
       <span>
-        همگام‌سازی: {asOf ? relativeTimeFromNow(asOf, now) : "در انتظار داده"}
+        همگام‌سازی:{" "}
+        {asOf ? formatRelativeDateTime(asOf, now) : "در انتظار داده"}
       </span>
       {stale && (
         <span role="status" className="text-warning-soft-foreground">

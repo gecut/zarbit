@@ -1,38 +1,11 @@
 import { useQuery, skipToken } from "@tanstack/react-query";
 import { Card, Chip, cn, ScrollShadow } from "@heroui/react";
+import { formatDateTime, formatNumber } from "@zarbit/format";
 import { useIdentity } from "../../shared/auth/auth";
 import { useApi } from "../../shared/api/api-context";
 import { DrawerSheet } from "../../shared/ui/drawer";
 import { DataCoverageBadge } from "./_data-coverage-badge";
 import TomanIcon from "@/shared/ui/_toman-icon";
-
-function formatPersianNumber(value: number): string {
-  return new Intl.NumberFormat("fa-IR").format(value);
-}
-
-function formatTime(isoString: string): string {
-  try {
-    const d = new Date(isoString);
-    return new Intl.DateTimeFormat("fa-IR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).format(d);
-  } catch {
-    return isoString;
-  }
-}
-function formatDate(isoString: string): string {
-  try {
-    const d = new Date(isoString);
-    return new Intl.DateTimeFormat("fa-IR", {
-      day: "numeric",
-      month: "long",
-    }).format(d);
-  } catch {
-    return isoString;
-  }
-}
 
 export function TraderDetailDrawer({
   alias,
@@ -94,7 +67,7 @@ export function TraderDetailDrawer({
                     !isProfitable && !isLoss && "text-muted",
                   )}
                 >
-                  {formatPersianNumber(summary.realizedPnlTomans)}
+                  {formatNumber(summary.realizedPnlTomans)}
                   {isProfitable ? "+" : ""}
                   <TomanIcon className="text-muted mb-1" />
                 </span>
@@ -107,29 +80,29 @@ export function TraderDetailDrawer({
             <Card className="border-border bg-surface rounded-2xl border p-3">
               <span className="text-muted text-xs">کل حجم معاملات:</span>
               <span className="text-foreground mt-1 block text-sm font-semibold">
-                {formatPersianNumber(summary.totalVolume)} واحد
+                {formatNumber(summary.totalVolume)} واحد
               </span>
               <span className="text-muted mt-0.5 block text-[11px]">
-                خرید: {formatPersianNumber(summary.buyVolume)} | فروش:{" "}
-                {formatPersianNumber(summary.sellVolume)}
+                خرید: {formatNumber(summary.buyVolume)} | فروش:{" "}
+                {formatNumber(summary.sellVolume)}
               </span>
             </Card>
 
             <Card className="border-border bg-surface rounded-2xl border p-3">
               <span className="text-muted text-xs">تعداد کل معاملات:</span>
               <span className="text-foreground mt-1 block text-sm font-semibold">
-                {formatPersianNumber(summary.totalTrades)} معامله
+                {formatNumber(summary.totalTrades)} معامله
               </span>
               <span className="text-muted mt-0.5 block text-[11px]">
-                خرید: {formatPersianNumber(summary.buyTrades)} | فروش:{" "}
-                {formatPersianNumber(summary.sellTrades)}
+                خرید: {formatNumber(summary.buyTrades)} | فروش:{" "}
+                {formatNumber(summary.sellTrades)}
               </span>
             </Card>
 
             <Card className="border-border bg-surface rounded-2xl border p-3">
               <span className="text-muted text-xs">میانگین حجم هر معامله:</span>
               <span className="text-foreground mt-1 block text-sm font-semibold">
-                {formatPersianNumber(summary.averageTradeSize)} واحد
+                {formatNumber(summary.averageTradeSize)} واحد
               </span>
             </Card>
 
@@ -142,17 +115,17 @@ export function TraderDetailDrawer({
                   </Chip>
                 ) : summary.observedPosition > 0 ? (
                   <Chip size="sm" variant="soft" color="success">
-                    خرید: +{formatPersianNumber(summary.observedPosition)}
+                    خرید: +{formatNumber(summary.observedPosition)}
                   </Chip>
                 ) : (
                   <Chip size="sm" variant="soft" color="danger">
-                    فروش: {formatPersianNumber(summary.observedPosition)}
+                    فروش: {formatNumber(summary.observedPosition)}
                   </Chip>
                 )}
               </div>
               {summary.currentCostBasis > 0 && (
                 <span className="text-muted dir-ltr mt-1 block text-right text-[11px]">
-                  مظنه میانگین: {formatPersianNumber(summary.currentCostBasis)}
+                  مظنه میانگین: {formatNumber(summary.currentCostBasis)}
                 </span>
               )}
             </Card>
@@ -188,11 +161,11 @@ export function TraderDetailDrawer({
                       </Chip>
 
                       <span className="text-foreground font-medium">
-                        {formatPersianNumber(t.quantity)} واحد
+                        {formatNumber(t.quantity)} واحد
                       </span>
                       <span className="text-muted">با مظنه</span>
                       <span className="text-foreground">
-                        {formatPersianNumber(t.compactPrice)}
+                        {formatNumber(t.compactPrice)}
                       </span>
                       <span className="text-muted">
                         با {t.counterpartyAlias}
@@ -201,10 +174,7 @@ export function TraderDetailDrawer({
 
                     <div className="flex flex-col items-end gap-0.5">
                       <span className="text-muted block text-xs">
-                        {formatDate(t.announcedAt)}
-                      </span>
-                      <span className="text-muted block text-xs tracking-wider">
-                        {formatTime(t.announcedAt)}
+                        {formatDateTime(t.announcedAt)}
                       </span>
                     </div>
                   </div>

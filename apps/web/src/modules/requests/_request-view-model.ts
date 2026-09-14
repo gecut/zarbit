@@ -5,6 +5,7 @@ import {
   ExportIcon,
   ImportIcon,
 } from "@solar-icons/react/linear";
+import { formatDateTime } from "@zarbit/format";
 
 const labels = {
   ACTIVE: "فعال",
@@ -50,24 +51,16 @@ export const conditionOptions = [
   { value: "GTE", label: conditionLabels.GTE, Icon: CourseUpIcon },
 ] as const;
 
-const dateFormatter = new Intl.DateTimeFormat("fa-IR", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Tehran",
-});
-
 export function userMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "عملیات انجام نشد؛ دوباره تلاش کنید.";
 }
 
-export function formatNumber(value: number): string {
-  return value.toLocaleString("fa-IR").replaceAll("٬", ".");
-}
+export { formatNumber } from "@zarbit/format";
 
 export function formatDate(value: string | null): string {
-  return value ? dateFormatter.format(new Date(value)) : "—";
+  return value ? formatDateTime(value) : "—";
 }
 
 export function requestStatusLabel(status: keyof typeof labels): string {

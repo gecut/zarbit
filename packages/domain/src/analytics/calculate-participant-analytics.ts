@@ -2,7 +2,11 @@ import {
   calculatePositionTransition,
   createInitialPositionState,
 } from "./calculate-position";
-import { ROLLING_WINDOW_MS, roundAnalyticsPoints } from "./constants";
+import {
+  ROLLING_WINDOW_MS,
+  roundAnalyticsPoints,
+  realizedPnlPointsToTomans,
+} from "./constants";
 import type {
   DataCoverageConfidence,
   ParticipantAnalytics7D,
@@ -61,7 +65,6 @@ export function calculateParticipantAnalytics7D(
   // 3. Process window trades, accumulating 7-day metrics
   let currentState: PositionState = openingState;
   let realizedPnlPoints = 0;
-  let realizedPnlTomans = 0;
   let buyVolume = 0;
   let sellVolume = 0;
   let buyTrades = 0;
@@ -71,10 +74,7 @@ export function calculateParticipantAnalytics7D(
     const transition = calculatePositionTransition(currentState, trade);
     currentState = transition.nextPosition;
 
-    realizedPnlPoints = roundAnalyticsPoints(
-      realizedPnlPoints + transition.realizedPnlPoints,
-    );
-    realizedPnlTomans += transition.realizedPnlTomans;
+    realizedPnlPoints += transition.unroundedRealizedPnlPoints;
 
     if (trade.side === "BUY") {
       buyVolume += trade.quantity;
@@ -126,7 +126,7 @@ export function calculateParticipantAnalytics7D(
     windowStart,
     windowEnd,
     realizedPnlPoints: roundAnalyticsPoints(realizedPnlPoints),
-    realizedPnlTomans,
+    realizedPnlTomans: realizedPnlPointsToTomans(realizedPnlPoints),
     totalVolume,
     buyVolume,
     sellVolume,

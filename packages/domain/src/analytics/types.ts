@@ -24,12 +24,14 @@ export interface PositionState {
 }
 
 export interface TradeTransition {
+  /** Internal accumulator value before display rounding or monetary conversion. */
+  readonly unroundedRealizedPnlPoints: number;
   readonly previousPosition: PositionState;
   readonly nextPosition: PositionState;
   readonly trade: ParticipantTrade;
   /** Realized P&L in compact price points. Zero if trade only added/opened inventory. */
   readonly realizedPnlPoints: number;
-  /** Realized P&L converted to Tomans using RECEIPT_TOMAN_MULTIPLIER. */
+  /** Realized P&L in Tomans for 100g units using the 4.3318 quote divisor. */
   readonly realizedPnlTomans: number;
   /** Quantity of units closed in this trade (0 if pure add/open). */
   readonly closedQuantity: number;

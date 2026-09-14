@@ -1,4 +1,4 @@
-import { RECEIPT_TOMAN_MULTIPLIER, roundAnalyticsPoints } from "./constants";
+import { realizedPnlPointsToTomans, roundAnalyticsPoints } from "./constants";
 import type { ParticipantTrade, PositionState, TradeTransition } from "./types";
 
 /**
@@ -49,6 +49,7 @@ export function calculatePositionTransition(
       previousPosition: current,
       nextPosition,
       trade,
+      unroundedRealizedPnlPoints: 0,
       realizedPnlPoints: 0,
       realizedPnlTomans: 0,
       closedQuantity: 0,
@@ -74,6 +75,7 @@ export function calculatePositionTransition(
         previousPosition: current,
         nextPosition,
         trade,
+        unroundedRealizedPnlPoints: 0,
         realizedPnlPoints: 0,
         realizedPnlTomans: 0,
         closedQuantity: 0,
@@ -86,9 +88,12 @@ export function calculatePositionTransition(
     if (q <= prevQ) {
       // Partial or Full close of Long
       const nextQ = prevQ - q;
-      const realizedPnlPoints = roundAnalyticsPoints(q * (p - prevC));
-      const realizedPnlTomans = Math.round(
-        realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
+      const unroundedRealizedPnlPoints = q * (p - prevC);
+      const realizedPnlPoints = roundAnalyticsPoints(
+        unroundedRealizedPnlPoints,
+      );
+      const realizedPnlTomans = realizedPnlPointsToTomans(
+        unroundedRealizedPnlPoints,
       );
       const isFlat = nextQ === 0;
 
@@ -103,6 +108,7 @@ export function calculatePositionTransition(
         previousPosition: current,
         nextPosition,
         trade,
+        unroundedRealizedPnlPoints,
         realizedPnlPoints,
         realizedPnlTomans,
         closedQuantity: q,
@@ -115,9 +121,10 @@ export function calculatePositionTransition(
     // Atomic split: close all prevQ at p, open (q - prevQ) Short at p
     const closedQty = prevQ;
     const openedQty = q - prevQ;
-    const realizedPnlPoints = roundAnalyticsPoints(closedQty * (p - prevC));
-    const realizedPnlTomans = Math.round(
-      realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
+    const unroundedRealizedPnlPoints = closedQty * (p - prevC);
+    const realizedPnlPoints = roundAnalyticsPoints(unroundedRealizedPnlPoints);
+    const realizedPnlTomans = realizedPnlPointsToTomans(
+      unroundedRealizedPnlPoints,
     );
 
     const nextPosition: PositionState = {
@@ -131,6 +138,7 @@ export function calculatePositionTransition(
       previousPosition: current,
       nextPosition,
       trade,
+      unroundedRealizedPnlPoints,
       realizedPnlPoints,
       realizedPnlTomans,
       closedQuantity: closedQty,
@@ -157,6 +165,7 @@ export function calculatePositionTransition(
       previousPosition: current,
       nextPosition,
       trade,
+      unroundedRealizedPnlPoints: 0,
       realizedPnlPoints: 0,
       realizedPnlTomans: 0,
       closedQuantity: 0,
@@ -169,9 +178,10 @@ export function calculatePositionTransition(
   if (q <= shortQty) {
     // Partial or Full close of Short
     const nextShortQty = shortQty - q;
-    const realizedPnlPoints = roundAnalyticsPoints(q * (prevC - p));
-    const realizedPnlTomans = Math.round(
-      realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
+    const unroundedRealizedPnlPoints = q * (prevC - p);
+    const realizedPnlPoints = roundAnalyticsPoints(unroundedRealizedPnlPoints);
+    const realizedPnlTomans = realizedPnlPointsToTomans(
+      unroundedRealizedPnlPoints,
     );
     const isFlat = nextShortQty === 0;
 
@@ -186,6 +196,7 @@ export function calculatePositionTransition(
       previousPosition: current,
       nextPosition,
       trade,
+      unroundedRealizedPnlPoints,
       realizedPnlPoints,
       realizedPnlTomans,
       closedQuantity: q,
@@ -198,9 +209,10 @@ export function calculatePositionTransition(
   // Atomic split: close all shortQty at p, open (q - shortQty) Long at p
   const closedQty = shortQty;
   const openedQty = q - shortQty;
-  const realizedPnlPoints = roundAnalyticsPoints(closedQty * (prevC - p));
-  const realizedPnlTomans = Math.round(
-    realizedPnlPoints * RECEIPT_TOMAN_MULTIPLIER,
+  const unroundedRealizedPnlPoints = closedQty * (prevC - p);
+  const realizedPnlPoints = roundAnalyticsPoints(unroundedRealizedPnlPoints);
+  const realizedPnlTomans = realizedPnlPointsToTomans(
+    unroundedRealizedPnlPoints,
   );
 
   const nextPosition: PositionState = {
@@ -214,6 +226,7 @@ export function calculatePositionTransition(
     previousPosition: current,
     nextPosition,
     trade,
+    unroundedRealizedPnlPoints,
     realizedPnlPoints,
     realizedPnlTomans,
     closedQuantity: closedQty,

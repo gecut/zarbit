@@ -90,7 +90,11 @@ function fixture() {
   return { client };
 }
 
-test("analytics.traders returns sorted participant list via oRPC", async () => {
+test("analytics.traders returns sorted participant list via oRPC", async (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-10T12:00:00Z"),
+  });
   const { client } = fixture();
   const traders = await client.analytics.traders({
     sortBy: "REALIZED_PNL",
@@ -100,27 +104,45 @@ test("analytics.traders returns sorted participant list via oRPC", async () => {
 
   assert.ok(Array.isArray(traders));
   assert.equal(traders.length, 3);
-  // اسکان bought 2 @ 105000, sold 1 @ 105200 -> Realized P&L = +200 points = +20,000 Tomans
+  // اسکان bought 2 @ 105000, sold 1 @ 105200 -> Realized P&L = +200 points = +4,617,018 Tomans
   const eskan = traders.find((t) => t.alias === "اسکان");
   assert.ok(eskan);
   assert.equal(eskan.realizedPnlPoints, 200);
-  assert.equal(eskan.realizedPnlTomans, 20_000);
+  assert.equal(eskan.realizedPnlTomans, 4_617_018);
   assert.equal(eskan.totalVolume, 3); // 2 buy + 1 sell
   assert.equal(eskan.observedPosition, 1); // 2 - 1 = 1 Long
 });
 
-test("analytics.traderDetail returns detail and recent trades for valid alias", async () => {
+test("analytics.traderDetail returns detail and recent trades for valid alias", async (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-10T12:00:00Z"),
+  });
   const { client } = fixture();
   const detail = await client.analytics.traderDetail({ alias: "اسکان" });
 
   assert.ok(detail);
   assert.equal(detail.summary.alias, "اسکان");
   assert.equal(detail.summary.realizedPnlPoints, 200);
+  assert.equal(detail.summary.realizedPnlTomans, 4_617_018);
+  const traders = await client.analytics.traders({
+    sortBy: "REALIZED_PNL",
+    sortOrder: "DESC",
+    limit: 10,
+  });
+  assert.deepEqual(
+    detail.summary,
+    traders.find((trader) => trader.alias === "اسکان"),
+  );
   assert.equal(detail.recentTrades.length, 2);
   assert.equal(detail.recentTrades[0]?.counterpartyAlias, "عرفاان");
 });
 
-test("analytics.traderDetail returns null for non-existent alias", async () => {
+test("analytics.traderDetail returns null for non-existent alias", async (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-10T12:00:00Z"),
+  });
   const { client } = fixture();
   const detail = await client.analytics.traderDetail({ alias: "ناشناس" });
   assert.equal(detail, null);

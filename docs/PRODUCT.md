@@ -53,9 +53,20 @@ UI uses HeroUI semantic tokens, compact mobile layout, RTL direction, and the Va
   $$\text{Price in Tomans} = \text{compactPrice} \times 1000$$
   For example, `105020` converts to `105,020,000 تومان`.
 - **Display Rules**: Headline quote and trade figures on the Home dashboard display full Toman formatting; secondary prices and request target prices remain compact integers.
-- **Realized P&L**: Analytics calculates realized P&L points in compact integer space (`realizedPnlPoints`), rounded to 2 decimal places, and converts to nominal Tomans via `realizedPnlPoints × 1000`.
+- **Realized P&L**: Analytics calculates realized P&L points in compact integer space (`realizedPnlPoints`), rounded to 2 decimal places, and converts to nominal Tomans via `unroundedRealizedPnlPoints × 100 / 4.3318 × 1000`.
 - **Permanent Retention**: Completed trades in `Trade` and reference quotes in `QuoteHistory` are retained permanently. The 7-day rolling window is strictly a query filter for analytics, never a database pruning TTL.
 
 ## Release validation
 
 TypeScript compilation (`pnpm check-types`), linting (`pnpm lint`), production bundling (`pnpm build`), and automated unit/integration tests must pass cleanly. Live Telegram validation (login, 2FA, group message reception, and order execution) requires owner verification with real accounts in a controlled staging group.
+
+### Analytics monetary conversion
+
+Each historical and new trading unit represents 100 grams of 18-karat gold.
+Recorded compact prices remain 17-karat mithqal quotes. Realized monetary P&L
+is `Math.round(sumOfUnroundedPoints * 100 / 4.3318 * 1000)`; negative zero becomes zero.
+Sum unrounded closing P&L over the rolling window before converting; never sum
+rounded per-trade amounts. API points remain unit-weighted quote differences
+rounded to two decimals for display. No raw trades or schemas are rewritten.
+Deploy server and web together, restart server caches, and reload existing web
+tabs: older web bundles still multiply monetary P&L by 100.

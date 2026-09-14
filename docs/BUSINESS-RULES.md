@@ -13,13 +13,13 @@
   $$\text{Nominal Tomans} = \text{compactPrice} \times 1000$$
   For example, `105020` represents `105,020,000 تومان`.
 - **Storage and APIs**: Database columns (`QuoteHistory.compactQuote`, `Trade.compactPrice`, `Request.targetPrice`), API contracts, and internal calculations remain in compact integer format.
-- **Realized P&L**: Analytics tracks realized profit and loss in compact price points (`realizedPnlPoints`), rounded to 2 decimal places using `roundAnalyticsPoints`. Nominal P&L in Tomans is computed as `realizedPnlPoints × 1000`.
+- **Realized P&L**: Analytics tracks realized profit and loss in compact price points (`realizedPnlPoints`), rounded to 2 decimal places using `roundAnalyticsPoints`. Nominal P&L in Tomans is computed as `unroundedRealizedPnlPoints × 100 / 4.3318 × 1000`.
 
 ## 7-day participant analytics and accounting engine
 
 - **Rolling 7-Day Window**: Analytics queries filter trades within $[t - 7\text{ days}, t]$.
-- **FIFO Inventory Accounting**:
-  1. Historical trades prior to the 7-day window start are replayed from inception using FIFO matching to establish the participant's opening position (`netQuantity`) and `costBasis`.
+- **Weighted-Average Inventory Accounting**:
+  1. Historical trades prior to the 7-day window start are replayed from inception using signed weighted-average cost basis to establish the participant's opening position (`netQuantity`) and `costBasis`.
   2. Trades within the active 7-day window are replayed against the open position, accumulating `realizedPnlPoints`, `realizedPnlTomans`, buy/sell volumes, and buy/sell trade counts.
 - **Data Coverage Confidence**:
   - `UNVERIFIED_INVENTORY`: Assigned if the participant has unmatched inventory units (`unmatchedUnits > 0`).
@@ -54,3 +54,14 @@
 - Maximum 20 simultaneous Telegram client sessions per worker instance.
 - Single trading group (`TELEGRAM_GROUP_ID`) and single group bot (`QUOTE_SENDER_ID`).
 - Leaderboard and trader analytics UI are fully implemented; automated copy-trade execution is reserved for Phase 3.
+
+### Analytics monetary conversion
+
+Each historical and new trading unit represents 100 grams of 18-karat gold.
+Recorded compact prices remain 17-karat mithqal quotes. Realized monetary P&L
+is `Math.round(sumOfUnroundedPoints * 100 / 4.3318 * 1000)`; negative zero becomes zero.
+Sum unrounded closing P&L over the rolling window before converting; never sum
+rounded per-trade amounts. API points remain unit-weighted quote differences
+rounded to two decimals for display. No raw trades or schemas are rewritten.
+Deploy server and web together, restart server caches, and reload existing web
+tabs: older web bundles still multiply monetary P&L by 100.

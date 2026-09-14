@@ -72,7 +72,7 @@ Phase 2 built the accounting engine, ranking API, and Persian leaderboard UI.
 
 - Trader rankings evaluate a **rolling 7-day query window** (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`).
 - FIFO inventory replay: Historical trades prior to the 7-day window establish opening position and cost basis at window start; window trades accumulate realized P&L, volumes, and trade counts.
-- Financial unit multiplier: Canonical rule is $\text{compactPrice} \times 1000 = \text{Tomans}$. Realized P&L in Tomans is computed as $\text{realizedPnlPoints} \times 1000$.
+- Financial unit multiplier: Canonical rule is $\text{compactPrice} \times 1000 = \text{Tomans}$. Realized P&L in Tomans is computed as $\text{unroundedRealizedPnlPoints} \times 100 / 4.3318 \times 1000$.
 - Data coverage confidence: Evaluated from $\max(\text{earliestSystemDate}, \text{firstTradeAt})$.
   - `HIGH`: Confirmed flat-position reset (`hasZeroCrossing === true`) and full 7-day data span.
   - `ESTIMATED`: Shorter history or position has never reset to flat.
@@ -128,3 +128,14 @@ Phase 3 introduces autonomous order copying and execution.
 | Market Polling Transport (3-second TanStack Query)              |   ✅    |   ✅    | Review  |
 
 The current production transport uses 3-second TanStack Query polling on `market.snapshot` with monotonic head merging. SSE / real-time streaming proposals are archived; [ARCHITECTURE.md](ARCHITECTURE.md) and [RPC.md](RPC.md) are canonical.
+
+### Analytics monetary conversion
+
+Each historical and new trading unit represents 100 grams of 18-karat gold.
+Recorded compact prices remain 17-karat mithqal quotes. Realized monetary P&L
+is `Math.round(sumOfUnroundedPoints * 100 / 4.3318 * 1000)`; negative zero becomes zero.
+Sum unrounded closing P&L over the rolling window before converting; never sum
+rounded per-trade amounts. API points remain unit-weighted quote differences
+rounded to two decimals for display. No raw trades or schemas are rewritten.
+Deploy server and web together, restart server caches, and reload existing web
+tabs: older web bundles still multiply monetary P&L by 100.

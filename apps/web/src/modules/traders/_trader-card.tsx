@@ -56,7 +56,7 @@ export function TraderCard({
               !isProfitable && !isLoss && "text-muted",
             )}
           >
-            {formatNumber(trader.realizedPnlTomans)}
+            {formatNumber(trader.realizedPnlTomans * 100)}
             {isProfitable ? "+" : ""}
 
             <TomanIcon className="text-muted mb-1 size-4" />

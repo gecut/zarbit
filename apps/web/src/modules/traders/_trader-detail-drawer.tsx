@@ -67,7 +67,7 @@ export function TraderDetailDrawer({
                     !isProfitable && !isLoss && "text-muted",
                   )}
                 >
-                  {formatNumber(summary.realizedPnlTomans)}
+                  {formatNumber(summary.realizedPnlTomans * 100)}
                   {isProfitable ? "+" : ""}
                   <TomanIcon className="text-muted mb-1" />
                 </span>

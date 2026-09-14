@@ -66,3 +66,10 @@ export const marketSnapshotQuery = {
   refetchOnWindowFocus: "always",
   refetchOnReconnect: "always",
 } as const;
+export const marketPolling = {
+  staleTime: 1000,
+  refetchInterval: 3000,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: "always",
+  refetchOnReconnect: "always",
+} as const;

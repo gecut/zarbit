@@ -1,12 +1,6 @@
-import {
-  marketSnapshotSchema,
-  type MarketSnapshot,
-  type MarketLiveEvent,
-} from "@zarbit/contracts";
+import { marketSnapshotSchema, type MarketSnapshot } from "@zarbit/contracts";
 import { compareTradeToQuote } from "@zarbit/domain";
 import type { Store } from "@zarbit/db";
-
-type IncrementalEvent = Extract<MarketLiveEvent, { type: "QUOTE" | "TRADE" }>;
 
 export class MarketState {
   private value: MarketSnapshot | null = null;
@@ -32,7 +26,13 @@ export class MarketState {
     if (this.flight) return this.flight;
     this.observe("hydrate");
     this.flight = this.load()
-      .then(({ quote, trade }) => {
+      .then((loaded) => {
+        const { quote } = loaded;
+        const legacy = loaded as typeof loaded & {
+          trade?: (typeof loaded.recentTrades)[number] | null;
+        };
+        const recentTrades =
+          loaded.recentTrades ?? (legacy.trade ? [legacy.trade] : []);
         const previous = this.value;
         const nextQuote = quote
           ? {
@@ -41,9 +41,11 @@ export class MarketState {
               sourceMessageId: quote.sourceMessageId,
             }
           : null;
-        const nextTrade = trade
-          ? { ...trade, announcedAt: trade.announcedAt.toISOString() }
-          : null;
+        const nextTrades = recentTrades.map((trade) => ({
+          ...trade,
+          announcedAt: trade.announcedAt.toISOString(),
+        }));
+        const nextTrade = nextTrades[0] ?? null;
         // A notification can arrive while the hydration query is in flight.
         const q =
           previous?.quote &&
@@ -58,6 +60,7 @@ export class MarketState {
         this.value = marketSnapshotSchema.parse({
           quote: q,
           trade: t,
+          recentTrades: nextTrades,
           revision: Math.max(q?.sourceMessageId ?? 0, t?.sourceMessageId ?? 0),
           tradeQuoteDifference: compareTradeToQuote(
             t?.compactPrice ?? null,
@@ -72,25 +75,5 @@ export class MarketState {
         this.flight = null;
       });
     return this.flight;
-  }
-
-  apply(event: IncrementalEvent): boolean {
-    if (!this.value) return false;
-    const head = event.type === "QUOTE" ? this.value.quote : this.value.trade;
-    if (head && event.sourceMessageId <= head.sourceMessageId) return false;
-    const { type, revision: _revision, ...point } = event;
-    const quote = type === "QUOTE" ? point : this.value.quote;
-    const trade = type === "TRADE" && "id" in point ? point : this.value.trade;
-    this.value = marketSnapshotSchema.parse({
-      quote,
-      trade,
-      revision: Math.max(this.value.revision, event.sourceMessageId),
-      tradeQuoteDifference: compareTradeToQuote(
-        trade?.compactPrice ?? null,
-        quote?.compactPrice ?? null,
-      ),
-      asOf: new Date().toISOString(),
-    });
-    return true;
   }
 }

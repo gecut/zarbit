@@ -2,10 +2,9 @@ import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { mergeMarketSnapshot } from "./merge-market-snapshot";
-import { AppError, marketSnapshotSchema } from "@zarbit/contracts";
+import { AppError } from "@zarbit/contracts";
 import { rpcErrorDataSchema, type RpcClient } from "@zarbit/contracts/rpc";
-import { marketSnapshotQuery, fastQuery, slowQuery } from "./query-policy";
+import { marketPolling, fastQuery, slowQuery } from "./query-policy";
 
 export function createRpcClient(
   url: string,
@@ -99,12 +98,7 @@ export function createRpcUtils(
     experimental_defaults: {
       snapshot: {
         queryOptions: {
-          ...marketSnapshotQuery,
-          structuralSharing: (previous: unknown, incoming: unknown) =>
-            mergeMarketSnapshot(
-              marketSnapshotSchema.safeParse(previous).data,
-              marketSnapshotSchema.parse(incoming),
-            ),
+          ...marketPolling,
         },
       },
     },

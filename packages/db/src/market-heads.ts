@@ -17,17 +17,18 @@ const tradeSelect = {
 export function createMarketHeadsStore(db: PrismaClient) {
   return {
     marketHeads: async () => {
-      const [quote, trade] = await Promise.all([
+      const [quote, recentTrades] = await Promise.all([
         db.quoteHistory.findFirst({
           orderBy: { sourceMessageId: "desc" },
           select: quoteSelect,
         }),
-        db.trade.findFirst({
-          orderBy: { sourceMessageId: "desc" },
+        db.trade.findMany({
+          orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
+          take: 10,
           select: tradeSelect,
         }),
       ]);
-      return { quote, trade };
+      return { quote, recentTrades };
     },
     marketEvent: async (event: MarketNotification) => {
       if (event.type === "QUOTE") {

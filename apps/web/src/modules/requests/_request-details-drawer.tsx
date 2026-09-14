@@ -36,6 +36,7 @@ export function RequestDetailsDrawer({
       initialDataUpdatedAt: 0,
       refetchInterval: (query) =>
         query.state.data?.status === "ACTIVE" ? 3000 : false,
+      refetchIntervalInBackground: false,
     }),
   );
   const request = detail.isError ? null : (detail.data ?? initialRequest);

@@ -17,14 +17,14 @@ export function TradersPage() {
   const tradersQuery = useQuery(
     api.analytics.traders.queryOptions({
       input: { sortBy, sortOrder, limit: 50 },
-      refetchInterval: 5000,
+      refetchInterval: 30000,
     }),
   );
 
   const traders = tradersQuery.data ?? [];
 
   return (
-    <section className="space-y-4 pb-12">
+    <section className="space-y-4">
       <TraderSortBar
         sortBy={sortBy}
         sortOrder={sortOrder}

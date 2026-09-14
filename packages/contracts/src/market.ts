@@ -18,6 +18,7 @@ export const marketSnapshotSchema = z
     revision: z.number().int().nonnegative().safe(),
     quote: marketQuoteSchema.nullable(),
     trade: marketTradeSchema.nullable(),
+    recentTrades: z.array(marketTradeSchema).max(10).default([]),
     tradeQuoteDifference: z.number().int().safe().nullable(),
     asOf: z.string().datetime(),
   })

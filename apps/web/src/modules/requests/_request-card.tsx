@@ -1,6 +1,5 @@
-import { Card, Chip, cn } from "@heroui/react";
+import { Button, Card, Chip } from "@heroui/react";
 import type { RequestDetail } from "@zarbit/contracts";
-
 import {
   actionIcons,
   actionLabels,
@@ -8,111 +7,151 @@ import {
   formatNumber,
   requestStatusLabel,
 } from "./_request-view-model";
-import {
-  DollarMinimalisticIcon,
-  SquareTopDownIcon,
-} from "@solar-icons/react/linear";
 import TomanIcon from "@/shared/ui/_toman-icon";
 
-function actionColorClassName(action: RequestDetail["action"]) {
-  switch (action) {
-    case "ALERT":
-      return "text-warning";
-    case "BUY":
-      return "text-success";
-    case "SELL":
-      return "text-danger";
-
-    default:
-      return "text-accent";
-  }
-}
-
-function cardFromColorClassName(action: RequestDetail["action"]) {
-  switch (action) {
-    case "ALERT":
-      return "from-warning/10";
-    case "BUY":
-      return "from-success/10";
-    case "SELL":
-      return "from-danger/8";
-
-    default:
-      return "from-accent/5";
-  }
-}
-
-function cardToColorClassName(status: RequestDetail["status"]) {
-  switch (status) {
-    case "ACTIVE":
-      return "to-accent/10";
-    case "DONE":
-      return "to-success/10";
-    case "CANCELLED":
-      return "to-danger/5";
-    case "FAILED":
-      return "to-danger/10";
-    case "UNKNOWN":
-      return "to-default/10";
-
-    default:
-      return "to-accent/5";
-  }
+export interface RequestCardProps {
+  row: RequestDetail;
+  onDetails: () => void;
+  currentQuote?: number;
+  compact?: boolean;
 }
 
 export function RequestCard({
   row,
   onDetails,
-}: {
-  row: RequestDetail;
-  onDetails: () => void;
-}) {
+  currentQuote,
+  compact = false,
+}: RequestCardProps) {
   const ActionIcon = actionIcons[row.action];
   const actionLabel = actionLabels[row.action];
   const conditionLabel = conditionShortLabels[row.condition];
 
+  // Calculate distance from live quote
+  const distance =
+    currentQuote != null && Number.isFinite(currentQuote)
+      ? row.targetPrice - currentQuote
+      : null;
+
+  const isTriggeredOrInRange =
+    distance != null &&
+    ((row.condition === "LTE" && distance >= 0) ||
+      (row.condition === "GTE" && distance <= 0));
+
+  if (compact) {
+    return (
+      <article className="border-separator grid gap-1 border-b py-2 text-xs last:border-b-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Chip
+              size="sm"
+              color={
+                row.action === "BUY"
+                  ? "success"
+                  : row.action === "SELL"
+                    ? "danger"
+                    : "default"
+              }
+              variant="soft"
+            >
+              <Chip.Label>{actionLabel}</Chip.Label>
+            </Chip>
+            {row.action !== "ALERT" && row.units != null && (
+              <b className="tabular-nums">{formatNumber(row.units)} واحد</b>
+            )}
+            <span>{requestStatusLabel(row.status)}</span>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={onDetails}
+            aria-label={`جزئیات ${actionLabel} در مظنه ${formatNumber(row.targetPrice)}`}
+          >
+            جزئیات
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span>
+            مظنه {row.condition === "LTE" ? "کمتر یا مساوی" : "بیشتر یا مساوی"}{" "}
+            <b className="tabular-nums">{formatNumber(row.targetPrice)}</b>
+          </span>
+          {distance != null && row.status === "ACTIVE" && (
+            <span className="text-muted tabular-nums">
+              فاصله هدف:{" "}
+              <bdi dir="ltr">
+                {distance > 0 ? "+" : ""}
+                {formatNumber(distance)}
+              </bdi>{" "}
+              هزار تومان
+            </span>
+          )}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <Card
+      role="button"
+      tabIndex={0}
       onClick={onDetails}
-      className={cn(
-        "bg-surface bg-linear-210 via-surface to-surface cursor-pointer",
-        cardFromColorClassName(row.action),
-        cardToColorClassName(row.status),
-      )}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onDetails();
+        }
+      }}
+      variant="secondary"
+      className="border-border/60 hover:bg-surface-secondary/90 hover:border-border focus-visible:outline-3 focus-visible:outline-focus cursor-pointer rounded-xl border p-2.5 transition-colors focus-visible:outline-offset-2 active:scale-[0.99] sm:p-3"
     >
-      <div className="flex w-full items-center">
-        <div className="flex flex-1 flex-col gap-3">
-          <div className="flex items-center">
-            <ActionIcon
-              className={cn("me-2 size-5", actionColorClassName(row.action))}
-            />
+      <div className="flex w-full items-center justify-between gap-2.5">
+        {/* Left/Start Side: Action Chip, Units, Price Target */}
+        <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <Chip
+            size="sm"
+            color={
+              row.action === "BUY"
+                ? "success"
+                : row.action === "SELL"
+                  ? "danger"
+                  : "warning"
+            }
+            variant="soft"
+            className="h-5.5 px-1.5 text-[0.7rem] font-bold"
+          >
+            <ActionIcon className="me-1 inline-block size-3.5" />
+            <Chip.Label>{actionLabel}</Chip.Label>
+          </Chip>
 
-            <span className="text-muted me-1 text-sm">{actionLabel}</span>
-
-            {row.action !== "ALERT" && row.units != null && (
-              <span className="text-foreground text-sm">
-                {formatNumber(row.units)} واحد
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center">
-            <DollarMinimalisticIcon className="text-muted me-2 size-5" />
-
-            <div className="text-muted me-1 text-sm">
-              قیمت <span className="text-foreground">{conditionLabel}</span> از
-            </div>
-
-            <span className="text-foreground me-1 text-sm font-semibold tabular-nums">
-              {formatNumber(row.targetPrice)}
+          {row.action !== "ALERT" && row.units != null && (
+            <span className="text-foreground font-semibold tabular-nums">
+              {formatNumber(row.units)} واحد
             </span>
+          )}
 
-            <TomanIcon className="text-muted size-3 opacity-70" />
+          <div className="text-muted flex items-center gap-1">
+            <span>مظنه {conditionLabel} از</span>
+            <strong className="text-foreground font-mono font-bold tabular-nums">
+              {formatNumber(row.targetPrice)}
+            </strong>
+            <TomanIcon className="size-3 opacity-80" />
           </div>
         </div>
 
-        <div className="flex h-full flex-col items-end justify-between">
-          <SquareTopDownIcon className="text-muted size-5" />
+        {/* Right/End Side: Quote Distance & Status */}
+        <div className="flex shrink-0 items-center gap-2">
+          {distance != null && row.status === "ACTIVE" && (
+            <span
+              className={`font-mono text-[0.68rem] tabular-nums ${
+                isTriggeredOrInRange
+                  ? "text-success font-semibold"
+                  : "text-muted"
+              }`}
+            >
+              {isTriggeredOrInRange
+                ? "در محدوده هدف"
+                : `فاصله: ${distance > 0 ? "+" : ""}${formatNumber(distance)} هزار`}
+            </span>
+          )}
 
           <Chip
             color={
@@ -123,9 +162,9 @@ export function RequestCard({
                   : "danger"
             }
             variant="soft"
-            className="text-xs"
+            className="h-5.5 px-2 text-[0.68rem] font-semibold"
           >
-            {requestStatusLabel(row.status)}
+            <Chip.Label>{requestStatusLabel(row.status)}</Chip.Label>
           </Chip>
         </div>
       </div>

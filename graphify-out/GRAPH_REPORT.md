@@ -1,23 +1,24 @@
-# Graph Report - .  (2026-09-12)
+# Graph Report - zarbit  (2026-09-13)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 488 files · ~224,038 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3642 nodes · 4787 edges · 328 communities (234 shown, 94 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 91 edges (avg confidence: 0.73)
+- 3874 nodes · 5110 edges · 384 communities (251 shown, 133 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 80 edges (avg confidence: 0.72)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e3a80448`
+- Built from commit: `2e6a6f04`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- create-orpc-router.ts
+- AppError
 - contracts/src/index.ts
-- worker/src/requests.ts
-- @zarbit/config/tsconfig.base.json
+- worker/src/index.ts
+- compilerOptions
 - tasks
 - _telegram-session-panel.tsx
 - brandkit/SKILL.md
@@ -33,9 +34,9 @@
 - Nexload Design Engineering
 - Nexload React Engineering
 - dependencies
-- market-ingestion.ts
+- create-market-mock.ts
 - logger.ts
-- ZarBit — Future Realtime Data Architecture.md
+- create-market-runtime.ts
 - dependencies
 - sessions.ts
 - Model Queries
@@ -44,8 +45,8 @@
 - Global Options Reference
 - mtcute — TypeScript MTProto Library
 - Dependency Management
+- create-orpc-router.ts
 - app-dependencies.ts
-- start-application-server.ts
 - db/src/index.ts
 - Relation Queries
 - Monorepo Best Practices
@@ -62,7 +63,7 @@
 - Client Methods
 - Filter Conditions and Operators
 - devDependencies
-- typescript
+- devDependencies
 - useApi
 - drawer.tsx
 - mtcute.ts
@@ -73,15 +74,15 @@
 - Query Options
 - Prisma Client API Reference
 - Critical Anti-Patterns
-- legacy-api.ts
-- RequestDetail
+- api-provider.tsx
+- What You Must Do When Invoked
 - prisma generate
 - prisma migrate dev
 - Agent Skill: Principal UI/UX Architect & Motion Choreographer (Awwwards-Tier)
 - prisma db seed
 - Debugging Cache Issues
-- quote-dashboard-card.tsx
-- worker/src/index.ts
+- home-page.tsx
+- ZarBit — Deep Implementation Audit Report (Phases 1–6)
 - prisma db pull
 - prisma init
 - prisma migrate deploy
@@ -93,14 +94,14 @@
 - get-class.js
 - React Composition Patterns
 - scripts
-- traders-page.tsx
+- _trader-detail-drawer.tsx
 - contracts/package.json
 - HeroUI v3 React Development Guide
 - Configuration Gotchas
 - get-method.js
 - 5. Re-render Optimization
 - devDependencies
-- README.md
+- ARCHITECTURE.md
 - 45. Capture plan برای تکمیل reverse engineering
 - Appendix B - Canonical Sources (read these before reinventing)
 - Transactions
@@ -120,10 +121,10 @@
 - Styling & Customization
 - turbo watch
 - scripts
-- dependencies
-- @types/node
+- @zarbit/domain
+- ZarBit — Deep Implementation Audit Report (Phases 7–13)
 - ZarBit — Product Roadmap
-- db/package.json
+- scripts
 - caveman/SKILL.md
 - 4. DESIGN ENGINEERING DIRECTIVES (Bias Correction)
 - prisma migrate diff
@@ -137,7 +138,7 @@
 - CI Optimization Patterns
 - Configuration Keys
 - 6. Rendering Performance
-- scripts
+- ZarBit — Phases 1–6 Hardening Report
 - domain/package.json
 - tasteskill: Anti-Slop Frontend Skill
 - SQL Server Setup
@@ -172,7 +173,7 @@
 - Environment Variable Gotchas
 - Environment Modes
 - Turborepo Skill
-- app-shell.tsx
+- auth.tsx
 - 9. AI TELLS (Forbidden Patterns)
 - prisma mcp
 - Forms & Inputs
@@ -181,7 +182,7 @@
 - SessionOutages
 - Zarbit — Architecture
 - 21. Sequence Example C — مقدار مشخص
-- 29. Proposed implementation phases
+- app-runtime.tsx
 - APPENDICES - Real Source-Backed Reference Material
 - 11. REDESIGN PROTOCOL
 - 3. DEFAULT ARCHITECTURE & CONVENTIONS
@@ -197,7 +198,7 @@
 - 4. اصطلاحات اصلی گروه
 - Zarbit — Product Specification
 - Web/server RPC
-- 21. Failure model
+- calculate-participant-analytics.ts
 - Agent Operating Contract
 - Sections
 - history.tsx
@@ -217,7 +218,7 @@
 - @zarbit/env
 - 11. مظنه Protocol
 - 20. Sequence Example B — Take All
-- Zarbit
+- README.md
 - 1. THE THREE DIALS (Core Configuration)
 - 7. DIAL DEFINITIONS (Technical Reference)
 - get_docs.mjs
@@ -232,17 +233,17 @@
 - 30. Price Resolver — قرارداد مفهومی
 - 5. نقش‌ها و actorها
 - 7. Normalization قبل از Parsing
-- 4. Conservative Alias → Telegram Identity Resolver
-- 5. Phase 1B Serving & Web Architecture
-- 7. Market Data contracts
+- _market-hero-card.tsx
+- مستند جامع قابلیت‌ها و مشخصات صفحه اصلی زربیت (Home Page Feature Specification)
+- orpc.ts
 - config/package.json
 - cart-summary.tsx
 - product-list.tsx
 - vendor-map.tsx
 - prisma complete
 - 9. لفظ خرید/فروش
-- ZarBit — Future Realtime Data Architecture
-- 4. Why the separation exists
+- MarketLive
+- TelegramTransport
 - abstraction-proposal.md
 - interop-seam.md
 - metrics-parser.md
@@ -328,91 +329,145 @@
 - server-serialization.md
 - vercel-react-best-practices/rules/_template.md
 - playwright.config.ts
+- ZarBit Phase 13.5 Implementation Report
+- graphify reference: extra exports and benchmark
+- package.json
+- compilerOptions
+- logger/src/index.ts
+- SessionStore
+- worker/tsconfig.json
+- Zarbit — Dokploy operations
+- graphify reference: query, path, explain
+- worker/package.json
+- domain/tsconfig.json
+- logger/tsconfig.json
+- messages/tsconfig.json
+- web/package.json
+- lint-staged
+- contracts/tsconfig.json
+- graphify reference: add a URL and watch a folder
+- graphify reference: commit hook and native AGENTS.md integration
+- graphify reference: incremental update and cluster-only
+- 19. Sequence Example A — ایجاد لفظ فروش
+- 3. Idempotent Ingestion Pipeline
+- graphify reference: GitHub clone and cross-repo merge
+- graphify reference: transcribe video and audio
+- env/tsconfig.json
+- tsconfig.json
+- extraction-spec.md
+- @hono/node-server
+- @orpc/server
+- @orpc/zod
+- pg
+- pino
+- @prisma/adapter-pg
+- @t3-oss/env-core
+- @zarbit/db
+- @zarbit/messages
+- zod
+- @orpc/tanstack-query
+- @tailwindcss/vite
+- @tanstack/react-router
+- @zarbit/contracts
+- grammy
+- @hono/node-server
+- @mtcute/dispatcher
+- pino
+- @prisma/adapter-pg
+- @prisma/client
+- @t3-oss/env-core
+- @zarbit/db
+- @zarbit/env
+- zod
+- eslint-plugin-react-refresh
+- husky
+- prettier
+- typescript
 
 ## God Nodes (most connected - your core abstractions)
 1. `Sessions` - 32 edges
-2. `AppError` - 28 edges
+2. `AppError` - 29 edges
 3. `sessionRef` - 27 edges
 4. `AppDependencies` - 24 edges
-5. `useApi()` - 23 edges
-6. `useIdentity()` - 22 edges
-7. `scripts` - 22 edges
+5. `scripts` - 22 edges
+6. `useApi()` - 21 edges
+7. `Store` - 20 edges
 8. `Critical Anti-Patterns` - 20 edges
-9. `RequestDetail` - 19 edges
+9. `useIdentity()` - 18 edges
 10. `compilerOptions` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `createRequestsRouter()` --indirect_call--> `requestView()`  [INFERRED]
   apps/server/src/modules/requests/create-requests-router.ts → packages/db/src/requests.ts
+- `MarketInsightsProps` --references--> `MarketSnapshot`  [EXTRACTED]
+  apps/web/src/modules/home/_market-insights.tsx → packages/contracts/src/market.ts
+- `AppDependencies` --references--> `Identity`  [EXTRACTED]
+  apps/server/src/app-dependencies.ts → packages/contracts/src/index.ts
 - `AppDependencies` --references--> `TelegramSessionStatus`  [EXTRACTED]
   apps/server/src/app-dependencies.ts → packages/contracts/src/index.ts
 - `AppDependencies` --references--> `WorkerCommand`  [EXTRACTED]
   apps/server/src/app-dependencies.ts → packages/contracts/src/index.ts
-- `AppDependencies` --references--> `Store`  [EXTRACTED]
-  apps/server/src/app-dependencies.ts → packages/db/src/index.ts
-- `registerRequestRoutes()` --indirect_call--> `requestView()`  [INFERRED]
-  apps/server/src/legacy/rest/register-request-routes.ts → packages/db/src/requests.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (328 total, 94 thin omitted)
+## Communities (384 total, 133 thin omitted)
 
-### Community 0 - "create-orpc-router.ts"
-Cohesion: 0.08
-Nodes (27): createAnalyticsRouter(), createAuthRouter(), createQuoteRouter(), QuoteRouterDependencies, createRequestsRouter(), RequestsRouterDependencies, requireLiveSession(), createTelegramRouter() (+19 more)
+### Community 0 - "AppError"
+Cohesion: 0.12
+Nodes (14): AppDependencies, createRequestsRouter(), RequestsRouterDependencies, requireLiveSession(), TelegramRouterDependencies, TelegramSessionStatusData, CacheOptions, ResponseCache (+6 more)
 
 ### Community 1 - "contracts/src/index.ts"
 Cohesion: 0.06
-Nodes (46): parseInput(), registerRequestRoutes(), baseRow, requestApp(), requestRow(), codeSchema, createRequestInputSchema, LegacyTelegramSessionStatus (+38 more)
+Nodes (41): parseInput(), registerRequestRoutes(), baseRow, requestApp(), requestRow(), codeSchema, CreateRequestInput, createRequestInputSchema (+33 more)
 
-### Community 2 - "worker/src/requests.ts"
-Cohesion: 0.09
-Nodes (39): createTelegramBot(), createRequestExecutor(), Quote, RequestStore, example, ExecutorStore, RequestRow, setup() (+31 more)
+### Community 2 - "worker/src/index.ts"
+Cohesion: 0.07
+Nodes (50): createTelegramBot(), createWorkerApp(), startWorker(), createPrivateNotifier(), notifyRecoveredRequests(), acquireWorkerOwnership(), createRequestExecutor(), Quote (+42 more)
 
-### Community 3 - "@zarbit/config/tsconfig.base.json"
-Cohesion: 0.04
-Nodes (38): compilerOptions, composite, jsx, jsxImportSource, outDir, paths, extends, compilerOptions (+30 more)
+### Community 3 - "compilerOptions"
+Cohesion: 0.22
+Nodes (8): compilerOptions, composite, jsx, jsxImportSource, outDir, paths, extends, @zarbit/config/tsconfig.base.json
 
 ### Community 4 - "tasks"
 Cohesion: 0.05
 Nodes (45): ^build, ^check-types, DATABASE_URL, dist/**, .env*, ^format:check, ^lint, $TURBO_DEFAULT$ (+37 more)
 
 ### Community 5 - "_telegram-session-panel.tsx"
-Cohesion: 0.07
-Nodes (30): ConfirmAction(), ConfirmActionProps, ConnectionChip, resolveChip(), resolveDescription(), resolveTelegramSessionPresentation(), stateLabels, TelegramSessionPresentation (+22 more)
+Cohesion: 0.08
+Nodes (24): ConfirmAction(), ConfirmActionProps, ConnectionChip, resolveChip(), resolveDescription(), resolveTelegramSessionPresentation(), stateLabels, TelegramSessionPresentation (+16 more)
 
 ### Community 6 - "brandkit/SKILL.md"
 Cohesion: 0.05
 Nodes (43): 1. Logo Cover, 1. Monogram + Meaning, 2 × 3 REFERENCE-STYLE LAYOUT, 2. Logo Construction, 2. Product Action, 3. Digital Application, 3. Metaphor Fusion, 4. Brand Essence (+35 more)
 
 ### Community 7 - "harness.tsx"
-Cohesion: 0.07
-Nodes (23): Harness(), Identity(), params, root, router, AppErrorBoundary, AppErrorFallback(), AppRuntime() (+15 more)
+Cohesion: 0.14
+Nodes (12): Harness(), Identity(), params, root, router, AppErrorBoundary, AppErrorFallback(), queryClient (+4 more)
 
 ### Community 8 - "contracts/src/analytics.ts"
-Cohesion: 0.09
-Nodes (32): AnalyticsService, AnalyticsRouterDependencies, DataCoverageConfidence, dataCoverageConfidenceSchema, ParticipantAnalyticsDetail, participantAnalyticsDetailSchema, ParticipantAnalyticsSummary, participantAnalyticsSummarySchema (+24 more)
+Cohesion: 0.17
+Nodes (15): AnalyticsService, AnalyticsRouterDependencies, dataCoverageConfidenceSchema, ParticipantAnalyticsDetail, participantAnalyticsDetailSchema, ParticipantAnalyticsSummary, participantAnalyticsSummarySchema, sortOrderSchema (+7 more)
 
 ### Community 9 - "Other Commands"
 Cohesion: 0.05
-Nodes (40): `--affected`, Basic Usage, `--cache`, Cache Control, CI Integration Example, Comparison Depth, `--concurrency`, `--continue` (+32 more)
+Nodes (41): `--affected`, Basic Usage, `--cache`, Cache Control, CI Integration Example, Comparison Depth, `--concurrency`, `--continue` (+33 more)
 
 ### Community 10 - "Sessions"
-Cohesion: 0.18
-Nodes (4): challengeRef, sessionRef, Sessions, SessionStore
+Cohesion: 0.25
+Nodes (3): challengeRef, sessionRef, Sessions
 
 ### Community 11 - "Nexload CTO Review"
 Cohesion: 0.05
 Nodes (34): Architecture and standards routing, Foundational skill routing, Ownership and boundaries, SDK and public API, Smallest correct architecture, Types, dependencies, performance, and security, Compact output, Conditional dimensions (+26 more)
 
 ### Community 12 - "domain/src/index.ts"
-Cohesion: 0.16
-Nodes (25): DownsampledQuotePoint, DownsampleQuoteOptions, QuoteHistoryInputPoint, compactQuoteMultiplier, normalizeArabicPersianLetters(), normalizeCompactText(), normalizeProtocolText(), stripBidiAndControlChars() (+17 more)
+Cohesion: 0.08
+Nodes (47): AuthoritativeHandlerDependencies, createAuthoritativeHandler(), workerLog, createMarketIngestion(), createQuoteRecorder, MarketDataStore, BoundedMessageDeduplicator, BoundedOrderCache (+39 more)
 
 ### Community 13 - "scripts"
-Cohesion: 0.06
-Nodes (35): dependencies, lint-staged, **/*.{css,json,jsonc,md,yaml,yml,html}, **/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}, name, packageManager, private, scripts (+27 more)
+Cohesion: 0.09
+Nodes (22): scripts, build, check-types, db:generate, db:migrate, db:push, db:studio, dev (+14 more)
 
 ### Community 14 - "GROUP-TRADING-PROTOCOL.md"
 Cohesion: 0.06
@@ -431,28 +486,28 @@ Cohesion: 0.06
 Nodes (29): Component contracts and locality, File ownership, Primary sources, Public shape, Review questions, Boundary map, Payload Admin composition and verification, Primary sources (+21 more)
 
 ### Community 18 - "dependencies"
-Cohesion: 0.06
-Nodes (33): dependencies, dotenv, grammy, hono, @hono/node-server, @orpc/openapi, @orpc/server, @orpc/zod (+25 more)
+Cohesion: 0.12
+Nodes (17): dependencies, dotenv, grammy, hono, @orpc/openapi, @prisma/client, @zarbit/domain, @zarbit/env (+9 more)
 
-### Community 19 - "market-ingestion.ts"
-Cohesion: 0.13
-Nodes (16): AuthoritativeHandlerDependencies, createAuthoritativeHandler(), createMarketIngestion(), createQuoteRecorder, MarketDataStore, BoundedMessageDeduplicator, BoundedOrderCache, CachedCanonicalOrder (+8 more)
+### Community 19 - "create-market-mock.ts"
+Cohesion: 0.11
+Nodes (18): MarketHub, createMarketMock(), createMarketFixtures(), MarketScenario, marketScenarios, mockEpoch, createMockLiveIterator(), LiveView (+10 more)
 
 ### Community 20 - "logger.ts"
-Cohesion: 0.13
-Nodes (21): errorDetails, FailureCategory, isNetworkCode(), isRevoked(), nativeCode(), rpcCode(), safeCode(), safeError() (+13 more)
+Cohesion: 0.24
+Nodes (13): errorDetails, FailureCategory, isNetworkCode(), isRevoked(), nativeCode(), rpcCode(), safeCode(), safeError() (+5 more)
 
-### Community 21 - "ZarBit — Future Realtime Data Architecture.md"
-Cohesion: 0.07
-Nodes (29): 10. PostgreSQL remains the source of truth, 11. Revision and ordering, 12. Client bootstrap, 13. Chart composition, 14. Chart reconciliation, 15. Stream recovery, 16. LISTEN startup race, 17. User Data Plane (+21 more)
+### Community 21 - "create-market-runtime.ts"
+Cohesion: 0.10
+Nodes (9): createMarketRuntime(), Subscriber, MarketListener, Observe, IncrementalEvent, MarketState, RpcMetrics, Sample (+1 more)
 
 ### Community 22 - "dependencies"
-Cohesion: 0.07
-Nodes (29): dependencies, @base-ui/react, @fontsource-variable/vazirmatn, @heroui/react, @heroui/styles, @orpc/tanstack-query, react, react-dom (+21 more)
+Cohesion: 0.08
+Nodes (25): dependencies, @base-ui/react, @fontsource-variable/vazirmatn, @heroui/react, @heroui/styles, @orpc/client, react, react-dom (+17 more)
 
 ### Community 23 - "sessions.ts"
-Cohesion: 0.08
-Nodes (18): Challenge, expiredLoginCodes, LoginPhase, Runtime, SessionOptions, SessionOwner, sessionReason(), SessionRecord (+10 more)
+Cohesion: 0.11
+Nodes (19): Challenge, expiredLoginCodes, LoginPhase, SessionOptions, SessionOwner, sessionReason(), SessionRecord, SessionState (+11 more)
 
 ### Community 24 - "Model Queries"
 Cohesion: 0.07
@@ -478,17 +533,17 @@ Nodes (25): Architecture overview, Basic usage, Calling high-level methods, Clie
 Cohesion: 0.08
 Nodes (25): 1. Clarity, 2. Flexibility, 3. Better Caching, 4. Pruning Support, Benefits of Local Installation, Common Issues, Core Principle: Install Where Used, Dependency Management (+17 more)
 
-### Community 30 - "app-dependencies.ts"
-Cohesion: 0.22
-Nodes (13): createApp(), AppDependencies, registerQuoteRoutes(), AppEnv, generateOpenApi(), registerApiErrorHandlers(), initDataFromBody(), registerApiMiddleware() (+5 more)
-
-### Community 31 - "start-application-server.ts"
+### Community 30 - "create-orpc-router.ts"
 Cohesion: 0.14
-Nodes (15): createProductionDependencies(), startApplicationServer(), assertTelegramBotConfiguration(), app, dependencies, serverLog, authenticate, authenticateTelegramRequest() (+7 more)
+Nodes (20): createApp(), createAnalyticsRouter(), createAuthRouter(), createMarketRouter(), MarketRuntime, createTelegramRouter(), generateOpenApi(), registerApiErrorHandlers() (+12 more)
+
+### Community 31 - "app-dependencies.ts"
+Cohesion: 0.13
+Nodes (17): createProductionDependencies(), startApplicationServer(), assertTelegramBotConfiguration(), app, dependencies, market, authenticate, authenticateTelegramRequest() (+9 more)
 
 ### Community 32 - "db/src/index.ts"
-Cohesion: 0.11
-Nodes (19): createAnalyticsDataStore(), createPrismaClient(), createStore(), databasePool, databasePoolOptions, originalPrismaDisconnect, QuoteRecord, SessionRecord (+11 more)
+Cohesion: 0.09
+Nodes (25): Identity, MarketNotification, createAnalyticsDataStore(), createPrismaClient(), createStore(), databasePool, databasePoolOptions, originalPrismaDisconnect (+17 more)
 
 ### Community 33 - "Relation Queries"
 Cohesion: 0.08
@@ -507,16 +562,16 @@ Cohesion: 0.22
 Nodes (16): classifyWorkerFailure(), probeWorker(), envelopeSchema, errorSchema, sendWorkerCommand(), successSchema, WorkerDiagnostic, WorkerFailure (+8 more)
 
 ### Community 37 - "_request-details-drawer.tsx"
-Cohesion: 0.17
-Nodes (18): actionColorClassName(), cardFromColorClassName(), cardToColorClassName(), RequestCard(), RequestDetailsDrawer(), actionIcons, actionLabels, conditionLabels (+10 more)
+Cohesion: 0.19
+Nodes (17): actionColorClassName(), cardFromColorClassName(), cardToColorClassName(), RequestCard(), RequestDetailsDrawer(), actionIcons, actionLabels, conditionLabels (+9 more)
 
 ### Community 38 - "dependencies"
-Cohesion: 0.09
-Nodes (23): dependencies, dotenv, grammy, hono, @hono/node-server, @mtcute/dispatcher, @mtcute/node, pg (+15 more)
+Cohesion: 0.13
+Nodes (15): dependencies, dotenv, hono, @mtcute/node, pg, @zarbit/contracts, @zarbit/logger, @zarbit/messages (+7 more)
 
 ### Community 39 - "devDependencies"
-Cohesion: 0.09
-Nodes (23): eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, husky, lint-staged, devDependencies (+15 more)
+Cohesion: 0.10
+Nodes (21): eslint, @eslint/js, eslint-plugin-react-hooks, globals, lint-staged, devDependencies, eslint, @eslint/js (+13 more)
 
 ### Community 40 - "agy-worker/SKILL.md"
 Cohesion: 0.09
@@ -547,28 +602,28 @@ Cohesion: 0.10
 Nodes (20): AND (explicit), AND (implicit), Array Field Filters, Combined, Comparison, Equality, every, Filter Conditions and Operators (+12 more)
 
 ### Community 47 - "devDependencies"
-Cohesion: 0.10
-Nodes (21): devDependencies, @playwright/test, postcss, tailwindcss, @tanstack/router-plugin, tsx, @types/react, @types/react-dom (+13 more)
+Cohesion: 0.07
+Nodes (27): devDependencies, @playwright/test, postcss, tailwindcss, @tanstack/router-plugin, tsx, @types/node, @types/react (+19 more)
 
-### Community 48 - "typescript"
-Cohesion: 0.10
-Nodes (21): typescript, @zarbit/config, devDependencies, tsdown, tsx, typescript, @zarbit/config, tsx (+13 more)
+### Community 48 - "devDependencies"
+Cohesion: 0.22
+Nodes (9): devDependencies, tsdown, tsx, typescript, @zarbit/config, tsdown, tsx, typescript (+1 more)
 
 ### Community 49 - "useApi"
-Cohesion: 0.26
-Nodes (13): compactPriceFormatOptions, RequestFormDrawer(), RequestList(), useRequestActions(), useSessionCommand(), useTelegramSession(), useApi(), createRpcUtils() (+5 more)
+Cohesion: 0.33
+Nodes (10): compactPriceFormatOptions, RequestFormDrawer(), FilterAction, RequestList(), useRequestActions(), useSessionCommand(), useTelegramSession(), useApi() (+2 more)
 
 ### Community 50 - "drawer.tsx"
 Cohesion: 0.12
 Nodes (3): Drawer, DrawerSheet(), DrawerSheetProps
 
 ### Community 51 - "mtcute.ts"
-Cohesion: 0.15
-Nodes (13): add(), mtcuteFactory(), MtcuteLifecycleClient, observeMtcuteClient(), remove(), ZARBIT_CONNECTION_IDENTITY, CodeDelivery, LoginResult (+5 more)
+Cohesion: 0.18
+Nodes (10): add(), mtcuteFactory(), MtcuteLifecycleClient, observeMtcuteClient(), remove(), ZARBIT_CONNECTION_IDENTITY, CodeDelivery, TelegramConnectionState (+2 more)
 
 ### Community 52 - "env/package.json"
-Cohesion: 0.10
-Nodes (20): dependencies, dotenv, @t3-oss/env-core, zod, exports, ./access, ./db, ./server (+12 more)
+Cohesion: 0.07
+Nodes (29): dependencies, dotenv, @t3-oss/env-core, zod, devDependencies, @types/node, typescript, @zarbit/config (+21 more)
 
 ### Community 53 - "prisma db push"
 Cohesion: 0.10
@@ -584,7 +639,7 @@ Nodes (19): Command, Common Workflow, Custom port, Don't open browser, Edit Reco
 
 ### Community 56 - "Query Options"
 Cohesion: 0.10
-Nodes (19): cursor, distinct, Filtered include, include, Include relation count, Multiple distinct fields, Negative take (reverse), Nested include (+11 more)
+Nodes (20): cursor, distinct, Filtered include, include, Include relation count, Multiple distinct fields, Negative take (reverse), Nested include (+12 more)
 
 ### Community 57 - "Prisma Client API Reference"
 Cohesion: 0.10
@@ -594,17 +649,17 @@ Nodes (19): Client Instantiation, Client Methods, Create records, Delete records
 Cohesion: 0.10
 Nodes (20): Accessing Files Across Package Boundaries, `^build` vs `build` Confusion, Critical Anti-Patterns, `.env` Files Not in Inputs, Environment Variables Not Hashed, Missing `outputs` for File-Producing Tasks, NOT an Anti-Pattern: Large `env` Arrays, Overly Broad `globalDependencies` (+12 more)
 
-### Community 59 - "legacy-api.ts"
-Cohesion: 0.18
-Nodes (15): ApiProvider(), AppRuntimeProps, ApiContext, createLegacyApi(), request(), serverUrl(), createRpcClient(), telegramInitData() (+7 more)
+### Community 59 - "api-provider.tsx"
+Cohesion: 0.32
+Nodes (6): ApiProvider(), ApiContext, createRpcClient(), env, ImportMeta, ImportMetaEnv
 
-### Community 60 - "RequestDetail"
-Cohesion: 0.21
-Nodes (5): adaptLegacyApi(), LegacyApi, CreateRequestInput, RequestDetail, UpdateRequestInput
+### Community 60 - "What You Must Do When Invoked"
+Cohesion: 0.08
+Nodes (24): For /graphify add and --watch, For /graphify query, For the commit hook and native AGENTS.md integration, For --update and --cluster-only, /graphify, Honesty Rules, Interpreter guard for subcommands, Part A - Structural extraction for code files (+16 more)
 
 ### Community 61 - "prisma generate"
-Cohesion: 0.11
-Nodes (18): After schema changes, Basic generation, Bun Runtime, CI/CD pipeline, Command, Common Patterns, Compiler Build Tuning, Current Generator Behavior (+10 more)
+Cohesion: 0.10
+Nodes (19): After schema changes, Basic generation, Bun Runtime, CI/CD pipeline, Command, Common Patterns, Compiler Build Tuning, Current Generator Behavior (+11 more)
 
 ### Community 62 - "prisma migrate dev"
 Cohesion: 0.11
@@ -622,13 +677,13 @@ Nodes (17): Best Practices, Command, Common Patterns, Common seed commands, Cond
 Cohesion: 0.11
 Nodes (17): Debugging Cache Issues, Debugging with `globalConfiguration` Enabled, Diagnostic Tools, `--dry` / `--dry=json`, .env File Changed, Environment Variable Changed, `--force`, Incorrect Cache Hits (+9 more)
 
-### Community 66 - "quote-dashboard-card.tsx"
-Cohesion: 0.21
-Nodes (11): formatAxisDate(), formatDate(), formatQuote(), QuoteDashboardCard(), relativeFormatter, safeDisplayPrice(), timeFormatter, useQuoteDashboard() (+3 more)
+### Community 66 - "home-page.tsx"
+Cohesion: 0.16
+Nodes (12): HomePage(), relativeTimeFromNow(), MarketInsights(), MarketInsightsProps, MarketConnection, MarketQuickActions(), MarketQuickActionsProps, MarketTelemetryBar() (+4 more)
 
-### Community 67 - "worker/src/index.ts"
-Cohesion: 0.22
-Nodes (12): startWorker(), workerLog, createPrivateNotifier(), notifyRecoveredRequests(), acquireWorkerOwnership(), checkDatabaseHealth(), databasePoolStats(), prisma (+4 more)
+### Community 67 - "ZarBit — Deep Implementation Audit Report (Phases 1–6)"
+Cohesion: 0.08
+Nodes (24): 10. Documentation Drift, 11. Dead / Obsolete Code, 12. Phase 7 Blockers, 13. Recommended Fix Order, 14. Final Confidence, 1. Executive Verdict, 2. Phase Scorecard, 3. Critical Findings (+16 more)
 
 ### Community 68 - "prisma db pull"
 Cohesion: 0.12
@@ -671,16 +726,16 @@ Cohesion: 0.12
 Nodes (16): 1.1 Avoid Boolean Prop Proliferation, 1.2 Use Compound Components, 1. Component Architecture, 2.1 Decouple State Management from UI, 2.2 Define Generic Context Interfaces for Dependency Injection, 2.3 Lift State into Provider Components, 2. State Management, 3.1 Create Explicit Component Variants (+8 more)
 
 ### Community 78 - "scripts"
-Cohesion: 0.12
-Nodes (16): name, private, scripts, build, check-types, dev, format, format:check (+8 more)
+Cohesion: 0.17
+Nodes (12): scripts, build, check-types, dev, format, format:check, generate-pwa-assets, lint (+4 more)
 
-### Community 79 - "traders-page.tsx"
-Cohesion: 0.26
-Nodes (10): DataCoverageBadge(), formatPersianNumber(), TraderCard(), formatPersianNumber(), formatTime(), TraderDetailDrawer(), sortOptions, TraderSortBar() (+2 more)
+### Community 79 - "_trader-detail-drawer.tsx"
+Cohesion: 0.19
+Nodes (15): DataCoverageBadge(), formatPersianNumber(), TraderCard(), formatDate(), formatPersianNumber(), formatTime(), TraderDetailDrawer(), sortOptions (+7 more)
 
 ### Community 80 - "contracts/package.json"
-Cohesion: 0.12
-Nodes (16): @orpc/contract, dependencies, @orpc/contract, zod, exports, ./rpc, zod, name (+8 more)
+Cohesion: 0.09
+Nodes (21): @orpc/contract, dependencies, @orpc/contract, zod, devDependencies, typescript, @zarbit/config, exports (+13 more)
 
 ### Community 81 - "HeroUI v3 React Development Guide"
 Cohesion: 0.12
@@ -699,12 +754,12 @@ Cohesion: 0.12
 Nodes (16): 5.10 Subscribe to Derived State, 5.11 Use Functional setState Updates, 5.12 Use Lazy State Initialization, 5.13 Use Transitions for Non-Urgent Updates, 5.14 Use useDeferredValue for Expensive Derived Renders, 5.15 Use useRef for Transient Values, 5.1 Calculate Derived State During Rendering, 5.2 Defer State Reads to Usage Point (+8 more)
 
 ### Community 85 - "devDependencies"
-Cohesion: 0.12
-Nodes (16): devDependencies, @orpc/client, tsdown, tsx, @types/node, typescript, @zarbit/config, @orpc/client (+8 more)
+Cohesion: 0.13
+Nodes (15): devDependencies, @orpc/client, tsdown, tsx, @types/node, @types/pg, typescript, @zarbit/config (+7 more)
 
-### Community 86 - "README.md"
-Cohesion: 0.15
-Nodes (8): Basic readiness, Before publication, Owner's Telegram check, SQLite to PostgreSQL cutover, Troubleshooting and rollback, Zarbit — Dokploy operations, Market data schema and retention, Zarbit — PostgreSQL
+### Community 86 - "ARCHITECTURE.md"
+Cohesion: 0.33
+Nodes (4): Market data schema and retention, Public development database, Zarbit — PostgreSQL, ZarBit — Archived realtime proposal
 
 ### Community 87 - "45. Capture plan برای تکمیل reverse engineering"
 Cohesion: 0.12
@@ -727,20 +782,20 @@ Cohesion: 0.13
 Nodes (14): 1. Eliminating Waterfalls (CRITICAL), 2. Bundle Size Optimization (CRITICAL), 3. Server-Side Performance (HIGH), 4. Client-Side Data Fetching (MEDIUM-HIGH), 5. Re-render Optimization (MEDIUM), 6. Rendering Performance (MEDIUM), 7. JavaScript Performance (LOW-MEDIUM), 8. Advanced Patterns (LOW) (+6 more)
 
 ### Community 92 - "telegram-session.test.ts"
-Cohesion: 0.20
-Nodes (10): commandInput(), registerTelegramSessionRoutes(), SessionReader, commandWith(), onlineStatus, statusRouteApp(), statusStore(), storedSession (+2 more)
+Cohesion: 0.17
+Nodes (12): registerQuoteRoutes(), commandInput(), registerTelegramSessionRoutes(), SessionReader, AppEnv, appWithQuote(), commandWith(), onlineStatus (+4 more)
 
 ### Community 93 - "compilerOptions"
 Cohesion: 0.13
 Nodes (14): compilerOptions, esModuleInterop, jsx, module, moduleResolution, paths, rootDirs, skipLibCheck (+6 more)
 
 ### Community 94 - "scripts"
-Cohesion: 0.13
-Nodes (14): main, name, private, scripts, build, check-types, dev, format (+6 more)
+Cohesion: 0.22
+Nodes (9): scripts, build, check-types, dev, format, format:check, lint, start (+1 more)
 
 ### Community 95 - "logger/package.json"
-Cohesion: 0.13
-Nodes (14): dependencies, pino, exports, pino, name, private, scripts, check-types (+6 more)
+Cohesion: 0.08
+Nodes (23): dependencies, pino, devDependencies, tsx, @types/node, typescript, @zarbit/config, exports (+15 more)
 
 ### Community 96 - "MongoDB Setup"
 Cohesion: 0.14
@@ -782,21 +837,17 @@ Nodes (12): Basic Usage, Caching, Common Patterns, Dependency-Aware Persistent T
 Cohesion: 0.15
 Nodes (12): main, name, scripts, build, check-types, dev, format, format:check (+4 more)
 
-### Community 106 - "dependencies"
-Cohesion: 0.15
-Nodes (13): @zarbit/domain, @zarbit/domain, @zarbit/domain, dependencies, dotenv, pg, @prisma/adapter-pg, @prisma/client (+5 more)
-
-### Community 107 - "@types/node"
-Cohesion: 0.15
-Nodes (13): @types/node, @types/node, devDependencies, tsx, @types/node, typescript, @zarbit/config, tsx (+5 more)
+### Community 107 - "ZarBit — Deep Implementation Audit Report (Phases 7–13)"
+Cohesion: 0.09
+Nodes (21): 1. Executive Verdict, 2. Phase-by-Phase Scorecard, 3. Comprehensive Verification & Test Results, 4. Critical Findings (P1), 5. Medium Deficiencies & Technical Debt (P2), 6. Architecture & Dependency Flow (Graphify Analysis), 7. Production Dataset Analysis (`worker-messages.txt`), 8. Remediation Roadmap Prior to Follow Planning (+13 more)
 
 ### Community 108 - "ZarBit — Product Roadmap"
 Cohesion: 0.15
 Nodes (12): 1. Strategic Vision, 2.1 Rolling 7-Day Performance Engine, 2.2 Leaderboards & Intelligence UI, 2. Phase 1 — Data Collection Foundation (Current Focus), 3. Phase 2 — Market Intelligence & Trader Analytics (Future), 4.1 Core Invariant: Action Copy, NOT Trade Copy, 4.2 Risk Management & Safeguards, 4. Phase 3 — Action-Based Whale Following (Future) (+4 more)
 
-### Community 109 - "db/package.json"
-Cohesion: 0.15
-Nodes (12): devDependencies, prisma, tsx, @types/pg, typescript, @zarbit/config, exports, tsx (+4 more)
+### Community 109 - "scripts"
+Cohesion: 0.05
+Nodes (43): dependencies, dotenv, pg, @prisma/adapter-pg, @prisma/client, @zarbit/contracts, @zarbit/domain, @zarbit/env (+35 more)
 
 ### Community 110 - "caveman/SKILL.md"
 Cohesion: 0.17
@@ -835,11 +886,11 @@ Cohesion: 0.17
 Nodes (11): Cache Restoration, Example Flow, Global Hash Inputs, How `global.inputs` Changes the Hash Equation, How Turborepo Caching Works, Key Points, Local Cache Location, Task Hash Inputs (+3 more)
 
 ### Community 119 - "GitHub Actions"
-Cohesion: 0.17
+Cohesion: 0.18
 Nodes (11): Alternative: actions/cache, Basic Workflow Structure, Bun, Complete Example, GitHub Actions, Option A: OpenID Connect (recommended), Option B: Personal Access Token, Package Manager Setup (+3 more)
 
 ### Community 120 - "CI Optimization Patterns"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (12): actions/cache Fallback, Cache Considerations, Caching Strategies, CI Optimization Patterns, Conditional Tasks, Custom Git Ranges with --filter, Main Branch: Full Build, Matrix Builds (+4 more)
 
 ### Community 121 - "Configuration Keys"
@@ -850,13 +901,13 @@ Nodes (11): Complete Example, Configuration Keys, `env` - Task-Specific Variable
 Cohesion: 0.17
 Nodes (12): 6.10 Use React DOM Resource Hints, 6.11 Use useTransition Over Manual Loading States, 6.1 Animate SVG Wrapper Instead of SVG Element, 6.2 CSS content-visibility for Long Lists, 6.3 Hoist Static JSX Elements, 6.4 Optimize SVG Precision, 6.5 Prevent Hydration Mismatch Without Flickering, 6.6 Suppress Expected Hydration Mismatches (+4 more)
 
-### Community 123 - "scripts"
-Cohesion: 0.17
-Nodes (12): scripts, check-types, db:generate, db:migrate, db:migrate:deploy, db:push, db:studio, format (+4 more)
+### Community 123 - "ZarBit — Phases 1–6 Hardening Report"
+Cohesion: 0.10
+Nodes (19): 1. Executive Summary, 2. Summary of Changes, 3. Correctness Verification (6 Items), 4. Reasoning Simulation (Scenarios A through E), 5. Migration Impact, 6. Remaining Technical Debt & Future Considerations, 7. Validation Gates, Item 1: Conservative Identity Correlation (3-Level Hierarchy) (+11 more)
 
 ### Community 124 - "domain/package.json"
-Cohesion: 0.17
-Nodes (11): exports, name, private, scripts, check-types, format, format:check, lint (+3 more)
+Cohesion: 0.10
+Nodes (20): devDependencies, tsx, @types/node, typescript, @zarbit/config, exports, tsx, @types/node (+12 more)
 
 ### Community 125 - "tasteskill: Anti-Slop Frontend Skill"
 Cohesion: 0.18
@@ -899,8 +950,8 @@ Cohesion: 0.18
 Nodes (11): 39. Protocol invariants, INV-01 — Side semantics, INV-02 — Color semantics, INV-03 — Remaining, INV-04 — Receipt price, INV-05 — Confirmation, INV-06 — Context, INV-07 — Digits (+3 more)
 
 ### Community 136 - "ZarBit — Market Data Specification"
-Cohesion: 0.18
-Nodes (11): 1. Purpose and Architecture Boundaries, 3.1 Multi-Session Architecture, 3.2 Idempotency Rules, 3.3 MTProto Message Metadata Extraction, 3. Idempotent Ingestion Pipeline, 6.1 Trade Retention, 6.2 Rolling 7-Day View, 6.3 QuoteHistory Retention (+3 more)
+Cohesion: 0.15
+Nodes (13): 1. Purpose and Architecture Boundaries, 2. Core Entities & Relational Schema, 4.1 Non-Negotiable Resolver Constraints, 4.2 Evidence Qualification Levels, 4.3 Resolver State Machine, 4. Conservative Alias → Telegram Identity Resolver, 5. Market serving, 6.1 Trade Retention (+5 more)
 
 ### Community 137 - "10. REFERENCE VOCABULARY (Pattern Names the Agent Should Know)"
 Cohesion: 0.20
@@ -955,8 +1006,8 @@ Cohesion: 0.20
 Nodes (9): 1. Eliminating Waterfalls (async), 2. Bundle Size Optimization (bundle), 3. Server-Side Performance (server), 4. Client-Side Data Fetching (client), 5. Re-render Optimization (rerender), 6. Rendering Performance (rendering), 7. JavaScript Performance (js), 8. Advanced Patterns (advanced) (+1 more)
 
 ### Community 150 - "messages/package.json"
-Cohesion: 0.20
-Nodes (9): exports, name, private, scripts, check-types, lint, test, type (+1 more)
+Cohesion: 0.09
+Nodes (21): dependencies, @zarbit/contracts, devDependencies, tsx, @types/node, typescript, @zarbit/config, exports (+13 more)
 
 ### Community 151 - "prisma migrate status"
 Cohesion: 0.22
@@ -990,9 +1041,9 @@ Nodes (8): Checking Environment Mode, Disabling Framework Inference, Environment
 Cohesion: 0.22
 Nodes (9): Common Task Configurations, Dev Task with `^dev` Pattern (for `turbo watch`), IMPORTANT: Package Tasks, Not Root Tasks, Secondary Rule: `turbo run` vs `turbo`, Source Documentation, Standard Build Pipeline, Transit Nodes for Parallel Tasks with Cache Invalidation, Turborepo Skill (+1 more)
 
-### Community 159 - "app-shell.tsx"
-Cohesion: 0.28
-Nodes (5): AppShell(), navigationItems, PwaUpdate(), Route, RouterAppContext
+### Community 159 - "auth.tsx"
+Cohesion: 0.17
+Nodes (10): AppShell(), navigationItems, PwaUpdate(), Route, RouterAppContext, AuthGate(), authErrorMessage(), IdentityContext (+2 more)
 
 ### Community 160 - "9. AI TELLS (Forbidden Patterns)"
 Cohesion: 0.25
@@ -1019,12 +1070,12 @@ Cohesion: 0.25
 Nodes (8): Boundaries, Database access, Deployment, Internal protocol, Market data and PostgreSQL, Session ownership, Web state, Zarbit — Architecture
 
 ### Community 167 - "21. Sequence Example C — مقدار مشخص"
-Cohesion: 0.25
-Nodes (8): 19. Sequence Example A — ایجاد لفظ فروش, 21. Sequence Example C — مقدار مشخص, Canonical bot output, Existing opposite لفظ, Interpretation, Raw input, Receipt, Reply
+Cohesion: 0.40
+Nodes (5): 21. Sequence Example C — مقدار مشخص, Existing opposite لفظ, Interpretation, Receipt, Reply
 
-### Community 168 - "29. Proposed implementation phases"
-Cohesion: 0.25
-Nodes (8): 29. Proposed implementation phases, Phase 1 — Domain separation, Phase 2 — Lightweight snapshots, Phase 3 — Database notification, Phase 4 — `quote.live`, Phase 5 — Web integration, Phase 6 — Recovery and reconciliation, Phase 7 — Measurement
+### Community 168 - "app-runtime.tsx"
+Cohesion: 0.18
+Nodes (11): AppRuntime(), AppRuntimeProps, themeOptions, ThemePicker(), AppRouter, initializeTelegramWebApp(), TelegramWebApp, applyTheme() (+3 more)
 
 ### Community 169 - "APPENDICES - Real Source-Backed Reference Material"
 Cohesion: 0.29
@@ -1066,10 +1117,6 @@ Nodes (7): 1.1 Check Cheap Conditions Before Async Flags, 1.2 Defer Await Until 
 Cohesion: 0.29
 Nodes (7): 2.1 Avoid Barrel File Imports, 2.2 Conditional Module Loading, 2.3 Defer Non-Critical Third-Party Libraries, 2.4 Dynamic Imports for Heavy Components, 2.5 Prefer Statically Analyzable Paths, 2.6 Preload Based on User Intent, 2. Bundle Size Optimization
 
-### Community 179 - "@zarbit/contracts"
-Cohesion: 0.29
-Nodes (7): @zarbit/contracts, @zarbit/contracts, @zarbit/contracts, @zarbit/contracts, dependencies, @zarbit/contracts, @zarbit/contracts
-
 ### Community 180 - "10. Price Model"
 Cohesion: 0.29
 Nodes (7): 10.1 Compact price, 10.2 Full compact price, 10.3 Three-digit shorthand, 10.4 One-/two-digit shorthand, 10.5 Full monetary value with trailing zeros, 10. Price Model, مدل استنباطی resolver
@@ -1083,12 +1130,12 @@ Cohesion: 0.29
 Nodes (7): Access and login, Quote and market data, Release validation, Scope, Screens, Session lifecycle, Zarbit — Product Specification
 
 ### Community 183 - "Web/server RPC"
-Cohesion: 0.29
-Nodes (7): Browser startup regression, Capacity and observability, Freshness, Procedures and transport, Rollout and rollback, Sources and validation, Web/server RPC
+Cohesion: 0.33
+Nodes (6): API reference, Cache ownership and freshness, Data planes, Development and release, Queries, revisions and limits, Web/server RPC
 
-### Community 184 - "21. Failure model"
-Cohesion: 0.29
-Nodes (7): 21. Failure model, Client suspended, Duplicate event, Older event, PostgreSQL notification missed, Server restarts, Worker unavailable
+### Community 184 - "calculate-participant-analytics.ts"
+Cohesion: 0.24
+Nodes (14): CalculateAnalyticsInput, calculateParticipantAnalytics7D(), calculatePositionTransition(), createInitialPositionState(), RECEIPT_TOMAN_MULTIPLIER, ROLLING_WINDOW_DAYS, ROLLING_WINDOW_MS, roundAnalyticsPoints() (+6 more)
 
 ### Community 185 - "Agent Operating Contract"
 Cohesion: 0.33
@@ -1100,7 +1147,7 @@ Nodes (5): 1. Component Architecture (architecture), 2. State Management (state)
 
 ### Community 188 - "Zarbit — Business Rules"
 Cohesion: 0.33
-Nodes (5): Ownership and readiness, Product limits, Quote and market data, Validation policy, Zarbit — Business Rules
+Nodes (6): Home Market invariants, Ownership and readiness, Product limits, Quote and market data, Validation policy, Zarbit — Business Rules
 
 ### Community 189 - "2. منبع و کیفیت شواهد"
 Cohesion: 0.33
@@ -1111,12 +1158,12 @@ Cohesion: 0.33
 Nodes (6): 44. Anti-patterns, اشتباه: `ب` یعنی BUY, اشتباه: قیمت shorthand مستقل است, اشتباه: `مانده` همان quantity است, اشتباه: هر bot order یعنی معامله, اشتباه: هر عدد مستقل یعنی مظنه
 
 ### Community 191 - "2.1 Entity Details"
-Cohesion: 0.33
-Nodes (6): 2.1 Entity Details, 2. Core Entities & Relational Schema, A. `Participant`, B. `TradingAction`, C. `Trade`, D. `QuoteHistory`
+Cohesion: 0.40
+Nodes (5): 2.1 Entity Details, A. `Participant`, B. `TradingAction`, C. `Trade`, D. `QuoteHistory`
 
 ### Community 192 - "Zarbit — Telegram Integration"
-Cohesion: 0.33
-Nodes (6): Failures and disconnect, Group market data ingestion, Identity and secrets, Logs and manual verification, OTP contract, Zarbit — Telegram Integration
+Cohesion: 0.29
+Nodes (7): Committed Market propagation, Failures and disconnect, Group market data ingestion, Identity and secrets, Logs and manual verification, OTP contract, Zarbit — Telegram Integration
 
 ### Community 193 - "context7"
 Cohesion: 0.33
@@ -1150,10 +1197,6 @@ Nodes (5): 8.1 Do Not Put Effect Events in Dependency Arrays, 8.2 Initialize App
 Cohesion: 0.40
 Nodes (4): Guidelines Source, How It Works, Usage, Web Interface Guidelines
 
-### Community 201 - "@zarbit/env"
-Cohesion: 0.40
-Nodes (5): @zarbit/env, @zarbit/env, @zarbit/env, @zarbit/env, @zarbit/env
-
 ### Community 202 - "11. مظنه Protocol"
 Cohesion: 0.40
 Nodes (5): 11.1 Quote announcement, 11.2 Full quote input, 11.3 Shorthand quote input, 11.4 عدد مستقل ambiguous است, 11. مظنه Protocol
@@ -1162,8 +1205,8 @@ Nodes (5): 11.1 Quote announcement, 11.2 Full quote input, 11.3 Shorthand quote 
 Cohesion: 0.40
 Nodes (5): 20. Sequence Example B — Take All, Domain interpretation, Existing لفظ, Result, User command
 
-### Community 204 - "Zarbit"
-Cohesion: 0.40
+### Community 204 - "README.md"
+Cohesion: 0.22
 Nodes (5): Architecture references, Build and deploy, Checks, Development, Zarbit
 
 ### Community 205 - "1. THE THREE DIALS (Core Configuration)"
@@ -1210,17 +1253,17 @@ Nodes (4): 5.1 Trader, 5.2 Quote Publisher, 5.3 Group Trading Bot, 5. نقش‌�
 Cohesion: 0.50
 Nodes (4): 7.1 Digit normalization, 7.2 Whitespace normalization, 7.3 Character normalization, 7. Normalization قبل از Parsing
 
-### Community 219 - "4. Conservative Alias → Telegram Identity Resolver"
-Cohesion: 0.50
-Nodes (4): 4.1 Non-Negotiable Resolver Constraints, 4.2 Evidence Qualification Levels, 4.3 Resolver State Machine, 4. Conservative Alias → Telegram Identity Resolver
+### Community 219 - "_market-hero-card.tsx"
+Cohesion: 0.22
+Nodes (13): compactPriceFormat(), fullToman(), marketDifferenceDetails, marketNumber, marketTime(), marketTimePrecise(), time, timeWithSeconds (+5 more)
 
-### Community 220 - "5. Phase 1B Serving & Web Architecture"
-Cohesion: 0.50
-Nodes (4): 5.1 Dashboard Scope, 5.2 Deriving Latest Trade Price, 5.3 Transport & Caching Architecture, 5. Phase 1B Serving & Web Architecture
+### Community 220 - "مستند جامع قابلیت‌ها و مشخصات صفحه اصلی زربیت (Home Page Feature Specification)"
+Cohesion: 0.12
+Nodes (16): الف) سربرگ فوقانی (Fixed Header), الف) کشوی ثبت درخواست جدید ([`RequestFormDrawer`](file:///Users/mm25zamanian/Codes/zarbit/apps/web/src/modules/requests/_request-form-drawer.tsx)), ب) محافظت احراز هویت ([`AuthGate`](file:///Users/mm25zamanian/Codes/zarbit/apps/web/src/shared/auth/auth.tsx)), ب) کشوی جزئیات و مدیریت سفارش ([`RequestDetailsDrawer`](file:///Users/mm25zamanian/Codes/zarbit/apps/web/src/modules/requests/_request-details-drawer.tsx)), ج) پاپ‌آپ نسخه جدید PWA ([`PwaUpdate`](file:///Users/mm25zamanian/Codes/zarbit/apps/web/src/app/pwa-update.tsx)), جدول خلاصهٔ ماتریس فیچرهای صفحه اصلی, د) نوار ناوبری پایینی (Bottom Navigation Dock), مستند جامع قابلیت‌ها و مشخصات صفحه اصلی زربیت (Home Page Feature Specification) (+8 more)
 
-### Community 221 - "7. Market Data contracts"
-Cohesion: 0.50
-Nodes (4): 7. Market Data contracts, `quote.chart`, `quote.latest`, `quote.live`
+### Community 221 - "orpc.ts"
+Cohesion: 0.27
+Nodes (7): createQueryClient(), fastQuery, marketSnapshotQuery, retryDelay(), retryQuery(), sessionInterval(), slowQuery
 
 ### Community 222 - "config/package.json"
 Cohesion: 0.50
@@ -1230,33 +1273,105 @@ Nodes (3): name, private, version
 Cohesion: 0.67
 Nodes (3): 9.1 قالب canonical, 9.2 quantity اختیاری, 9. لفظ خرید/فروش
 
-### Community 228 - "ZarBit — Future Realtime Data Architecture"
-Cohesion: 0.67
-Nodes (3): 1. Purpose, 2. Current architectural baseline, ZarBit — Future Realtime Data Architecture
+### Community 328 - "ZarBit Phase 13.5 Implementation Report"
+Cohesion: 0.20
+Nodes (9): Documentation updates, Executive verdict, Identity investigation, Mock API status, Remaining debt, Test-policy findings, Validation results, Verified fixes (+1 more)
 
-### Community 229 - "4. Why the separation exists"
-Cohesion: 0.67
-Nodes (3): 4.1 Market data is global, 4.2 User data is private, 4. Why the separation exists
+### Community 329 - "graphify reference: extra exports and benchmark"
+Cohesion: 0.22
+Nodes (8): graphify reference: extra exports and benchmark, Step 6b - Wiki (only if --wiki flag), Step 7 - Neo4j export (only if --neo4j or --neo4j-push flag), Step 7a - FalkorDB export (only if --falkordb or --falkordb-push flag), Step 7b - SVG export (only if --svg flag), Step 7c - GraphML export (only if --graphml flag), Step 7d - MCP server (only if --mcp flag), Step 8 - Token reduction benchmark (only if total_words > 5000)
+
+### Community 330 - "package.json"
+Cohesion: 0.22
+Nodes (8): dependencies, name, packageManager, private, type, workspaces, apps/*, packages/*
+
+### Community 331 - "compilerOptions"
+Cohesion: 0.22
+Nodes (8): compilerOptions, composite, declaration, declarationMap, outDir, sourceMap, extends, @zarbit/config/tsconfig.base.json
+
+### Community 332 - "logger/src/index.ts"
+Cohesion: 0.31
+Nodes (6): createLogger(), LogContext, LoggerConfig, LogLevel, safeErrorCode(), serializeError()
+
+### Community 334 - "worker/tsconfig.json"
+Cohesion: 0.25
+Nodes (7): compilerOptions, composite, outDir, extends, include, src, @zarbit/config/tsconfig.base.json
+
+### Community 335 - "Zarbit — Dokploy operations"
+Cohesion: 0.29
+Nodes (7): Basic readiness, Before publication, Market listener and SSE release gate, Owner's Telegram check, SQLite to PostgreSQL cutover, Troubleshooting and rollback, Zarbit — Dokploy operations
+
+### Community 336 - "graphify reference: query, path, explain"
+Cohesion: 0.33
+Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
+
+### Community 337 - "worker/package.json"
+Cohesion: 0.33
+Nodes (5): main, name, private, type, version
+
+### Community 338 - "domain/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): extends, include, src, test, @zarbit/config/tsconfig.base.json
+
+### Community 339 - "logger/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): extends, include, src, test, @zarbit/config/tsconfig.base.json
+
+### Community 340 - "messages/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): extends, include, src, test, @zarbit/config/tsconfig.base.json
+
+### Community 341 - "web/package.json"
+Cohesion: 0.40
+Nodes (4): name, private, type, version
+
+### Community 342 - "lint-staged"
+Cohesion: 0.40
+Nodes (5): lint-staged, **/*.{css,json,jsonc,md,yaml,yml,html}, **/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}, eslint --fix, prettier --write
+
+### Community 343 - "contracts/tsconfig.json"
+Cohesion: 0.40
+Nodes (4): extends, include, @zarbit/config/tsconfig.base.json, src/**/*.ts
+
+### Community 344 - "graphify reference: add a URL and watch a folder"
+Cohesion: 0.50
+Nodes (3): For /graphify add, For --watch, graphify reference: add a URL and watch a folder
+
+### Community 345 - "graphify reference: commit hook and native AGENTS.md integration"
+Cohesion: 0.50
+Nodes (3): For git commit hook, For native AGENTS.md integration, graphify reference: commit hook and native AGENTS.md integration
+
+### Community 346 - "graphify reference: incremental update and cluster-only"
+Cohesion: 0.50
+Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphify reference: incremental update and cluster-only
+
+### Community 347 - "19. Sequence Example A — ایجاد لفظ فروش"
+Cohesion: 0.50
+Nodes (4): 19. Sequence Example A — ایجاد لفظ فروش, Canonical bot output, Interpretation, Raw input
+
+### Community 348 - "3. Idempotent Ingestion Pipeline"
+Cohesion: 0.50
+Nodes (4): 3.1 Multi-Session Architecture, 3.2 Idempotency Rules, 3.3 MTProto Message Metadata Extraction, 3. Idempotent Ingestion Pipeline
 
 ## Knowledge Gaps
-- **2086 isolated node(s):** `FALLBACK_THEME`, `CartItem`, `Product`, `Window`, `pnpm` (+2081 more)
+- **2215 isolated node(s):** `FALLBACK_THEME`, `CartItem`, `Product`, `Window`, `pnpm` (+2210 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **94 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **133 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AppError` connect `create-orpc-router.ts` to `db/src/index.ts`, `contracts/src/index.ts`, `worker/src/requests.ts`, `create-session-command.ts`, `harness.tsx`, `useApi`, `logger.ts`, `sessions.ts`, `legacy-api.ts`, `telegram-session.test.ts`, `app-dependencies.ts`?**
-  _High betweenness centrality (0.003) - this node is a cross-community bridge._
+- **Why does `AppError` connect `AppError` to `db/src/index.ts`, `contracts/src/index.ts`, `worker/src/index.ts`, `create-session-command.ts`, `create-market-mock.ts`, `logger.ts`, `create-market-runtime.ts`, `sessions.ts`, `telegram-session.test.ts`, `orpc.ts`, `create-orpc-router.ts`, `auth.tsx`?**
+  _High betweenness centrality (0.005) - this node is a cross-community bridge._
+- **Why does `Sessions` connect `Sessions` to `worker/src/index.ts`, `sessions.test.ts`, `domain/src/index.ts`, `SessionStore`, `logger.ts`, `sessions.ts`?**
+  _High betweenness centrality (0.004) - this node is a cross-community bridge._
+- **Why does `Turborepo Skill` connect `Turborepo Skill` to `turborepo/SKILL.md`, `Critical Anti-Patterns`, `Quick Decision Trees`, `Reference Index`?**
+  _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **What connects `FALLBACK_THEME`, `CartItem`, `Product` to the rest of the system?**
-  _2086 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `create-orpc-router.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07676767676767676 - nodes in this community are weakly interconnected._
+  _2215 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `AppError` be split into smaller, more focused modules?**
+  _Cohesion score 0.12258064516129032 - nodes in this community are weakly interconnected._
 - **Should `contracts/src/index.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.058823529411764705 - nodes in this community are weakly interconnected._
-- **Should `worker/src/requests.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09268707482993198 - nodes in this community are weakly interconnected._
-- **Should `@zarbit/config/tsconfig.base.json` be split into smaller, more focused modules?**
-  _Cohesion score 0.0425531914893617 - nodes in this community are weakly interconnected._
-- **Should `tasks` be split into smaller, more focused modules?**
-  _Cohesion score 0.04541062801932367 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06376811594202898 - nodes in this community are weakly interconnected._
+- **Should `worker/src/index.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.07365967365967366 - nodes in this community are weakly interconnected._

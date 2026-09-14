@@ -1,31 +1,45 @@
-import { QuoteAge } from "./_quote-age";
+import { useState } from "react";
+import type { CreateRequestInput } from "@zarbit/contracts";
 import { RequestList } from "../requests";
-import { MarketSummary } from "./_market-summary";
 import { useMarket } from "./_use-market";
+import { TerminalQuoteHeader } from "./_terminal-quote-header";
+import { ExecutionStrip } from "./_execution-strip";
+import { RecentTradesTape } from "./_recent-trades-tape";
 
 export function HomePage() {
   const market = useMarket();
+  const [createRequestOpen, setCreateRequestOpen] = useState(false);
+  const [createAction, setCreateAction] =
+    useState<CreateRequestInput["action"]>("BUY");
+
+  const handleActionSelect = (action: CreateRequestInput["action"]) => {
+    setCreateAction(action);
+    setCreateRequestOpen(true);
+  };
+
+  const currentQuote = market.snapshot.data?.quote?.compactPrice;
 
   return (
-    <div className="grid gap-6">
-      <section className="border-accent/20 bg-surface shadow-surface grid gap-5 rounded-3xl border p-4 sm:p-5">
-        {market.connection === "degraded" && (
-          <p
-            role="status"
-            className="bg-warning-soft text-warning-soft-foreground rounded-xl px-3 py-2 text-xs"
-          >
-            ارتباط زنده قطع است؛ قیمت‌ها به‌صورت دوره‌ای تازه می‌شوند.
-          </p>
-        )}
-        <QuoteAge announcedAt={market.snapshot.data?.quote?.announcedAt} />
-        <MarketSummary
-          data={market.snapshot.data}
-          pending={market.snapshot.isPending}
-          error={market.snapshot.error}
-          retry={() => void market.snapshot.refetch()}
-        />
-      </section>
-      <RequestList />
+    <div className="flex flex-col gap-3 sm:gap-4">
+      <TerminalQuoteHeader
+        data={market.snapshot.data}
+        connection={market.connection}
+        isPending={market.snapshot.isPending}
+        isFetching={market.snapshot.isFetching}
+        error={market.snapshot.error}
+        onRefresh={() => void market.snapshot.refetch()}
+      />
+
+      <ExecutionStrip onActionSelect={handleActionSelect} />
+
+      <RequestList
+        createOpen={createRequestOpen}
+        onOpenCreateChange={setCreateRequestOpen}
+        initialAction={createAction}
+        currentQuote={currentQuote}
+      />
+
+      <RecentTradesTape data={market.snapshot.data} />
     </div>
   );
 }

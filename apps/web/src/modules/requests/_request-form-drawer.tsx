@@ -35,15 +35,18 @@ export function RequestFormDrawer({
   open,
   onOpenChange,
   onDone,
+  initialAction = "ALERT",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: () => Promise<void>;
+  initialAction?: CreateRequestInput["action"];
 }) {
   const api = useApi(useIdentity().telegramUserId);
   const queryClient = useQueryClient();
   const { create } = useRequestActions();
-  const [action, setAction] = useState<CreateRequestInput["action"]>("ALERT");
+  const [action, setAction] =
+    useState<CreateRequestInput["action"]>(initialAction);
   const [condition, setCondition] =
     useState<CreateRequestInput["condition"]>("LTE");
   const [price, setPrice] = useState(fallbackTargetPrice);
@@ -55,7 +58,7 @@ export function RequestFormDrawer({
   const priceEditedRef = useRef(false);
   const quoteRequestRef = useRef(0);
   const isDirty =
-    action !== "ALERT" ||
+    action !== initialAction ||
     condition !== "LTE" ||
     price !== initialPriceRef.current ||
     units > 0;
@@ -63,6 +66,7 @@ export function RequestFormDrawer({
   useEffect(() => {
     if (!open) return;
 
+    setAction(initialAction);
     const requestId = ++quoteRequestRef.current;
     priceEditedRef.current = false;
     initialPriceRef.current = fallbackTargetPrice;
@@ -96,10 +100,10 @@ export function RequestFormDrawer({
     return () => {
       quoteRequestRef.current += 1;
     };
-  }, [api, open, queryClient]);
+  }, [api, initialAction, open, queryClient]);
 
   const reset = () => {
-    setAction("ALERT");
+    setAction(initialAction);
     setCondition("LTE");
     initialPriceRef.current = fallbackTargetPrice;
     priceEditedRef.current = false;
@@ -217,6 +221,7 @@ export function RequestFormDrawer({
                   <Button
                     data-base-ui-swipe-ignore
                     key={value}
+                    aria-pressed={action === value}
                     onPress={() => setAction(value)}
                     className="flex h-auto flex-1 flex-col gap-1 py-2 text-sm"
                     type="button"

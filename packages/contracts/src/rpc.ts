@@ -1,4 +1,4 @@
-import { eventIterator, oc, type ContractRouterClient } from "@orpc/contract";
+import { oc, type ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import {
   createRequestInputSchema,
@@ -6,7 +6,6 @@ import {
   requestDetailSchema,
   requestHistoryPageSchema,
   marketSnapshotSchema,
-  marketLiveEventSchema,
   telegramSessionStatusSchema,
   sessionCommandSchema,
   participantAnalyticsSummarySchema,
@@ -51,9 +50,6 @@ export const rpcContract = {
     snapshot: base
       .route({ method: "GET", path: "/market/snapshot" })
       .output(marketSnapshotSchema),
-    live: base
-      .route({ method: "GET", path: "/market/live" })
-      .output(eventIterator(marketLiveEventSchema)),
   },
   telegram: {
     status: base

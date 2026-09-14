@@ -1,15 +1,28 @@
 import { useEffect, useState } from "react";
+import { relativeTimeFromNow } from "./_market-format";
 
-export function QuoteAge({ announcedAt }: { announcedAt?: string }) {
+interface QuoteAgeProps {
+  announcedAt?: string;
+  asOf?: string;
+}
+
+export function QuoteAge({ announcedAt, asOf }: QuoteAgeProps) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
-  if (!announcedAt || now - Date.parse(announcedAt) < 300_000) return null;
+  const stale = announcedAt != null && now - Date.parse(announcedAt) >= 300_000;
   return (
-    <p className="text-warning-soft-foreground bg-warning-soft rounded-xl px-3 py-2 text-xs">
-      آخرین مظنه بیش از پنج دقیقه پیش اعلام شده است.
-    </p>
+    <div className="text-muted grid gap-1 text-xs">
+      <span>
+        همگام‌سازی: {asOf ? relativeTimeFromNow(asOf, now) : "در انتظار داده"}
+      </span>
+      {stale && (
+        <span role="status" className="text-warning-soft-foreground">
+          مظنه قدیمی است؛ بیش از ۵ دقیقه از اعلام آن گذشته است.
+        </span>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,14 @@
-import { Button, Card } from "@heroui/react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  Chip,
+  Spinner,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@heroui/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AddIcon } from "@solar-icons/react/linear";
-import type { RequestDetail } from "@zarbit/contracts";
+import type { CreateRequestInput, RequestDetail } from "@zarbit/contracts";
 import {
   useQuery,
   useInfiniteQuery,
@@ -14,17 +21,30 @@ import { RequestCard } from "./_request-card";
 import { RequestDetailsDrawer } from "./_request-details-drawer";
 import { RequestFormDrawer } from "./_request-form-drawer";
 
+type FilterAction = "ALL" | "BUY" | "SELL" | "ALERT";
+
+interface RequestListProps {
+  history?: boolean;
+  requestId?: string;
+  onCloseLinkedRequest?: () => void;
+  createOpen?: boolean;
+  onOpenCreateChange?: (open: boolean) => void;
+  initialAction?: CreateRequestInput["action"];
+  currentQuote?: number;
+}
+
 export function RequestList({
   history = false,
   requestId,
   onCloseLinkedRequest,
-}: {
-  history?: boolean;
-  requestId?: string;
-  onCloseLinkedRequest?: () => void;
-}) {
+  createOpen: externalCreateOpen,
+  onOpenCreateChange: externalOnOpenCreateChange,
+  initialAction,
+  currentQuote,
+}: RequestListProps) {
   const api = useApi(useIdentity().telegramUserId);
   const client = useQueryClient();
+
   const active = useQuery(
     api.requests.active.queryOptions({
       enabled: !history,
@@ -46,9 +66,13 @@ export function RequestList({
       }),
   });
   const past = useInfiniteQuery({ ...historyOptions, enabled: history });
-  const rows = history
-    ? (past.data?.pages.flatMap((page) => page.items) ?? [])
-    : (active.data ?? []);
+  const rows = useMemo(
+    () =>
+      history
+        ? (past.data?.pages.flatMap((page) => page.items) ?? [])
+        : (active.data ?? []),
+    [history, past.data, active.data],
+  );
   const query = history ? past : active;
   const previousIds = useRef<string[]>([]);
   useEffect(() => {
@@ -59,98 +83,193 @@ export function RequestList({
     }
     previousIds.current = ids;
   }, [active.data, api, client]);
-  const [createOpen, setCreateOpen] = useState(false);
+
+  const [internalCreateOpen, setInternalCreateOpen] = useState(false);
+  const isCreateOpenControlled = externalCreateOpen !== undefined;
+  const createOpen = isCreateOpenControlled
+    ? externalCreateOpen
+    : internalCreateOpen;
+  const setCreateOpen = (nextOpen: boolean) => {
+    if (isCreateOpenControlled) {
+      externalOnOpenCreateChange?.(nextOpen);
+    } else {
+      setInternalCreateOpen(nextOpen);
+    }
+  };
   const [selectedRequest, setSelectedRequest] = useState<RequestDetail | null>(
     null,
   );
+  const [activeFilter, setActiveFilter] = useState<FilterAction>("ALL");
+
+  const filteredRows = useMemo(() => {
+    if (activeFilter === "ALL") return rows;
+    return rows.filter((r) => r.action === activeFilter);
+  }, [rows, activeFilter]);
+
+  const counts = useMemo(() => {
+    return {
+      all: rows.length,
+      buy: rows.filter((r) => r.action === "BUY").length,
+      sell: rows.filter((r) => r.action === "SELL").length,
+      alert: rows.filter((r) => r.action === "ALERT").length,
+    };
+  }, [rows]);
+
+  const sectionClasses = "grid gap-3";
+
+  const innerClasses = "flex flex-col gap-3";
 
   return (
-    <section
-      className={
-        history
-          ? "grid gap-4"
-          : "border-accent/20 bg-surface shadow-surface grid gap-4 rounded-3xl border p-4 sm:p-5"
-      }
-    >
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold">
-          {history ? "سوابق درخواست‌ها" : "درخواست‌های فعال"}
-          {!history && active.data && (
-            <span className="bg-surface-secondary text-muted ms-2 rounded-full px-2 py-1 text-xs">
-              {new Intl.NumberFormat("fa-IR").format(active.data.length)}
-            </span>
-          )}
-        </h2>
+    <section className={sectionClasses}>
+      <div className={innerClasses}>
+        {/* Header */}
+        <div className="border-separator/40 flex items-center justify-between gap-2 border-b pb-2.5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-foreground text-sm font-bold sm:text-base">
+              {history ? "سوابق درخواست‌ها" : "درخواست‌های فعال"}
+            </h2>
+            {!history && active.data && active.data.length > 0 && (
+              <Chip color="accent" variant="soft" size="sm">
+                <Chip.Label>
+                  {new Intl.NumberFormat("fa-IR").format(active.data.length)}
+                </Chip.Label>
+              </Chip>
+            )}
+          </div>
 
-        {!history ? (
-          <Button
-            onPress={() => setCreateOpen(true)}
-            variant="primary"
+          {!history && !isCreateOpenControlled && (
+            <Button
+              onPress={() => setCreateOpen(true)}
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 rounded-xl px-2.5 text-xs font-medium"
+            >
+              <AddIcon className="size-3.5" />
+              <span>ثبت درخواست</span>
+            </Button>
+          )}
+        </div>
+
+        {(rows.length > 1 || activeFilter !== "ALL") && (
+          <ToggleButtonGroup
+            aria-label="فیلتر درخواست‌ها"
+            selectionMode="single"
+            disallowEmptySelection
             size="sm"
+            selectedKeys={[activeFilter]}
+            onSelectionChange={(keys) => {
+              const key = Array.from(keys)[0];
+              if (
+                key === "ALL" ||
+                key === "BUY" ||
+                key === "SELL" ||
+                key === "ALERT"
+              )
+                setActiveFilter(key);
+            }}
           >
-            <AddIcon className="size-4" />
-            درخواست جدید
+            {(
+              [
+                { id: "ALL", label: "همه", count: counts.all },
+                { id: "BUY", label: "خرید", count: counts.buy },
+                { id: "SELL", label: "فروش", count: counts.sell },
+                { id: "ALERT", label: "هشدار", count: counts.alert },
+              ] as const
+            ).map((tab) => (
+              <ToggleButton key={tab.id} id={tab.id}>
+                {tab.label} {new Intl.NumberFormat("fa-IR").format(tab.count)}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        )}
+
+        <RequestFormDrawer
+          initialAction={initialAction}
+          onDone={async () => {
+            setCreateOpen(false);
+          }}
+          onOpenChange={setCreateOpen}
+          open={createOpen}
+        />
+
+        {query.isPending ? (
+          <div className="text-muted flex items-center justify-center py-6 text-xs">
+            <Spinner size="sm" />
+            در حال بارگذاری درخواست‌ها…
+          </div>
+        ) : null}
+
+        {query.error ? (
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>دریافت درخواست‌ها ناموفق بود.</Alert.Title>
+              <Button
+                onPress={() => void query.refetch()}
+                variant="secondary"
+                size="sm"
+              >
+                تلاش دوباره
+              </Button>
+            </Alert.Content>
+          </Alert>
+        ) : null}
+
+        {filteredRows.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {filteredRows.map((row) => (
+              <RequestCard
+                key={row.id}
+                onDetails={() => setSelectedRequest(row)}
+                row={row}
+                currentQuote={currentQuote}
+                compact={!history}
+              />
+            ))}
+          </div>
+        ) : !query.isPending && !query.error ? (
+          <div className="text-muted grid gap-1 py-3 text-xs">
+            <strong className="text-foreground text-xs font-semibold">
+              {activeFilter !== "ALL"
+                ? "در این فیلتر درخواستی وجود ندارد"
+                : history
+                  ? "هنوز سابقه‌ای ثبت نشده است"
+                  : "هیچ درخواست یا هشدار فعالی در جریان نیست"}
+            </strong>
+            <p className="text-muted max-w-xs text-[0.7rem] leading-relaxed">
+              {history
+                ? "سفارش‌ها و هشدارهای تکمیل‌شده یا لغوشده در اینجا نمایش داده می‌شوند."
+                : "برای شروع، خرید، فروش یا هشدار را انتخاب کنید."}
+            </p>
+          </div>
+        ) : null}
+
+        {history && past.hasNextPage ? (
+          <Button
+            onPointerEnter={() => {
+              const cursor = past.data?.pages.at(-1)?.nextCursor;
+              if (cursor)
+                void client.prefetchQuery(
+                  api.requests.history.queryOptions({ input: { cursor } }),
+                );
+            }}
+            onPress={() => void past.fetchNextPage()}
+            isPending={past.isFetchingNextPage}
+            variant="secondary"
+          >
+            سوابق بیشتر
           </Button>
         ) : null}
-      </div>
 
-      <RequestFormDrawer
-        onDone={async () => {
-          setCreateOpen(false);
-        }}
-        onOpenChange={setCreateOpen}
-        open={createOpen}
-      />
-
-      {query.isPending ? <p role="status">در حال دریافت درخواست‌ها…</p> : null}
-      {query.error ? (
-        <div role="alert">
-          <p>{query.error.message}</p>
-          <Button onPress={() => void query.refetch()} variant="secondary">
-            تلاش دوباره
-          </Button>
-        </div>
-      ) : null}
-      {rows.length ? (
-        rows.map((row) => (
-          <RequestCard
-            key={row.id}
-            onDetails={() => setSelectedRequest(row)}
-            row={row}
-          />
-        ))
-      ) : !query.isPending && !query.error ? (
-        <Card variant="tertiary" className="p-5 text-center text-sm">
-          {history
-            ? "هنوز سابقه‌ای ثبت نشده است."
-            : "درخواست فعالی نیست. با ساخت درخواست جدید، زربیت بازار را برایتان بررسی می‌کند."}
-        </Card>
-      ) : null}
-      {history && past.hasNextPage ? (
-        <Button
-          onPointerEnter={() => {
-            const cursor = past.data?.pages.at(-1)?.nextCursor;
-            if (cursor)
-              void client.prefetchQuery(
-                api.requests.history.queryOptions({ input: { cursor } }),
-              );
+        <RequestDetailsDrawer
+          onClose={() => {
+            setSelectedRequest(null);
+            if (requestId) onCloseLinkedRequest?.();
           }}
-          onPress={() => void past.fetchNextPage()}
-          isPending={past.isFetchingNextPage}
-          variant="secondary"
-        >
-          سوابق بیشتر
-        </Button>
-      ) : null}
-
-      <RequestDetailsDrawer
-        onClose={() => {
-          setSelectedRequest(null);
-          if (requestId) onCloseLinkedRequest?.();
-        }}
-        request={requestId ? null : selectedRequest}
-        requestId={requestId}
-      />
+          request={requestId ? null : selectedRequest}
+          requestId={requestId}
+        />
+      </div>
     </section>
   );
 }

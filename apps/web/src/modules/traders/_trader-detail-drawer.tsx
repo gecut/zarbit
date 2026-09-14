@@ -45,7 +45,7 @@ export function TraderDetailDrawer({
   const detailQuery = useQuery(
     api.analytics.traderDetail.queryOptions({
       input: alias ? { alias } : skipToken,
-      refetchInterval: 5000,
+      refetchInterval: 30000,
     }),
   );
 

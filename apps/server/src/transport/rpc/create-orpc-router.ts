@@ -133,24 +133,7 @@ export function createOrpcRouter(
 
   return os.router({
     auth: createAuthRouter(os.auth),
-    market: {
-      ...market,
-      live: os.market.live.handler(async ({ signal, lastEventId }) => {
-        if (!runtime.state.connected)
-          throw new ORPCError("SERVICE_UNAVAILABLE", {
-            message: "ارتباط زنده بازار در حال بازیابی است.",
-          });
-        await runtime.state.read();
-        // No replay guarantee. Subscribe synchronously with the current head.
-        return runtime.hub.subscribe(
-          {
-            type: lastEventId ? "RECONCILE_REQUIRED" : "SYNC",
-            revision: runtime.state.revision,
-          },
-          signal,
-        );
-      }),
-    },
+    market,
     telegram: createTelegramRouter(os.telegram, {
       store: deps.store,
       command: deps.command,

@@ -266,7 +266,7 @@ export function RequestFormDrawer({
             formatOptions={compactPriceFormatOptions}
             name="targetPrice"
             variant="secondary"
-            step={1}
+            step={10}
             value={price}
             className="h-auto"
             onChange={(value) => {

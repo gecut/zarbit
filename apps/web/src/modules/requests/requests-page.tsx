@@ -1,7 +1,6 @@
 import {
   Alert,
   Button,
-  Chip,
   Spinner,
   ToggleButton,
   ToggleButtonGroup,
@@ -133,12 +132,6 @@ export function RequestsPage({
             <h2 className="text-foreground text-sm font-bold sm:text-base">
               {history ? "سوابق درخواست‌ها" : ""}
             </h2>
-
-            {!history && active.data && active.data.length > 0 && (
-              <Chip color="accent" variant="soft" size="sm">
-                <Chip.Label>{formatNumber(active.data.length)}</Chip.Label>
-              </Chip>
-            )}
           </div>
 
           {!history && !isCreateOpenControlled && (

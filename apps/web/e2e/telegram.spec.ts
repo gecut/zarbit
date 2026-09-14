@@ -187,3 +187,57 @@ test("worker outage preserves account and allows disconnect", async ({
     page.getByRole("button", { name: "بررسی عضویت", exact: true }),
   ).toBeDisabled();
 });
+
+test("a login rejected before sendCode displays its operation error", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 420 });
+  let operation: TelegramOperation | null = null;
+  let observations = 0;
+  const message = "برای ورود جدید ابتدا اتصال فعلی را قطع کنید.";
+  await page.route("https://api.example.test/**", async (route) => {
+    const url = new URL(route.request().url());
+    let result: unknown = null;
+    if (url.pathname.endsWith("/auth/identity"))
+      result = { telegramUserId: "101" };
+    if (url.pathname.endsWith("/telegram/status"))
+      result = sessionFixture({
+        authorization: "REVOKED",
+        connection: "OFFLINE",
+        membership: "UNKNOWN",
+        observedAt: new Date().toISOString(),
+      });
+    if (url.pathname.endsWith("/telegram/operation")) {
+      observations++;
+      result = operation;
+    }
+    if (url.pathname.endsWith("/telegram/command")) {
+      const { json: input } = route.request().postDataJSON();
+      // The initial observation may reach the API before admission commits.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const at = new Date().toISOString();
+      operation = {
+        operationId: input.operationId,
+        type: "login",
+        status: "FAILED",
+        revision: 1,
+        challengeId: input.operationId,
+        requestId: input.operationId,
+        acceptedAt: at,
+        completedAt: at,
+        issue: { code: "SESSION_EXISTS", message },
+        cancelledRequests: 0,
+        sendingRequests: 0,
+      };
+      result = { operationId: input.operationId, acceptedAt: at };
+    }
+    await route.fulfill({ json: { json: result } });
+  });
+  await page.goto("/e2e/harness.html?telegram");
+  await page.getByLabel("شماره تلفن با کد کشور").fill("+989121234567");
+  await page.getByRole("button", { name: "ارسال کد ورود" }).click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByText(message, { exact: true })).toBeInViewport();
+  await expect(page.getByText(message, { exact: true })).toHaveCount(1);
+  expect(observations).toBeGreaterThan(0);
+});

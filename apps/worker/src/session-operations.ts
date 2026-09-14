@@ -6,8 +6,8 @@ import {
 } from "@zarbit/contracts";
 import type { Store } from "@zarbit/db";
 import { telegramOperationView } from "@zarbit/db/telegram-operations";
-import { safeError } from "./errors";
-import { withWorkerContext, workerLog } from "./logger";
+import { errorDetails, safeError } from "./errors";
+import { sessionRef, withWorkerContext, workerLog } from "./logger";
 import type { Sessions } from "./sessions";
 
 export type OperationStore = Pick<
@@ -75,11 +75,20 @@ export class SessionOperations {
     input: TelegramCommandInput,
     deadline: number,
   ): Promise<void> {
+    const startedAt = Date.now();
+    const context = {
+      operationId: input.operationId,
+      command: input.command.type,
+      sessionRef: sessionRef(userId),
+    };
     if (
       !(await this.store.claimTelegramOperation(userId, input.operationId))
         .count
-    )
+    ) {
+      workerLog.debug("telegram.operation.claim_skipped", context);
       return;
+    }
+    workerLog.info("telegram.operation.started", context);
     if (
       Date.now() >= deadline &&
       !["cancel", "revoke"].includes(input.command.type)
@@ -108,6 +117,11 @@ export class SessionOperations {
         "SUCCEEDED",
       );
     } catch (error) {
+      workerLog.warn("telegram.operation.failed", {
+        ...context,
+        ...errorDetails(error),
+        durationMs: Date.now() - startedAt,
+      });
       // A durable cleanup intent outlives this HTTP request and this process.
       if ((await this.store.session(userId))?.state === "REVOKING") {
         if (!["cancel", "revoke"].includes(input.command.type))

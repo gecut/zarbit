@@ -2,35 +2,55 @@
 
 ## Quote and market data
 
-Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group management bot qualify as the authoritative persisted quote source. The parser accepts compact integers, including Persian/Arabic digits and grouped commas.
+- **Authoritative Quote Source**: Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group management bot serve as the authoritative persisted quote source in `QuoteHistory`. The parser normalizes Persian/Arabic digits, grouped commas, and whitespace.
+- **Authoritative Trade Source**: Trades exist strictly upon observing authoritative bot receipts (`حواله`). Canonical order messages (`🔵 ... / 🔴 ...`) represent active liquidity only and are never treated as confirmed trades.
+- **Permanent Retention**: `Trade` and `QuoteHistory` records are permanently retained in PostgreSQL. The rolling 7-day window is an analytics query filter, never a data pruning boundary.
+- **Reference Numbers**: Empirical group data proves receipt reference numbers (`شماره حواله`) are not globally unique. The database primary key constraint is `UNIQUE(chatId, sourceMessageId)`. Reference numbers are stored as searchable metadata.
 
-The database, API, requests, and Telegram messages retain the compact value, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other price displays remain compact. `announcedAt` is the original Telegram message date. Multiple connected sessions observe events concurrently; ingestion is idempotent via `sourceMessageId` deduplication.
+## Financial calculations and conversions
 
-Trades exist strictly upon observing authoritative bot receipts (`حواله`). Canonical order messages (`🔵 ... / 🔴 ...`) represent active liquidity only and are never treated as confirmed trades. Historical trades are retained permanently; the rolling 7-day window is an analytics query filter, not a retention limit.
+- **Canonical Multiplier**: Compact prices convert to nominal Tomans via:
+  $$\text{Nominal Tomans} = \text{compactPrice} \times 1000$$
+  For example, `105020` represents `105,020,000 تومان`.
+- **Storage and APIs**: Database columns (`QuoteHistory.compactQuote`, `Trade.compactPrice`, `Request.targetPrice`), API contracts, and internal calculations remain in compact integer format.
+- **Realized P&L**: Analytics tracks realized profit and loss in compact price points (`realizedPnlPoints`), rounded to 2 decimal places using `roundAnalyticsPoints`. Nominal P&L in Tomans is computed as `realizedPnlPoints × 1000`.
 
-Analytics uses one canonical price conversion: `compactPrice × 1000 = receipt/display price in Tomans`. Realized P&L uses the same multiplier. Compact prices remain unchanged in storage, APIs, requests, and secondary displays.
+## 7-day participant analytics and accounting engine
 
-Participant confidence coverage starts at the later of the participant's first observed trade and the earliest system trade. This prevents new participants from inheriting system-wide history. `UNVERIFIED_INVENTORY` remains a reserved contract state because the public analytics and development mock surfaces expose it; the current trade replay engine does not currently produce unmatched units.
+- **Rolling 7-Day Window**: Analytics queries filter trades within $[t - 7\text{ days}, t]$.
+- **FIFO Inventory Accounting**:
+  1. Historical trades prior to the 7-day window start are replayed from inception using FIFO matching to establish the participant's opening position (`netQuantity`) and `costBasis`.
+  2. Trades within the active 7-day window are replayed against the open position, accumulating `realizedPnlPoints`, `realizedPnlTomans`, buy/sell volumes, and buy/sell trade counts.
+- **Data Coverage Confidence**:
+  - `UNVERIFIED_INVENTORY`: Assigned if the participant has unmatched inventory units (`unmatchedUnits > 0`).
+  - History start is evaluated conservatively as:
+    $$\text{historyStart} = \max(\text{earliestSystemDate}, \text{firstTradeAt})$$
+    This prevents newly observed participants from inheriting system-wide history.
+  - `HIGH`: Requires both a documented flat-position reset (`hasZeroCrossing === true`) AND at least 7 full days of data coverage ($\text{windowEnd} - \text{historyStart} \ge 7\text{ days}$).
+  - `ESTIMATED`: Assigned when history is shorter than 7 days or the participant's position has never reset to flat.
 
-## Ownership and readiness
+## Identity resolution rules
 
-Mini App signature and allowlist authorize API access. MTProto login must connect the same account as the Mini App identity. Connected, group-member accounts observe group events; each observation is deduplicated at the data layer.
+- **Canonical Identity**: The Persian participant alias emitted by the group bot (e.g. `سناتور`, `رسول اُف`) serves as the canonical identifier (`Participant.id`). No separate `ParticipantAlias` table is used.
+- **Conservative Correlation**:
+  - Direct Level 1 link (Telegram `replyToMessageId` or MTProto `text_mention` entity).
+  - Level 2 link (isolated sequence within $\Delta t \le 1.5$s with exactly one candidate human action and no intervening messages).
+  - Interleaved or concurrent messages (Level 3) are rejected as ambiguous evidence.
+- **Threshold**: At least 5 distinct exact confirmations ($K \ge 5$) with zero contradictions are required to transition to `VERIFIED`.
+- **Conflict Safety**: Verified identities are never overwritten. A contradictory observation locks the participant into `CONFLICT` (or `CONFLICT_FLAGGED` if previously verified). Unresolved status is always preferred over false attribution.
 
-Participant aliases emitted by the group bot serve as canonical participant identifiers. Alias-to-Telegram-identity resolution requires deterministic platform evidence and multiple confirmations ($K \ge 5$); unresolved state is always preferred over false mapping, and conflicts never overwrite verified records.
+## Home terminal invariants
 
-## Product limits
+1. Official Quote comes only from `QuoteHistory`; completed Trade comes only from an authoritative receipt in `Trade`.
+2. `tradeQuoteDifference = latest Trade compact price - latest Quote compact price`. It reflects current head-to-head spread (premium or discount), not historical slippage or execution-time spread.
+3. Message IDs strictly order each event stream. Gaps in Telegram message IDs are normal. A higher Trade message ID never suppresses a valid lower-ID Quote.
+4. `announcedAt` reflects Telegram message timestamp. Receipt times and cache intervals never alter announced timestamps. All UI times format in `Asia/Tehran` with Persian digits (`fa-IR`).
+5. Only headline prices on the dashboard convert compact thousands to full Tomans. Request prices remain compact.
+6. Automated follow execution is not implemented in this phase.
 
-Up to 20 simultaneous Telegram clients including OTP and recovery; one worker, group and group bot. Fixed environment allowlist requires restart. Phase 1 is data collection first: no public signup, portfolio, participant directory, leaderboard UI, or automated follow execution in this phase.
+## Product boundaries
 
-## Validation policy
-
-TypeScript, production builds and native dependency checks remain automated. Real Telegram and UI acceptance is performed manually by the owner.
-
-## Home Market invariants
-
-- Official Quote comes only from QuoteHistory; completed Trade comes only from an authoritative receipt in Trade. Request matching continues to use the official Quote and existing freshness/claim rules.
-- `tradeQuoteDifference = latest Trade compact price - latest Quote compact price`. It is a comparison of current heads, not historical slippage, profit or execution-time comparison.
-- Telegram message IDs order each stream in the supported single group. Gaps are expected; event identity includes Quote/Trade type. A later Trade must not suppress a valid lower-ID Quote.
-- `announcedAt` remains Telegram time. API/stream receipt and cache times do not make an old Quote fresh. Persian display uses Asia/Tehran.
-- Only the two headline prices convert compact thousands of Toman to full Toman using Domain conversion. Request prices stay compact.
-- Home does not implement Follow, auto-trading from Trade events, candles or a new Request model.
+- Access requires verified Mini App authentication and inclusion in `ALLOWED_TELEGRAM_USER_IDS`.
+- Maximum 20 simultaneous Telegram client sessions per worker instance.
+- Single trading group (`TELEGRAM_GROUP_ID`) and single group bot (`QUOTE_SENDER_ID`).
+- Leaderboard and trader analytics UI are fully implemented; automated copy-trade execution is reserved for Phase 3.

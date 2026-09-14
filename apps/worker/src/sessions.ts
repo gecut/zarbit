@@ -879,7 +879,7 @@ export class Sessions {
         const previous = await this.store.session(userId);
         if (
           previous &&
-          (previous.connectedTelegramUserId ||
+          ((previous.state !== "REVOKED" && previous.connectedTelegramUserId) ||
             ["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(previous.state))
         )
           throw new AppError(

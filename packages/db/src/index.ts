@@ -110,7 +110,7 @@ export function createStore(
         });
         if (
           current &&
-          (current.connectedTelegramUserId ||
+          ((current.state !== "REVOKED" && current.connectedTelegramUserId) ||
             ["ACTIVE", "NOT_IN_GROUP", "REVOKING"].includes(current.state))
         )
           throw new AppError(

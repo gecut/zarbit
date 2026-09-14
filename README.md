@@ -1,34 +1,63 @@
 # Zarbit
 
-Private Persian/RTL Telegram Mini App that shows the latest quote received from one fixed group and publisher. Each allowlisted user connects their own Telegram account with phone → code → optional two-step password. QR is removed. The worker alone owns all MTProto sessions.
+Private Persian/RTL Telegram Mini App for Iranian OTC gold trading intelligence and execution. Zarbit connects to a fixed trading group and authoritative management bot, providing an official quote & trade terminal, recent trades tape, active order radar, and a 7-day rolling trader analytics leaderboard. Each allowlisted user connects their own Telegram account via phone → code → optional two-step verification password. The worker alone owns all MTProto sessions.
 
 ## Development
 
-Use Node.js 24 and pnpm 10.26.0. Provision PostgreSQL first; see [docs/POSTGRES.md](docs/POSTGRES.md). Configure apps/server/.env and apps/worker/.env from their examples with the same `DATABASE_URL` and `WORKER_INTERNAL_TOKEN`; configure apps/web/.env with VITE_SERVER_URL. The root .env is only for Docker Compose, not shared application configuration. Local web development always talks to the server; use `DEV_TELEGRAM_USER_ID` with the same ID in `ALLOWED_TELEGRAM_USER_IDS` to access it outside Telegram.
+Requires Node.js 24 and pnpm 10.26.0.
 
-Install with pnpm install. Generate Prisma with pnpm run db:generate. Apply migrations with `MIGRATION_DATABASE_URL` explicitly set, using `pnpm --filter @zarbit/db exec prisma migrate deploy`; run the server and worker only with `DATABASE_URL`. Then pnpm run dev starts the apps. The web development port is 3001, server 3000, worker's private command port 3002.
+1. **Database**: Provision PostgreSQL 16+ (see [docs/POSTGRES.md](docs/POSTGRES.md)).
+2. **Environment**:
+   - Configure `apps/server/.env` and `apps/worker/.env` using their `.env.example` templates, setting identical `DATABASE_URL` and `WORKER_INTERNAL_TOKEN` values.
+   - Configure `apps/web/.env` with `VITE_SERVER_URL` (e.g. `http://localhost:3000` in dev).
+   - The root `.env` is used for Docker Compose, not shared package configuration.
+   - For local web development outside Telegram, set `DEV_TELEGRAM_USER_ID` to an ID listed in `ALLOWED_TELEGRAM_USER_IDS`.
+3. **Install & Migrate**:
+   ```bash
+   pnpm install
+   pnpm run db:generate
+   MIGRATION_DATABASE_URL="postgresql://..." pnpm --filter @zarbit/db exec prisma migrate deploy
+   ```
+4. **Run Services**:
+   ```bash
+   pnpm run dev
+   ```
+   - Web: `http://localhost:3001`
+   - Server: `http://localhost:3000` (OpenAPI spec at `/api/openapi.json`)
+   - Worker: private internal HTTP at `http://localhost:3002`
 
 ## Build and deploy
 
-Set the GitHub Actions repository variable VITE_SERVER_URL to the actual public HTTPS API URL before publishing. CI applies and verifies the PostgreSQL baseline, runs integration tests, typechecks, and builds. The publish workflow creates web/server/worker images for amd64 and arm64. Final server image stages validate Prisma's PostgreSQL adapter without connecting to production.
+- Set the repository build variable `VITE_SERVER_URL` in GitHub Actions before building images; the web client embeds this URL at build time.
+- In Dokploy, deploy using `compose.yml` with environment values from `deploy/compose.env.example`.
+- Route public domains to `web:80` (Mini App) and `server:3000` (API). Do not expose the worker port (3002).
+- The `migrate` service in `compose.yml` runs automatically on release cutover, applying migrations and preparing session volume permissions before server and worker start.
+- Full operational procedures, health checks, and rollback instructions: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-Use docker-compose.production.yml in Dokploy and the values from deploy/compose.env.example in its Environment UI. No Traefik labels are required. Configure domains for web port 80 and server port 3000. Do not expose worker port 3002.
+## Verification
 
-**This is a clean PostgreSQL cutover, not an in-place SQLite upgrade.** Stop the old services, snapshot and detach the legacy SQLite and Telegram-session volumes for seven days, then deploy the new release with the fresh `zarbit-telegram-sessions-postgres` volume. Existing users log in again. Never delete legacy volumes automatically.
+Run project checks:
 
-VITE_SERVER_URL is embedded into the web image; changing a runtime Dokploy variable cannot update an already-built frontend. Choose one immutable IMAGE_TAG across all services.
+```bash
+pnpm run test
+pnpm run check-types
+pnpm run build
+```
 
-Detailed steps and recovery: [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Live Telegram behavior (login, 2FA, message reception, and order dispatch) requires acceptance testing by the owner with real accounts in a controlled group.
 
-## Checks
+## Documentation
 
-Run `pnpm run test`, `pnpm run check-types`, and `pnpm run build` with PostgreSQL URLs and a public HTTPS `VITE_SERVER_URL`. Builds and database tests are not proof of Telegram behavior; the owner performs live-account acceptance.
-
-## Architecture references
-
-- [Product](docs/PRODUCT.md)
+- [Product Specification](docs/PRODUCT.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Business rules](docs/BUSINESS-RULES.md)
-- [Telegram integration](docs/TELEGRAM.md)
+- [Business Rules](docs/BUSINESS-RULES.md)
+- [Telegram Integration](docs/TELEGRAM.md)
+- [PostgreSQL Architecture](docs/POSTGRES.md)
+- [Dokploy Operations](docs/OPERATIONS.md)
+- [RPC Contracts](docs/RPC.md)
+- [Market Data Specification](docs/MARKET-DATA.md)
+- [Product Roadmap](docs/ROADMAP.md)
+- [Home Page Feature Specification](docs/HOME-PAGE-FEATURES.md)
+- [Telegram Room Protocol](docs/GROUP-TRADING-PROTOCOL.md)
 
-Shared packages: contracts (Zod/DTOs), domain (prices/parser/message builders), db (Prisma/PostgreSQL), env (service configuration), config (TypeScript). Bot launches the Mini App and sends notifications only. Codes/passwords must never be sent to the bot or shared in bug reports.
+Never send phone codes, passwords, or authentication secrets to the bot, or include them in bug reports or logs.

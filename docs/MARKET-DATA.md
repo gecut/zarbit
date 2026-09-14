@@ -1,6 +1,6 @@
 # ZarBit — Market Data Specification
 
-> **Status:** Draft / Active Implementation Specification (Phase 1)  
+> **Status:** Implemented (Phase 1 Data Foundation & Phase 2 Market Intelligence Engine)  
 > **Primary Authority:** Persistence, ingestion architecture, identity resolution, query contracts, and retention policies.  
 > **Complementary Authority:** `docs/GROUP-TRADING-PROTOCOL.md` (Telegram group trading syntax, message formats, and observed room mechanics).  
 > **Primary Components:** `packages/db`, `packages/contracts`, `packages/domain`, `apps/worker`, `apps/server`, `apps/web`.
@@ -9,9 +9,9 @@
 
 ## 1. Purpose and Architecture Boundaries
 
-This document defines the data foundation for ZarBit's market intelligence engine (Phase 1).
+This document defines the market data architecture and persistence models for ZarBit's market intelligence engine.
 
-Phase 1 focuses strictly on **DATA COLLECTION and MARKET INTELLIGENCE FOUNDATION**. No participant list, leaderboard, P&L UI, whale UI, or automated follow execution is exposed to end users in this phase.
+The system ingests canonical quotes, trade receipts, active orders, and human trading actions, serving real-time market snapshots and 7-day rolling performance analytics. Automated follow execution is deferred to Phase 3.
 
 ### Separation of Concerns
 
@@ -264,9 +264,15 @@ stateDiagram-v2
 
 ## 5. Market serving
 
-The current Home reads `market.snapshot` and `market.live`. QuoteHistory is the authoritative Quote source; completed bot receipts remain Trade. Heads are projected by source-ID order. The signed comparison is latest Trade compact price minus latest Quote compact price, not execution-time slippage or P&L. Only headline metrics convert to full Toman.
+The Home terminal reads market data via `GET /rpc/market.snapshot`:
 
-Each new Quote/Trade insert calls transaction-local `pg_notify('zarbit_market_changed', metadata)`. PostgreSQL sends the signal after commit; duplicate inserts emit nothing. The signal contains type and sourceMessageId only. It is not an event log, queue or data source. Server uses one dedicated listener with recovery and rehydration. Worker ingestion, matching and Telegram ownership are unchanged. See [ARCHITECTURE.md](ARCHITECTURE.md) and [RPC.md](RPC.md) for current delivery/cache contracts.
+- `QuoteHistory` provides the authoritative official quote; completed bot receipts in `Trade` provide the latest trade and recent trades list.
+- The server (`MarketState`) evaluates market heads via `store.marketHeads()`, querying the latest quote and up to 10 recent completed trades ordered by `[announcedAt DESC, sourceMessageId DESC]`.
+- Market heads are cached in memory on the server (5-second cache when offline/degraded, 60-second cache when connected).
+- The web client (`useMarket`) polls `market.snapshot` every 3 seconds via TanStack Query (`marketPolling`).
+- Monotonic head merging (`mergeMarketSnapshot`) prevents late HTTP responses from regressing visible market heads on the client.
+- The signed spread on the dashboard is computed as `latest Trade compact price - latest Quote compact price`.
+- Only headline metrics convert to full Tomans (`compactPrice × 1000`). All secondary prices and request targets remain compact integers.
 
 ---
 

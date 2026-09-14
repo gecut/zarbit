@@ -151,6 +151,18 @@ test(
     }
     const initial = telegramSessionStatusSchema.parse(await rpc("status"));
     assert.equal(initial.capabilities.canLogin, true);
+    // Legacy revocation kept the identity even after deleting the session file.
+    await db.telegramSession.create({
+      data: {
+        userId: owner.id,
+        state: "REVOKED",
+        connectedTelegramUserId: identity,
+        storageKey: null,
+        revision: 0,
+        reasonCode: "NETWORK_UNAVAILABLE",
+      },
+    });
+    assert.equal((await sessions.status(owner.id)).capabilities.canLogin, true);
     const login = {
       operationId: crypto.randomUUID(),
       command: { type: "login", phone: "+989121234567" },

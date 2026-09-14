@@ -1,53 +1,52 @@
-# Web/server RPC
+# Web/Server RPC
 
-The only Web transport is oRPC **1.15.0**, with contract-first Hono `/rpc/*` and `/openapi/*` adapters. `packages/contracts/src/rpc.ts` owns procedures; `market.ts` owns the strict Market schemas. PostgreSQL is authoritative. The old public `quote.latest`, `quote.dashboard`, `quote.history` and browser legacy transport have been removed in a coordinated release.
+The only Web transport is oRPC **1.15.0**, mounted via contract-first Hono handlers on `/rpc/*` and `/api/openapi.json`. Contracts are defined in `packages/contracts/src/rpc.ts`; market schemas live in `market.ts`, telegram schemas in `telegram.ts`, and analytics schemas in `analytics.ts`. PostgreSQL is the single source of truth.
 
 ## Data planes
 
-| Plane         | Procedures                                                                                                  | Ownership                                  |
-| ------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Shared Market | `market.snapshot`, `market.live`                                                                            | Process-global state; authenticated access |
-| Private User  | `auth.identity`, `telegram.status/command`, `requests.active/history/detail/create/update/cancel/forceSend` | Verified Mini App owner                    |
-| Analytics     | `analytics.traders`, `analytics.traderDetail`                                                               | Independent read domain                    |
+| Plane         | Procedures                                                                                                                                                                                                            | Ownership                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Shared Market | `market.snapshot`                                                                                                                                                                                                     | Process-global state; authenticated access |
+| Private User  | `auth.identity`, `telegram.status`, `telegram.command`, `telegram.operation`, `requests.active`, `requests.history`, `requests.detail`, `requests.create`, `requests.update`, `requests.cancel`, `requests.forceSend` | Verified Mini App owner                    |
+| Analytics     | `analytics.traders`, `analytics.traderDetail`                                                                                                                                                                         | 7-day rolling participant performance      |
 
-No Home aggregate combines Market, Requests or Telegram. Compatible snapshot/active-request HTTP calls may share a batch (maximum four). Telegram and the long-lived stream are outside that batch, avoiding Worker delays on critical market results.
+Compatible snapshot and active-request HTTP calls may share a batch (maximum 4 requests via `BatchHandlerPlugin`).
 
-Each procedure verifies initData and the allowlist. Identity mapping is cached five minutes; signature/expiry verification is not cached. The shared Market Web key uses the provider's scope, while User keys also include the user. A 401 clears cached data and closes the authentication gate. Credentials and raw identities never appear in keys or metric labels.
-
-Ordinary fetch calls combine cancellation with a 30-second deadline. `market.live` uses cancellation without that deadline. It is an oRPC `eventIterator(schema)` (the installed 1.15 API), with event IDs `QUOTE:<sourceMessageId>` / `TRADE:<sourceMessageId>`. Resume metadata requests reconciliation, not durable replay. Every subscription receives SYNC or RECONCILE_REQUIRED immediately. The transport emits comment heartbeats at 15 seconds; oRPC's compression plugin excludes event streams. Each stream has a 30-minute maximum lifetime to force a fresh authenticated connection.
+Every procedure verifies `X-Telegram-Init-Data` with the bot token HMAC, 86,400-second expiration check, and allowlist membership (`ALLOWED_TELEGRAM_USER_IDS`). Telegram procedures additionally require the contract header `X-Zarbit-Telegram-Contract: 3`. Identity mapping is cached for 5 minutes; signature and expiration verification are evaluated on every request. A 401 response clears client caches and redirects to the authentication gate. All RPC responses include `Cache-Control: no-store`.
 
 ## Cache ownership and freshness
 
-| Data                   | Key/scope and owner                          | Lifetime / refresh                                                                                                                | Failure / invalidation                                                                                           |
-| ---------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Market heads           | One Server `MarketState`                     | NOTIFY updates; single-flight DB hydration on startup/recovery; authoritative recheck when read after 60 s healthy / 5 s degraded | Last state is retained; expired verification failure returns a local RPC error; stream refuses degraded listener |
-| Web snapshot           | Shared provider Market key, TanStack Query   | 5 s stale; initial/focus/reconnect/reconciliation, no healthy interval                                                            | 10 s visible polling while degraded; per-stream monotonic head merge prevents late HTTP response regression      |
-| Active Requests        | Server owner key; Web owner key              | Server 1 s; Web 4 s visible when nonempty, no empty interval                                                                      | Mutation/focus/reconnect/manual refresh; no stale Server fallback                                                |
-| Request detail/history | Web owner + input                            | Existing detail lifecycle and cursor pagination                                                                                   | Mutation hooks exclusively own invalidation; no market invalidation                                              |
-| Telegram status        | Server owner/session cache 1 s               | 2 s transitional; 15 s stable/disconnected, visible only                                                                          | Focus/reconnect; independent Worker failure                                                                      |
-| Identity               | Server mapping + Web authentication boundary | Five minutes                                                                                                                      | Signature verification on every RPC; 401 discards caches                                                         |
-
-Client visibility/offline transitions cancel the stream. Resume reconnects and reconciles. A four-second connection grace period precedes fallback polling; reconnect backoff is bounded at 30 seconds. Recovery reconciles snapshot before returning to the healthy policy. Query data is never copied into React component state. Realtime live events apply directly to the market snapshot in cache.
+| Data                    | Key/scope and owner                            | Lifetime / refresh                                                                                                 | Failure / invalidation                                                                                  |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Market heads            | Server `MarketState`                           | Single-flight DB query (`store.marketHeads()`); 5 s cache when degraded/offline, 60 s cache when connected         | Retains last known valid heads; expired verification failure returns RPC error                          |
+| Web market snapshot     | Shared provider Market key, TanStack Query     | `marketPolling`: 1 s staleTime, 3 s refetchInterval, no background polling, refetch on window focus/reconnect      | Monotonic head merge (`mergeMarketSnapshot`) prevents late HTTP responses from regressing visible state |
+| Active Requests         | Server owner key (1 s); Web owner key          | Server 1 s; Web 4 s visible interval when active requests exist (`length > 0`), disabled when list is empty        | Invalidation on create, update, cancel, forceSend, and Telegram session changes; manual refresh         |
+| Request detail/history  | Web owner + input                              | Cursor-based infinite pagination for history; detail on demand                                                     | Mutation hooks invalidate active and history query caches; no automatic polling                         |
+| Telegram status         | Server owner cache (1 s); Web owner key        | Web 2 s during transitional states (`LOGIN_PENDING`, `REVOKING`, or active operation); 15 s when idle or connected | Refetch on window focus and reconnect; invalidation on command admission                                |
+| Telegram operation      | Server PostgreSQL query; Web owner + UUID      | Web 2 s polling while operation is pending (`ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`); disabled when terminal     | Terminal state invalidates `telegram.status` and `requests.active` caches                               |
+| Analytics traders       | Server cache `${sortBy}:${sortOrder}:${limit}` | Server 5 s TTL / 5 s staleTime; Web slow query (5 min staleTime, 5 min refetchInterval)                            | Automatic background refresh; isolated from market and user polling                                     |
+| Analytics trader detail | Server direct read; Web owner + alias          | Direct DB read wrapped in read capacity limiter                                                                    | Cached by TanStack Query on the client; refetched on drawer open                                        |
+| Identity                | Server user cache (5 min); Web auth boundary   | 5 minutes                                                                                                          | Fresh HMAC validation on every RPC; 401 clears all cached user data                                     |
 
 ## Queries, revisions and limits
 
-Snapshot reads two projected heads in parallel, ordered by source message ID. Its revision is the maximum head ID. Quote and Trade advance independently: a lower global ID may still advance the other stream. Message-ID gaps are normal and never imply missing market events. The supported single Telegram group and legacy null-chat Quote rows must be preserved; a multi-group migration needs a new revision scheme before rollout.
+- **Snapshot**: Reads the latest canonical quote from `QuoteHistory` and up to 10 recent completed trades from `Trade` in parallel. Its revision is `Math.max(quote.sourceMessageId, trade.sourceMessageId)`. Quote and Trade advance independently. Message ID gaps are expected and normal.
+- **Read Capacity**: The shared read gate permits 3 concurrent operations per named query and times out callers after 3 seconds while retaining permits until DB completion. Worker status queries use a separate 4-operation read gate with a 3-second timeout.
+- **Rate Limiting**: `RpcRateLimit` enforces per-user rate budgets, separating mutation budgets from read requests.
+- **Payload Limits**: `BodyLimitPlugin` restricts request bodies to 16 KiB.
+- **Metrics**: Server logs `rpc.metrics` and `market.metrics` periodically, tracking request durations, cache hit/miss/hydrate events, and database query durations. No raw user identities or credentials appear in metric labels.
 
-The shared read gate permits three operations and times out callers after three seconds while retaining permits until actual DB completion. Worker status has a separate four-operation gate. Server's normal pool remains five connections, plus one dedicated listener. Rate limits, 16 KiB request-body limit, mutation no-retry behavior and current error schemas remain unchanged.
+## Development and mock modes
 
-`rpc.metrics` and `market.metrics` contain bounded duration samples and cache/listener/hub counters. Listener transition logs report hydration/downtime/reconnect durations without URLs or payloads. Hub counters track publication, active connections and slow-client disconnections. No raw revision or user ID is a metric label.
+Under Vite DEV, `/?marketScenario=normal` activates deterministic in-browser mocks:
 
-## Development and release
-
-`/?marketScenario=normal` enables deterministic mocks only under Vite DEV. Fixtures use production schemas, per-instance state, a fixed injectable clock, bounded async iterators, controllable delays/failures and event scripts. See `apps/web/src/dev/market/market-scenarios.ts` for all scenarios. Production tree-shaking excludes this directory. `ApiProvider` stores the callable RPC proxy with `setClient(() => api)`; query utility proxies must not be spread into plain objects.
-
-Deploy Server, Worker and Web from one immutable revision. Old PWA bundles are incompatible and require their existing update/reload flow; no aliases remain. Roll back the coordinated images/bundle together. PostgreSQL table schemas are unchanged. Ingestion rollback merely stops NOTIFY and new clients fall back to reads, but old server/web contracts still require matching versions.
-
-Local builds, existing checks and direct PostgreSQL/SSE smoke are implementation evidence. Real Telegram receipt acceptance and actual Dokploy/Traefik proxy behavior are separate release gates in [OPERATIONS.md](OPERATIONS.md). No local timing is a production SLO.
+- `createMarketMock`: Implements production schemas, configurable delays, and fixture data without a backend.
+- `createTelegramMock`: Simulates phone input, code requests, 2FA challenges, and membership checks.
+- Scenarios live in `apps/web/src/dev/market/market-scenarios.ts`. Production builds tree-shake this entire directory.
+- `ApiProvider` stores the callable RPC proxy via `setClient(() => api)`.
 
 ## API reference
 
-- [oRPC event iterator](https://v1.orpc.dev/docs/event-iterator)
 - [oRPC contract-first implementation](https://v1.orpc.dev/docs/contract-first/implement-contract)
 - [oRPC batching](https://v1.orpc.dev/docs/plugins/batch-requests)
 - [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)

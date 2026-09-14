@@ -3,7 +3,7 @@ import type {
   TelegramSessionStatus,
   TelegramOperation,
 } from "@zarbit/contracts";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { ConfirmAction } from "./_confirm-action";
 import { resolveTelegramSessionPresentation } from "./_session-view-model";
@@ -148,6 +148,12 @@ export function TelegramSessionPanel({
   onRevoke,
   session,
 }: TelegramSessionPanelProps) {
+  const commandAlert = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!commandError) return;
+    commandAlert.current?.focus();
+    commandAlert.current?.scrollIntoView({ block: "nearest" });
+  }, [commandError, operation?.operationId]);
   const presentation = session
     ? resolveTelegramSessionPresentation(session)
     : null;
@@ -205,15 +211,17 @@ export function TelegramSessionPanel({
               (!operation &&
                 session.issue &&
                 session.issue.code !== "WORKER_UNAVAILABLE") ? (
-                <Alert status="danger">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    <Alert.Title>عملیات انجام نشد</Alert.Title>
-                    <Alert.Description>
-                      {commandError ?? session.issue?.message}
-                    </Alert.Description>
-                  </Alert.Content>
-                </Alert>
+                <div ref={commandAlert} tabIndex={-1}>
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>عملیات انجام نشد</Alert.Title>
+                      <Alert.Description>
+                        {commandError ?? session.issue?.message}
+                      </Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                </div>
               ) : null}
 
               {retryWait ? (

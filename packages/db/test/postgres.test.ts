@@ -28,6 +28,44 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
+test("relogin replaces a revoked legacy identity while preserving live session fences", async () => {
+  const owner = await store.user({ telegramUserId: "legacy-relogin" });
+  await prisma.telegramSession.create({
+    data: {
+      userId: owner.id,
+      connectedTelegramUserId: "legacy-relogin",
+      state: "ACTIVE",
+    },
+  });
+  for (const state of [
+    "ACTIVE",
+    "NOT_IN_GROUP",
+    "REVOKING",
+    "ERROR",
+  ] as const) {
+    await prisma.telegramSession.update({
+      where: { userId: owner.id },
+      data: { state },
+    });
+    await assert.rejects(store.beginSession(owner.id, "new-storage"), {
+      code: "SESSION_EXISTS",
+    });
+  }
+  await prisma.telegramSession.update({
+    where: { userId: owner.id },
+    data: { state: "REVOKED", storageKey: null, revokedAt: currentTime },
+  });
+  const started = await store.beginSession(
+    owner.id,
+    "new-storage",
+    crypto.randomUUID(),
+  );
+  assert.equal(started.state, "PENDING_OTP");
+  assert.equal(started.connectedTelegramUserId, null);
+  assert.equal(started.revokedAt, null);
+  assert.equal(started.revision, 1);
+});
+
 test("PostgreSQL records the first compact quote in history and latest", async () => {
   const announcedAt = new Date("2026-09-07T08:00:00.000Z");
   const recorded = await store.recordQuote({

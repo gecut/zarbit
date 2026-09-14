@@ -2,37 +2,57 @@
 
 ## Identity and secrets
 
-Mini App initData is verified with the bot-token HMAC, expiration and allowlist. Never trust initDataUnsafe or a client-supplied user ID. The MTProto account ID must then exactly equal that verified Mini App identity.
+- **Mini App Authentication**: The API verifies Telegram Mini App `initData` using the bot token HMAC (`WebAppData`), checking for expiration (max 24 hours) and allowlist authorization (`ALLOWED_TELEGRAM_USER_IDS`). Client-supplied user IDs and `initDataUnsafe` are never trusted.
+- **Account Binding Invariant**: The authenticated MTProto account ID must exactly match the verified Telegram user ID of the Mini App opener. If a user enters credentials for a different account, the mismatch is rejected immediately and the session is logged out.
+- **Credential Segregation**: `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` belong to the product's Telegram application and are supplied exclusively to the worker. End users never provide API credentials. The bot never receives phone codes or passwords.
 
-TELEGRAM_API_ID/HASH belong to the product's Telegram application and are provided only to the worker. The bot never receives phone codes or passwords.
+## OTP and login contract
 
-## OTP contract
-
-All public endpoints require Mini App authentication and return no-store responses. Login supports phone, code, optional two-step password, resend and cancellation. QR routes are removed. One random challenge per owner has a ten-minute lifetime; send and retry limits are persisted. OTP/password/hash stay only in short-lived worker memory and never enter logs or the database.
+- All public endpoints require Mini App authentication and return `Cache-Control: no-store` responses.
+- Login flow: phone number → SMS/app verification code → optional two-step password (2FA). QR login is unsupported.
+- Challenges have a 10-minute lifetime and permit up to 5 invalid attempts before expiration.
+- Send rate limits: maximum 3 code requests per rolling 15-minute window, persisted in `LoginRateLimit`.
+- OTP codes, passwords, and challenge state live in short-lived worker memory and are never persisted to the database or written to logs.
 
 ## Group market data ingestion
 
-The adapter loads dialogs, including archived dialogs, to resolve the private group's peer/access hash. It never joins groups automatically. Membership is checked after login and periodically; nonmembers remain authorized but dormant.
+The worker's connected sessions subscribe to incoming messages in `TELEGRAM_GROUP_ID`:
 
-The worker subscribes to incoming messages in `TELEGRAM_GROUP_ID` and extracts complete event metadata: `messageId`, `senderId`, `date`, `text`, `replyToMessageId`, `replyToSenderId`, and MTProto message entities.
+- **Peer Resolution**: Worker dialogs (including archived dialogs) are resolved on startup to obtain the group's `accessHash`. Worker sessions never join groups automatically.
+- **Membership**: Group membership is validated upon login and periodically re-verified. Non-members remain authorized in the database (`NOT_IN_GROUP`) but dormant.
+- **Authoritative Quotes**: Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group management bot are parsed via `parseCanonicalBotQuote` and recorded into `QuoteHistory`.
+- **Authoritative Trade Receipts**: Bot trade receipts (`حواله`) are parsed via `parseTradeReceipt` and recorded permanently into `Trade`.
+- **Active Orders & Taker Commands**: Canonical bot orders (`🔵 ... / 🔴 ...`) update the in-memory `BoundedOrderCache`. Human order intents (`خ`, `ف`, `ب`, `ن`) are recorded in `TradingAction`.
+- **Idempotency**: All message ingestion models enforce unique constraints on `sourceMessageId` (or `(chatId, sourceMessageId)`). Multiple sessions observing the same message concurrently result in one committed record (`count === 1`) and safe duplicate discards (`count === 0`).
 
-- **Authoritative Quotes:** Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group trading bot qualify as the authoritative persisted quote source in `QuoteHistory`.
-- **Trading Actions:** Human messages are parsed and recorded as `TradingAction` (`ORDER_BUY`, `ORDER_SELL`, `TAKE_ALL`, `TAKE_QUANTITY`, `CANCEL`) preserving their reply context.
-- **Completed Trades:** Authoritative bot receipts (`حواله`) issued by the bot are parsed and recorded into `Trade`.
-- **Idempotency:** Multiple active worker sessions observe group messages concurrently; database unique constraints on `sourceMessageId` ensure zero duplicate rows. Unresolved protocol behaviors (e.g. unreplied cancels, auto-cross matching) are preserved as unresolved and never guessed.
+## Request matching and execution engine
 
-## Failures and disconnect
+The worker executes user trading requests (`Request`):
 
-Network outage retains the authorization file and uses bounded reconnect backoff. Revocation invalidates the session. Disconnect first stores REVOKING even while the worker is offline; worker then logs out, closes storage, removes recognized files and reports REVOKED.
+1. **Matching**: When a fresh quote ($\le 60$s old) is recorded, the worker checks pending `WAITING_QUOTE` requests against their target price and condition (`GTE` or `LTE`).
+2. **Atomic Claim**: The request is transitioned to `CLAIMED` inside a database transaction using an atomic update with a unique `claimToken`.
+3. **Delivery**: The session transitions the request to `SENDING` and posts the formatted order command (e.g. `1خ105020`) to the Telegram group using MTProto.
+4. **Completion**: Upon successful delivery, the request is marked `DONE` with `outgoingMessageId`. If transmission fails, it transitions to `FAILED` with error metadata.
+5. **Immediate Execution («ارسال فوری»)**: Users may bypass quote matching via `requests.forceSend`, which claims and sends the order immediately.
 
-## Contract v3 and operations
+## Session lifecycle and failure handling
 
-Public Telegram procedures use contract version 3 (`X-Zarbit-Telegram-Contract: 3`). Session authorization, worker availability, MTProto connection, membership and operation state are independent facts. `telegram.command` accepts an operation UUID and returns immediately; `telegram.operation` is the owner-scoped durable result. Completed operation metadata is retained for 24 hours and contains no phone, OTP, password or session hash. Login attempts expire after ten minutes, allow five invalid code/password attempts, and are never replayed after a worker restart. Cancellation and revocation are accepted before worker connectivity is available; unsent `WAITING_QUOTE`/`CLAIMED` requests are cancelled under the session row lock, while `SENDING` requests keep their real outcome.
+- **Network Interruption**: Network outages retain session authorization files. Reconnection uses exponential backoff (from 10 seconds up to a 5-minute ceiling) and marks connection status `DEGRADED`.
+- **Revocation**: Disconnect requests immediately record `REVOKING` in PostgreSQL. The worker then logs out the MTProto client, closes the SQLite database, deletes the session files (`<hex>.sqlite`), and marks the state `REVOKED`.
+- **Offline Resilience**: Session cancellation and revocation are transactionally committed to PostgreSQL by the server before asynchronous worker dispatch. Unsent `WAITING_QUOTE` or `CLAIMED` requests are cancelled under database row locks, guaranteeing user logout succeeds even if the worker is restarting.
 
-## Logs and manual verification
+## Asynchronous operations (Contract v3)
 
-Operational logs use shared Pino JSON events and opaque session/challenge references, not raw Telegram errors or credentials. The owner verifies OTP/2FA, identity mismatch rejection, private-group access, quote persistence/display, membership loss, revocation and disconnect with real accounts.
+Public Telegram procedures use contract version 3 (`X-Zarbit-Telegram-Contract: 3`):
 
-## Committed Market propagation
+- `telegram.command`: Submits an operation UUID (`operationId`) and command payload (`login`, `code`, `password`, `resend`, `cancel`, `membership`, `revoke`). Returns `{ operationId, acceptedAt }` immediately (HTTP 200).
+- `telegram.operation`: Durable operation status endpoint (`GET /rpc/telegram/operation/{id}`). Returns current progress (`ACCEPTED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCEL_REQUESTED`, `CANCELLED`, `INTERRUPTED`) and safe outcome metadata.
+- Completed operations are retained in PostgreSQL (`TelegramOperation`) for 24 hours. They contain no phone numbers, OTPs, passwords, or session hashes.
+- `WORKER_DIAGNOSTIC_USER_ID` (`00000000-0000-0000-0000-000000000000`) is supported for inspecting worker health and session status without requiring an allowlisted user record.
 
-`recordQuote` and `recordTrade` notify PostgreSQL inside their insert transaction only when `createMany(skipDuplicates)` reports one new row. NOTIFY delivery happens after commit; rolled-back/duplicate observations do not emit. Payload is type plus sourceMessageId and contains no raw receipt, user identity or session data. One Server listener reads committed rows; Worker never pushes directly to Web/Server. The configured single group remains mandatory for revision semantics. Listener recovery relies on authoritative reads because PostgreSQL notifications are not replayed. Ingestion, Request matching, membership and Telegram command boundaries remain unchanged.
+## Logs and diagnostics
+
+Operational logging uses Pino JSON with structured correlation metadata:
+
+- Sensitive credentials, phone numbers, OTP codes, 2FA passwords, request bodies, and raw Telegram message texts are redacted or omitted.
+- Logs use opaque references (`sessionRef`, `challengeRef`) and standardized event names (e.g. `telegram.quote.recorded`, `telegram.trade.recorded`, `telegram.login.started`).

@@ -2,32 +2,60 @@
 
 ## Scope
 
-Private Persian/RTL Telegram Mini App that displays the latest gold quote and market intelligence from one fixed group and authoritative group bot. Up to 20 simultaneous Telegram clients support login, recovery, and message observation. Phase 1 focuses strictly on data collection and market data foundation: persisting `Participant`, `TradingAction`, `Trade`, and `QuoteHistory`. No public signup, billing, admin, portfolio, whale cards or Follow execution is introduced by Home. Existing trader/analytics navigation remains independent.
+Zarbit is a private Persian/RTL Telegram Mini App for Iranian OTC gold trading intelligence and execution. It connects to one fixed trading group and authoritative management bot, providing:
 
-## Access and login
+1. **Market Terminal**: Displays the latest official gold quote and latest completed trade in full Tomans, their signed difference (premium/discount spread), compact bank prices, announcement timestamps, and a live recent trades tape (up to 10 completed trades).
+2. **Order & Alert Radar**: Allows users to register conditional trading requests (`BUY`, `SELL`, `ALERT`) against the official quote (`GTE`, `LTE`), view active orders, monitor execution phase transitions, force immediate delivery to the group («ارسال فوری»), and cancel pending requests.
+3. **7-Day Whale Leaderboard & Trader Analytics**: Provides a rolling 7-day performance dashboard (`/traders`) ranking active participants by Realized P&L, Volume, Trade Count, and Average Trade Size, with data coverage confidence indicators (`HIGH`, `ESTIMATED`, `UNVERIFIED_INVENTORY`) and individual trader detail drawers.
+4. **MTProto Session Gateway**: Supports up to 20 concurrent Telegram user sessions for observing group trading flow and executing matched client orders under verified user ownership.
 
-The API verifies Telegram Mini App initData and ALLOWED_TELEGRAM_USER_IDS before any private access. OTP does not replace this identity check. Each authorized user connects only their own Telegram account through phone number → Telegram login code → two-step password if required. QR login has been removed.
+**Explicitly unsupported in this release**: Public signup (access is restricted by a fixed allowlist), billing/subscriptions, portfolio management, multi-group support, and automated follow/copy execution (which is deferred to Phase 3).
 
-The product owner supplies global TELEGRAM_API_ID/HASH on the worker. End users never provide application credentials. Telegram determines code delivery and length; SMS is not guaranteed. Codes/passwords are never accepted in the bot.
+## Access and authentication
 
-An authenticated account must have exactly the same Telegram ID as the Mini App opener. Mismatches are rejected and the newly authorized session is logged out.
+The API verifies the Telegram Mini App `initData` HMAC signature, expiration (max 24 hours), and allowlist (`ALLOWED_TELEGRAM_USER_IDS`) before granting access to any private endpoint.
+
+- Each authorized user connects only their own Telegram account via phone number → Telegram login code → optional two-step verification password.
+- QR login is unsupported and has been removed.
+- The product owner configures global `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` on the worker; end users never provide API credentials.
+- Telegram determines code delivery method (Telegram app message or SMS) and code length. Codes and passwords are never accepted through the bot.
+- **Identity Invariant**: The connected MTProto account ID must exactly match the verified Telegram user ID of the Mini App opener. Mismatches are immediately rejected and the newly authorized session is terminated.
 
 ## Session lifecycle
 
-Stored states: PENDING_OTP, ACTIVE, NOT_IN_GROUP, REVOKING, REVOKED, ERROR. DISCONNECTED is the API representation when no record exists. Live connectivity and stored authorization are separate.
+Session authorization states in PostgreSQL:
 
-- Nonmembers retain an inactive authorized session and may recheck membership without another OTP.
+- `PENDING_OTP`: Login challenge initiated; awaiting code or 2FA password.
+- `ACTIVE`: Account authenticated and authorized.
+- `NOT_IN_GROUP`: Account authenticated, but membership in the target trading group is unconfirmed. Re-checking membership does not require re-authenticating.
+- `REVOKING`: User requested disconnect; cleanup in progress.
+- `REVOKED`: Session terminated; local storage files deleted.
+- `ERROR`: Authentication or runtime failure occurred.
+- `DISCONNECTED`: Virtual API status when no session record exists in storage.
 
-## Screens
+Live connectivity (`CONNECTED`, `CONNECTING`, `OFFLINE`, `DEGRADED`) is tracked independently from authorization. Capabilities (`canLogin`, `canSubmitCode`, `canCreateRequest`, `canRevoke`, etc.) are dynamically presented by `presentTelegramSession`.
 
-Home displays the latest official Quote and latest completed Trade as full Toman figures, their signed compact-price difference, and real announcement timestamp. Header status means the current user’s Telegram connection, never global market health. Active Requests show their count and an explicit «درخواست جدید» action. Bottom navigation remains خانه / سوابق / معامله‌گران / تنظیمات. Market stream and Telegram errors remain local. Settings preserve the existing Telegram login/session lifecycle.
+## Screens and navigation
 
-The existing compact mobile layout, RTL and Vazirmatn font remain. HeroUI semantic tokens define colors, surfaces, states, focus, shadows and radii. Theme can follow Telegram/system or be set manually to light/dark. The update prompt never forces a reload.
+Bottom navigation dock provides four primary tabs:
 
-## Quote and market data
+1. **خانه (Home)** (`/`): Terminal quote card, execution action strip (`خرید`, `فروش`, `هشدار`), active requests radar, and recent completed trades tape.
+2. **سوابق (History)** (`/history`): Archive of past, completed, and cancelled requests with cursor-based infinite scrolling.
+3. **معامله‌گران (Traders)** (`/traders`): 7-day rolling performance leaderboard with sorting toolbar, confidence badges, and detailed trader profile drawers.
+4. **تنظیمات (Settings)** (`/telegram`): Telegram connection status, login and 2FA forms, group membership verification, session revocation, and theme picker (System / Light / Dark).
 
-Telegram, PostgreSQL, API responses, and requests retain the compact integer, such as `105020`. Only the primary latest-quote and latest-trade figures on the dashboard display Toman formatting (e.g. `105,020,000 تومان`); other internal prices remain compact. `QuoteHistory` is persisted in PostgreSQL to provide authoritative latest-quote resolution, auditability, and historical analysis. Completed trades are recorded strictly from authoritative bot receipts into `Trade` and retained permanently.
+UI uses HeroUI semantic tokens, compact mobile layout, RTL direction, and the Vazirmatn font. PWA updates are presented via an explicit update card and never force an abrupt reload.
+
+## Quote, trade and financial invariants
+
+- **Compact Integer Pricing**: Storage (`QuoteHistory.compactQuote`, `Trade.compactPrice`, `Request.targetPrice`), API payloads, and internal calculations retain the compact market integer (e.g. `105020`).
+- **Nominal Toman Conversion**: Receipt and display prices convert compact integers to full Tomans using the canonical multiplier:
+  $$\text{Price in Tomans} = \text{compactPrice} \times 1000$$
+  For example, `105020` converts to `105,020,000 تومان`.
+- **Display Rules**: Headline quote and trade figures on the Home dashboard display full Toman formatting; secondary prices and request target prices remain compact integers.
+- **Realized P&L**: Analytics calculates realized P&L points in compact integer space (`realizedPnlPoints`), rounded to 2 decimal places, and converts to nominal Tomans via `realizedPnlPoints × 1000`.
+- **Permanent Retention**: Completed trades in `Trade` and reference quotes in `QuoteHistory` are retained permanently. The 7-day rolling window is strictly a query filter for analytics, never a database pruning TTL.
 
 ## Release validation
 
-Typecheck, production builds and native dependency checks remain. Functional Telegram validation is performed by the owner with real accounts; a successful build is not proof that group delivery is operating.
+TypeScript compilation (`pnpm check-types`), linting (`pnpm lint`), production bundling (`pnpm build`), and automated unit/integration tests must pass cleanly. Live Telegram validation (login, 2FA, group message reception, and order execution) requires owner verification with real accounts in a controlled staging group.

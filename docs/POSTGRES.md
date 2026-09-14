@@ -1,26 +1,60 @@
 # Zarbit — PostgreSQL
 
-Use one PostgreSQL user for migration and runtime. In Dokploy's internal PostgreSQL service, use its internal host and do not add `sslmode=require`; that service does not provide TLS by default.
+## Connection architecture
+
+Zarbit uses PostgreSQL 16+ as its single primary database. A single PostgreSQL database user is shared by runtime services and the migration maintenance container.
 
 ```text
-DATABASE_URL=postgresql://postgres:<password>@<dokploy-db-host>:5432/<database>
-MIGRATION_DATABASE_URL=postgresql://postgres:<password>@<dokploy-db-host>:5432/<database>
+DATABASE_URL=postgresql://postgres:<password>@<db-host>:5432/<database>
+MIGRATION_DATABASE_URL=postgresql://postgres:<password>@<db-host>:5432/<database>
 ```
 
-Store both values in Dokploy. Compose passes `MIGRATION_DATABASE_URL` only to `migrate`; server and worker receive only `DATABASE_URL`. The values are intentionally identical.
+- In Dokploy, both values are configured in the Environment UI.
+- `MIGRATION_DATABASE_URL` is provided exclusively to the `migrate` container.
+- `DATABASE_URL` is provided to `server` and `worker`.
+- For Dokploy's internal managed PostgreSQL, connect over `dokploy-network` without `sslmode=require` (TLS is disabled on internal container networks by default).
 
-## Public development database
+### Connection pooling and sizing
 
-Use a separate development database and database role when working from a local machine. Put the provider's TLS-enabled connection string in `apps/server/.env` and `apps/worker/.env` as the same `DATABASE_URL`; never put it in `apps/web/.env` or any `VITE_*` variable. Keep credentials out of the repository, restrict provider network access to approved development IPs, and apply migrations with `MIGRATION_DATABASE_URL` before starting runtime services. Do not point local development at production data, production sessions, or the production database role.
+Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@prisma/adapter-pg`:
 
-`20260905010000_postgresql_baseline` requires an empty database. It does not replay SQLite history or import SQLite rows. Run `prisma migrate deploy`, then `prisma migrate status`. Do not use `prisma db push` in production.
+- Connection pool size: capped by `DATABASE_POOL_MAX` (default 5 connections per process).
+- Checkout timeout: 5,000 ms (`connectionTimeoutMillis`).
+- Idle timeout: 30,000 ms (`idleTimeoutMillis`).
+- Total runtime connections: Server (5) + Worker (5) = 10 active query connections.
+- Recommended database capacity: 15–20 connections to ensure ample headroom for migrations, maintenance tasks, and operational queries.
 
-Dokploy database and Zarbit containers must share external `dokploy-network`. Keep one server and one worker. Each runtime process uses at most five direct PostgreSQL query connections; the Server additionally requires one dedicated `LISTEN zarbit_market_changed` connection for the global Market plane. Provider capacity must include that listener and operational headroom.
+## Schema and entities
 
-## Market data schema and retention
+The database schema (`packages/db/prisma/schema/schema.prisma`) manages 9 primary models:
 
-Phase 1 persists four market entities in PostgreSQL: `QuoteHistory` (baseline), `Participant`, `TradingAction`, and `Trade`. All message-based tables enforce `sourceMessageId UNIQUE` for multi-session ingestion idempotency.
+1. **`TelegramUser`**: Canonical user record created from verified Mini App identity (`telegramUserId` unique).
+2. **`TelegramSession`**: User MTProto session state (`PENDING_OTP`, `ACTIVE`, `NOT_IN_GROUP`, `REVOKED`, `REVOKING`, `ERROR`), connection state (`CONNECTED`, `CONNECTING`, `OFFLINE`, `DEGRADED`), and storage key.
+3. **`TelegramOperation`**: Asynchronous Telegram command ledger (`@@id([userId, id])`), tracking operation type, status (`ACCEPTED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCEL_REQUESTED`, `CANCELLED`, `INTERRUPTED`), and timestamps.
+4. **`LoginRateLimit`**: Phone and user rate limiting counters for OTP request throttling (max 3 sends per 15-minute window).
+5. **`Request`**: Conditional orders and alerts (`condition`: `GTE`/`LTE`, `action`: `ALERT`/`BUY`/`SELL`, `targetPrice`, `units`). Execution phase machine: `WAITING_QUOTE` → `CLAIMED` (atomic `claimToken`) → `SENDING` → `DONE`/`FAILED`/`CANCELLED`.
+6. **`QuoteHistory`**: Authoritative gold quotes from canonical bot announcements (`compactQuote`, `sourceMessageId` unique).
+7. **`Participant`**: OTC market actors identified by canonical bot alias (`id` string). Stores optional unique `telegramUserId` and resolution status (`UNRESOLVED`, `CANDIDATE`, `VERIFIED`, `CONFLICT`, `CONFLICT_FLAGGED`).
+8. **`TradingAction`**: Observed human order commands and taker actions (`ORDER_BUY`, `ORDER_SELL`, `TAKE_ALL`, `TAKE_QUANTITY`, `CANCEL`) with effective `side` (`BUY`/`SELL`) and reply context. Enforces `@@unique([chatId, sourceMessageId])`.
+9. **`Trade`**: Completed trades recorded strictly upon receiving authoritative bot receipts (`حواله`). Enforces `@@unique([chatId, sourceMessageId])`.
 
-- **Retention:** `Trade` records are **permanently retained** and must never be pruned. The 7-day rolling window is strictly an analytics query filter for leaderboards and trader performance.
-- **Latest trade derivation:** The dashboard derives the latest completed trade price directly from `Trade` using an indexed scan on `@@index([announcedAt, sourceMessageId])`. No duplicate latest-trade table or singleton is permitted.
-- **Participants:** Canonical primary key is the bot-emitted participant alias (`Participant.id`). No `ParticipantAlias` table is introduced.
+## Data retention and query semantics
+
+- **Permanent Retention**: Both `Trade` and `QuoteHistory` records are **permanently retained**. They are never automatically pruned or deleted.
+- **7-Day Rolling Analytics Window**: The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) used by `analytics.traders` to calculate participant volume, win rate, and realized P&L. It must never be applied as a data retention TTL.
+- **Latest Trade Derivation**: The dashboard derives the latest completed trade directly from `Trade` using an indexed scan on `@@index([announcedAt, sourceMessageId])` with `LIMIT 1`. No separate or duplicate singleton table is used.
+- **Idempotency**: All message-based tables enforce uniqueness on `sourceMessageId` (or `(chatId, sourceMessageId)`), allowing concurrent worker sessions to observe the same Telegram messages safely with `createMany({ skipDuplicates: true })`.
+
+## Migrations
+
+Migrations live in `packages/db/prisma/migrations/`:
+
+- `20260905010000_postgresql_baseline`: Initial PostgreSQL baseline.
+- `20260908020000_compact_request_prices`: Compact integer price representation for requests.
+- `20260909120000_lifecycle_contracts`: Session and request lifecycle refinements.
+- `20260910190000_market_data_foundation`: Market data persistence (`Participant`, `Trade`, `TradingAction`, `QuoteHistory`).
+- `20260910200000_participant_identity_resolver`: Identity resolution schema.
+- `20260910210000_trading_action_side_and_telegram_uniqueness`: Trade side column and participant Telegram uniqueness index.
+- `20260914010000_telegram_operations`: Asynchronous Telegram operations ledger table.
+
+Apply migrations using `prisma migrate deploy` (or `node /app/deploy/migrate.mjs` in Compose). Never run `prisma db push` in production environments.

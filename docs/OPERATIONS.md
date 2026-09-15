@@ -77,3 +77,16 @@ Following deployment, verify live functionality using an allowlisted account:
 - **Worker logs `telegram.authoritative.invalid`**: Group bot format may have changed or non-bot messages are matching keywords. Inspect logged reason.
 - **Identity resolution shows CONFLICT**: Contradictory evidence detected linking two different Telegram accounts to the same bot alias. Mapping is frozen to prevent automated errors.
 - **Client displays "برنامه را به‌روز کنید" (409)**: Telegram contract version mismatch (`X-Zarbit-Telegram-Contract: 3`). Refresh the Mini App to load the updated frontend bundle.
+
+## Deploying trade-based request triggers
+
+1. Stop the Worker and temporarily stop request admission on the Server. Do not overlap old and new Worker versions.
+2. Apply migration `20260915010000_trade_request_triggers` through the existing migrate service. Never use db push. QuoteHistory and Trade rows are not rewritten or removed.
+3. Deploy Server and Web together, require old web tabs/PWA clients to reload, and start the new Worker. Existing waiting test requests adopt the new basis; cursor initialization prevents historical replay.
+4. Verify `request.trade_trigger.evaluated`, `request.trade_trigger.processing`, and `request.returned_to_waiting_or_cancelled` events. Logs contain request/message IDs and decision reasons, not credentials or raw receipt text.
+
+A one-second scan complements immediate receipt wakeups. The cursor and claims commit together. On restart, unsent TRADE claims are resumed and revalidated; unsent manual/legacy claims return to waiting. SENDING or a recorded delivery start becomes UNKNOWN, is reported once by recovery, and is never resent automatically. Failures after sending but before storing completion also require reconciliation, not retry. Processing drains before sessions and the database close.
+
+Rollback must be coordinated: stop Worker and admission first. The old binary is incompatible with WAITING_TRADE and the renamed request fields; do not point it at the migrated schema. Prefer a forward fix. Restoring an old application requires a reviewed schema rollback or pre-release backup restoration, with explicit accounting for any sends after the backup.
+
+Validation: use a separate local PostgreSQL test database, apply all migrations, run DB tests and worker integration tests, then browser tests and package gates. A transport stub proves internal execution behavior; it does not prove live Telegram group delivery.

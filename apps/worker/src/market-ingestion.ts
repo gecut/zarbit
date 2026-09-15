@@ -27,11 +27,7 @@ export type MarketDataStore = Pick<Store, "recordQuote"> &
 export function createMarketIngestion(
   store: MarketDataStore,
   config: { groupId: number; senderId: string },
-  match?: (quote: {
-    compactQuote: number;
-    sourceMessageId: number;
-    announcedAt: Date;
-  }) => Promise<void>,
+  onTradeRecorded?: () => void,
 ) {
   const deduplicator = new BoundedMessageDeduplicator(2_000);
   const activeOrders = new BoundedOrderCache(2_000);
@@ -140,7 +136,7 @@ export function createMarketIngestion(
     onQuoteRecorded: (compactQuote) => {
       latestCompactQuote = compactQuote;
     },
-    match,
+    onTradeRecorded,
   });
 
   const tradingActionHandler = createTradingActionHandler({

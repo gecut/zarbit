@@ -23,7 +23,7 @@ export function createMarketHeadsStore(db: PrismaClient) {
           select: quoteSelect,
         }),
         db.trade.findMany({
-          orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
+          orderBy: { sourceMessageId: "desc" },
           take: 10,
           select: tradeSelect,
         }),

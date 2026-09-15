@@ -1,3 +1,4 @@
+import { lockTradeStream } from "./trade-trigger";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "../prisma/generated/client";
 import type {
@@ -130,6 +131,7 @@ export function createMarketDataStore(
           : BigInt(input.compactPrice) * 1_000n;
 
       return db.$transaction(async (tx) => {
+        await lockTradeStream(tx, chatId);
         await tx.participant.upsert({
           where: { id: input.buyerAlias },
           create: { id: input.buyerAlias },
@@ -168,7 +170,7 @@ export function createMarketDataStore(
     latestTrade: (chatId?: bigint | number): Promise<Trade | null> =>
       db.trade.findFirst({
         where: chatId !== undefined ? { chatId: BigInt(chatId) } : undefined,
-        orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
+        orderBy: { sourceMessageId: "desc" },
       }),
 
     tradesSince: (

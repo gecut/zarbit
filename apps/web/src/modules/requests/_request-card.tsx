@@ -13,24 +13,24 @@ import { formatRelativeDateTime } from "@zarbit/format";
 export interface RequestCardProps {
   row: RequestDetail;
   onDetails: () => void;
-  currentQuote?: number;
+  currentTradePrice?: number;
   compact?: boolean;
 }
 
 export function RequestCard({
   row,
   onDetails,
-  currentQuote,
+  currentTradePrice,
   compact = false,
 }: RequestCardProps) {
   const ActionIcon = actionIcons[row.action];
   const actionLabel = actionLabels[row.action];
   const conditionLabel = conditionShortLabels[row.condition];
 
-  // Calculate distance from live quote
+  // Distance from the last confirmed trade
   const distance =
-    currentQuote != null && Number.isFinite(currentQuote)
-      ? row.targetPrice - currentQuote
+    currentTradePrice != null && Number.isFinite(currentTradePrice)
+      ? row.targetPrice - currentTradePrice
       : null;
 
   const isTriggeredOrInRange =
@@ -66,19 +66,20 @@ export function RequestCard({
             size="sm"
             variant="ghost"
             onPress={onDetails}
-            aria-label={`جزئیات ${actionLabel} در مظنه ${formatNumber(row.targetPrice)}`}
+            aria-label={`جزئیات ${actionLabel} با قیمت هدف ${formatNumber(row.targetPrice)}`}
           >
             جزئیات
           </Button>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span>
-            مظنه {row.condition === "LTE" ? "کمتر یا مساوی" : "بیشتر یا مساوی"}{" "}
+            آخرین معامله{" "}
+            {row.condition === "LTE" ? "کمتر یا مساوی" : "بیشتر یا مساوی"}{" "}
             <b className="tabular-nums">{formatNumber(row.targetPrice)}</b>
           </span>
           {distance != null && row.status === "ACTIVE" && (
             <span className="text-muted tabular-nums">
-              فاصله هدف:{" "}
+              فاصله تا آخرین معامله:{" "}
               <bdi dir="ltr">
                 {distance > 0 ? "+" : ""}
                 {formatNumber(distance)}

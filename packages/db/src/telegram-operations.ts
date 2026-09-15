@@ -154,7 +154,7 @@ export function createTelegramOperationStore(
                   userId,
                   status: "ACTIVE",
                   deliveryStartedAt: null,
-                  executionPhase: { in: ["WAITING_QUOTE", "CLAIMED"] },
+                  executionPhase: { in: ["WAITING_TRADE", "CLAIMED"] },
                 },
                 data: {
                   status: "CANCELLED",

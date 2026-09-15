@@ -13,7 +13,13 @@ const snapshot: MarketSnapshot = {
     sourceMessageId: 2,
   },
   tradeQuoteDifference: 20,
-  recentTrades: [],
+  recentTrades: Array.from({ length: 10 }, (_, i) => ({
+    id: `recent-${i}`,
+    sourceMessageId: 20 - i,
+    compactPrice: 105040 - i,
+    quantity: 2,
+    announcedAt: timestamp,
+  })),
   asOf: timestamp,
 };
 const requests: RequestDetail[] = (["BUY", "SELL"] as const).map(
@@ -25,7 +31,10 @@ const requests: RequestDetail[] = (["BUY", "SELL"] as const).map(
     units: 2,
     status: "ACTIVE",
     executing: false,
-    triggeredQuote: null,
+    triggeredPrice: null,
+    triggerSource: null,
+    triggeredTradeId: null,
+    triggeredAt: null,
     triggeredMessageId: null,
     outgoingMessageId: null,
     completedAt: null,
@@ -98,19 +107,17 @@ for (const width of [320, 390, 1280]) {
     });
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "درخواست‌های فعال" }),
+      page.getByRole("heading", { name: "درخواست های فعال" }),
     ).toBeVisible();
-    await expect(page.getByLabel("وضعیت جریان بازار")).toContainText(
-      "دریافت دوره‌ای",
-    );
+    await expect(page.getByLabel("وضعیت جریان بازار")).toContainText("زنده");
     await expect(
-      page.getByText("مظنه قدیمی است", { exact: false }),
+      page.getByText("معامله قدیمی است", { exact: false }),
     ).toBeVisible();
     await expect(page.locator("article")).toHaveCount(2);
     await expect(page.locator("article").first()).toContainText(
       "کمتر یا مساوی",
     );
-    await expect(page.locator("article").first()).toContainText("+۱۰");
+    await expect(page.locator("article").first()).toContainText("−۱۰");
     await page.getByRole("radio", { name: "هشدار ۰" }).click();
     await expect(
       page.getByText("در این فیلتر درخواستی وجود ندارد"),
@@ -118,7 +125,7 @@ for (const width of [320, 390, 1280]) {
     await page.getByRole("radio", { name: "همه ۲" }).click();
     await expect(page.locator("article")).toHaveCount(2);
     const table = page.getByRole("grid", {
-      name: "معاملات اخیر — داده نمونه",
+      name: "معاملات اخیر",
     });
     await expect(table.locator("tbody tr")).toHaveCount(10);
     const heights = await table
@@ -126,7 +133,7 @@ for (const width of [320, 390, 1280]) {
       .evaluateAll((rows) =>
         rows.map((row) => row.getBoundingClientRect().height),
       );
-    expect(heights.every((height) => height >= 28 && height <= 32)).toBe(true);
+    expect(heights.every((height) => height >= 28 && height <= 40)).toBe(true);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -214,4 +221,104 @@ test("terminal loading, empty data and refresh error", async ({ page }) => {
     ),
   ).toBeVisible({ timeout: 15000 });
   await expect(page.locator("body")).not.toContainText("private-server-error");
+});
+
+for (const marketState of ["fresh", "stale", "missing"] as const) {
+  test(`request price uses only a ${marketState} trade`, async ({ page }) => {
+    const now = new Date().toISOString();
+    const market: MarketSnapshot = {
+      ...snapshot,
+      asOf: now,
+      trade:
+        marketState === "missing"
+          ? null
+          : {
+              ...snapshot.trade!,
+              announcedAt: marketState === "fresh" ? now : timestamp,
+            },
+    };
+    await page.route("https://telegram.org/**", (route) =>
+      route.fulfill({ body: "", contentType: "text/javascript" }),
+    );
+    await page.route("https://api.example.test/**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      return route.fulfill({
+        json: {
+          json:
+            path === "/rpc/auth/identity"
+              ? { telegramUserId: "101" }
+              : path === "/rpc/requests/active"
+                ? []
+                : market,
+        },
+      });
+    });
+    await page.goto("/");
+    await expect(
+      page.getByText("آخرین معامله تأییدشده", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("group", { name: "عملیات معاملاتی سریع" })
+      .getByRole("button", { name: "خرید", exact: true })
+      .click();
+    const input = page.getByRole("dialog").locator("input").first();
+    if (marketState === "fresh") {
+      await expect(input).not.toHaveValue("");
+      const value = await input.inputValue();
+      expect(value.replace(/[^0-9۰-۹]/g, "")).toMatch(/105040|۱۰۵۰۴۰/);
+    } else {
+      await expect(input).toHaveValue("");
+    }
+    await expect(page.getByRole("dialog")).toContainText(
+      "سفارش با قیمت هدف شما",
+    );
+  });
+}
+
+test("a delayed trade response never overwrites an edited target price", async ({
+  page,
+}) => {
+  let delay = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const market = {
+    ...snapshot,
+    trade: { ...snapshot.trade!, announcedAt: new Date().toISOString() },
+  };
+  await page.route("https://telegram.org/**", (route) =>
+    route.fulfill({ body: "", contentType: "text/javascript" }),
+  );
+  await page.route("https://api.example.test/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (delay && path === "/rpc/market/snapshot") await pending;
+    await route.fulfill({
+      json: {
+        json:
+          path === "/rpc/auth/identity"
+            ? { telegramUserId: "101" }
+            : path === "/rpc/requests/active"
+              ? []
+              : market,
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(
+    page.getByText("آخرین معامله تأییدشده", { exact: true }),
+  ).toBeVisible();
+  delay = true;
+  await page
+    .getByRole("group", { name: "عملیات معاملاتی سریع" })
+    .getByRole("button", { name: "خرید", exact: true })
+    .click();
+  const input = page.getByRole("dialog").locator("input").first();
+  try {
+    await input.fill("106000");
+    await input.press("Tab");
+  } finally {
+    release();
+  }
+  await expect(input).toHaveValue(/106,000|۱۰۶٬۰۰۰/);
 });

@@ -3,11 +3,19 @@ import test from "node:test";
 
 import { createPrismaClient, createStore } from "../src/index";
 
+const testUrl = new URL(process.env.DATABASE_URL ?? "http://missing");
+if (
+  !["127.0.0.1", "localhost"].includes(testUrl.hostname) ||
+  !testUrl.pathname.endsWith("_test")
+) {
+  throw new Error("PostgreSQL tests require a local database ending in _test");
+}
 const prisma = createPrismaClient();
 let currentTime = new Date("2026-09-07T12:00:00.000Z");
 const store = createStore(prisma, () => currentTime);
 
 async function clean() {
+  await prisma.tradeRequestCursor.deleteMany();
   await prisma.quoteHistory.deleteMany();
   await prisma.request.deleteMany();
   await prisma.telegramOperation.deleteMany();
@@ -181,7 +189,14 @@ test("request recovery atomically returns only newly uncertain executions", asyn
   await prisma.request.createMany({
     data: [
       { ...base, id: "unclaimed", status: "ACTIVE" },
-      { ...base, id: "running", status: "ACTIVE", claimToken: "claim-a" },
+      {
+        ...base,
+        id: "running",
+        status: "ACTIVE",
+        claimToken: "claim-a",
+        executionPhase: "SENDING",
+        deliveryStartedAt: currentTime,
+      },
       { ...base, id: "finished", status: "DONE", claimToken: "claim-b" },
       { ...base, id: "uncertain", status: "UNKNOWN", claimToken: "claim-c" },
     ],
@@ -467,4 +482,243 @@ test("retention removes completed metadata after 24h and never drops pending cle
     (await prisma.telegramOperation.findFirstOrThrow()).type,
     "revoke",
   );
+});
+
+async function tradeRequest(
+  action: "BUY" | "SELL" | "ALERT" = "BUY",
+  condition: "LTE" | "GTE" = "LTE",
+) {
+  const owner = await store.user({
+    telegramUserId: `trade-user-${crypto.randomUUID()}`,
+  });
+  await prisma.telegramSession.create({
+    data: { userId: owner.id, state: "ACTIVE", runtimeReady: true },
+  });
+  const row = await store.createRequest(owner.id, {
+    action,
+    condition,
+    targetPrice: 100000,
+    units: action === "ALERT" ? null : 2,
+  });
+  return row;
+}
+async function receipt(
+  sourceMessageId: number,
+  compactPrice = 99990,
+  announcedAt = currentTime,
+) {
+  return store.recordTrade({
+    chatId: -1001,
+    sourceMessageId,
+    compactPrice,
+    quantity: 1,
+    buyerAlias: "test-buyer",
+    sellerAlias: "test-seller",
+    announcedAt,
+  });
+}
+function advance(ms = 1000) {
+  currentTime = new Date(currentTime.getTime() + ms);
+}
+
+test("trade matching claims all actions once and preserves target prices", async () => {
+  await store.initializeTradeRequests(-1001);
+  const rows = await Promise.all([
+    tradeRequest("BUY"),
+    tradeRequest("SELL"),
+    tradeRequest("ALERT"),
+  ]);
+  advance();
+  await Promise.all(Array.from({ length: 5 }, () => receipt(1)));
+  await Promise.all(
+    Array.from({ length: 5 }, () => store.claimTradeRequests(-1001)),
+  );
+  const pending = await store.pendingTradeRequests();
+  assert.equal(pending.length, 3);
+  for (const row of pending) {
+    assert.equal(row.targetPrice, 100000);
+    assert.equal(row.triggeredPrice, 99990);
+    assert.equal(row.triggerSource, "TRADE");
+    assert.equal(row.triggeredMessageId, 1);
+    const attempts = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        store.markSending(row.id, row.claimToken!),
+      ),
+    );
+    assert.equal(attempts.filter((attempt) => attempt.count).length, 1);
+  }
+  assert.equal(await prisma.trade.count(), 1);
+  assert.equal(rows.length, 3);
+});
+
+test("trade freshness includes exactly 60 seconds and rejects older or future receipts", async () => {
+  await store.initializeTradeRequests(-1001);
+  const row = await tradeRequest();
+  advance(120000);
+  for (const [id, age, expected] of [
+    [1, 60001, 0],
+    [2, -1, 0],
+    [3, 60000, 1],
+  ] as const) {
+    await receipt(id, 100000, new Date(currentTime.getTime() - age));
+    await store.claimTradeRequests(-1001);
+    assert.equal((await store.pendingTradeRequests()).length, expected);
+  }
+  const claimed = await store.request(row.userId, row.id);
+  advance(1);
+  assert.equal(
+    (await store.markSending(row.id, claimed!.claimToken!)).count,
+    0,
+  );
+  assert.equal(
+    (await store.request(row.userId, row.id))?.executionPhase,
+    "WAITING_TRADE",
+  );
+});
+
+test("creation and editing fence existing, same-second and delayed historical trades", async () => {
+  await store.initializeTradeRequests(-1001);
+  await receipt(1);
+  const row = await tradeRequest();
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 0);
+  await receipt(2); // Same Telegram second as creation.
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 0);
+  advance();
+  await store.editRequest(row.userId, row.id, {
+    action: "BUY",
+    condition: "LTE",
+    targetPrice: 100000,
+    units: 2,
+  });
+  await receipt(3, 99990, new Date(currentTime.getTime() - 1000));
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 0);
+  advance();
+  await receipt(4);
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 1);
+});
+
+test("newest message wins over timestamps and older receipts cannot regress matching or snapshot", async () => {
+  await store.initializeTradeRequests(-1001);
+  await tradeRequest();
+  advance(3000);
+  await receipt(10, 100010, new Date(currentTime.getTime() - 1000));
+  await receipt(9, 99990, currentTime);
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 0);
+  assert.equal(
+    (await store.marketHeads()).recentTrades[0]?.sourceMessageId,
+    10,
+  );
+  assert.equal((await store.latestTrade(-1001))?.sourceMessageId, 10);
+});
+
+test("send revalidates latest price and returns invalid claims to waiting", async () => {
+  await store.initializeTradeRequests(-1001);
+  const row = await tradeRequest();
+  advance();
+  await receipt(1);
+  await store.claimTradeRequests(-1001);
+  const first = (await store.pendingTradeRequests())[0]!;
+  advance();
+  await receipt(2, 100010);
+  assert.equal((await store.markSending(row.id, first.claimToken!)).count, 0);
+  assert.equal((await store.request(row.userId, row.id))?.claimToken, null);
+  advance();
+  await receipt(3, 99980);
+  await store.claimTradeRequests(-1001);
+  const next = (await store.pendingTradeRequests())[0]!;
+  advance();
+  await receipt(4, 99970);
+  const sending = await store.markSending(row.id, next.claimToken!);
+  assert.equal(sending.row?.triggeredPrice, 99970);
+  assert.equal(sending.row?.triggeredMessageId, 4);
+  assert.equal(sending.row?.targetPrice, 100000);
+});
+
+test("restart recovers persisted trades and unsent claims but never retries ambiguous sends", async () => {
+  await store.initializeTradeRequests(-1001);
+  const row = await tradeRequest();
+  advance();
+  await receipt(1); // Process stops before matching.
+  const restarted = createStore(prisma, () => currentTime);
+  await restarted.initializeTradeRequests(-1001);
+  await restarted.recoverRequests();
+  await restarted.claimTradeRequests(-1001);
+  const claimed = (await restarted.pendingTradeRequests())[0]!;
+  assert.equal(claimed.id, row.id);
+  assert.deepEqual(await restarted.recoverRequests(), []); // Stops after claiming, before send.
+  assert.equal(
+    (await restarted.pendingTradeRequests())[0]?.claimToken,
+    claimed.claimToken,
+  );
+  await restarted.markSending(row.id, claimed.claimToken!);
+  assert.equal((await restarted.recoverRequests())[0]?.status, "UNKNOWN"); // Send may have happened.
+  await restarted.claimTradeRequests(-1001);
+  assert.equal((await restarted.pendingTradeRequests()).length, 0);
+  assert.equal(
+    (await restarted.markSending(row.id, claimed.claimToken!)).count,
+    0,
+  );
+});
+
+test("cancel and manual execution compete safely with automatic claiming", async () => {
+  await store.initializeTradeRequests(-1001);
+  const row = await tradeRequest();
+  advance();
+  await receipt(1);
+  await Promise.all([
+    store.claimTradeRequests(-1001),
+    store.claimRequest(row.id, row.userId, "manual-token"),
+  ]);
+  const claimed = await store.request(row.userId, row.id);
+  assert.ok(claimed?.claimToken);
+  const results = await Promise.allSettled([
+    store.cancelRequest(row.userId, row.id),
+    store.markSending(row.id, claimed.claimToken),
+  ]);
+  const final = await store.request(row.userId, row.id);
+  assert.ok(
+    final?.status === "CANCELLED" || final?.executionPhase === "SENDING",
+  );
+  assert.equal(
+    results.filter((r) => r.status === "fulfilled").length >= 1,
+    true,
+  );
+  assert.equal((await store.markSending(row.id, claimed.claimToken)).count, 0);
+});
+
+test("claim and cursor update roll back together on a database failure", async () => {
+  await store.initializeTradeRequests(-1001);
+  await tradeRequest();
+  advance();
+  await receipt(1);
+  await prisma.$executeRawUnsafe(
+    `CREATE FUNCTION fail_trade_cursor() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test cursor failure'; END $$`,
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE TRIGGER test_cursor_failure BEFORE UPDATE ON "TradeRequestCursor" FOR EACH ROW EXECUTE FUNCTION fail_trade_cursor()`,
+  );
+  try {
+    await assert.rejects(store.claimTradeRequests(-1001));
+    assert.equal((await store.pendingTradeRequests()).length, 0);
+    assert.equal(
+      (
+        await prisma.tradeRequestCursor.findUniqueOrThrow({
+          where: { chatId: -1001n },
+        })
+      ).sourceMessageId,
+      0,
+    );
+  } finally {
+    await prisma.$executeRawUnsafe(
+      'DROP TRIGGER test_cursor_failure ON "TradeRequestCursor"',
+    );
+    await prisma.$executeRawUnsafe("DROP FUNCTION fail_trade_cursor()");
+  }
+  await store.claimTradeRequests(-1001);
+  assert.equal((await store.pendingTradeRequests()).length, 1);
 });

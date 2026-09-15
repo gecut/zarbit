@@ -158,12 +158,26 @@ export function RequestDetailsDrawer({
               value={formatDate(request.completedAt)}
             />
             <DetailRow
-              label="قیمت اجرا"
+              label="قیمت محرک"
               value={
-                request.triggeredQuote
-                  ? formatNumber(request.triggeredQuote)
+                request.triggeredPrice
+                  ? formatNumber(request.triggeredPrice)
                   : "—"
               }
+            />
+            <DetailRow
+              label="منبع محرک"
+              value={
+                request.triggerSource === "TRADE"
+                  ? "معاملهٔ تأییدشده"
+                  : request.triggerSource === "QUOTE"
+                    ? "مظنه رسمی"
+                    : "—"
+              }
+            />
+            <DetailRow
+              label="زمان محرک"
+              value={formatDate(request.triggeredAt)}
             />
             {request.failureReason ? (
               <DetailRow label="علت خطا" value={request.failureReason} />

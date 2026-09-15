@@ -1,3 +1,12 @@
+import { randomUUID } from "node:crypto";
+import { isFreshTrade } from "@zarbit/domain";
+import {
+  eligibleTrade,
+  emptyTrigger,
+  latestGroupTrade,
+  lockTradeStream,
+  tradeTrigger,
+} from "./trade-trigger";
 import {
   AppError,
   type CreateRequestInput,
@@ -29,7 +38,7 @@ export function requestView(row: RequestViewRow): RequestDetail {
     row.executionPhase ??
     (
       {
-        ACTIVE: "WAITING_QUOTE",
+        ACTIVE: "WAITING_TRADE",
         DONE: "DONE",
         FAILED: "FAILED",
         CANCELLED: "CANCELLED",
@@ -51,7 +60,10 @@ export function requestView(row: RequestViewRow): RequestDetail {
     resolutionState:
       row.resolutionState ??
       (row.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE"),
-    triggeredQuote: row.triggeredQuote,
+    triggeredPrice: row.triggeredPrice,
+    triggerSource: row.triggerSource,
+    triggeredTradeId: row.triggeredTradeId,
+    triggeredAt: row.triggeredAt?.toISOString() ?? null,
     triggeredMessageId: row.triggeredMessageId,
     outgoingMessageId: row.outgoingMessageId,
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -96,6 +108,13 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         );
       return work(tx);
     });
+  const arm = async (tx: Prisma.TransactionClient) => {
+    const head = await tx.trade.findFirst({
+      orderBy: { sourceMessageId: "desc" },
+      select: { sourceMessageId: true },
+    });
+    return { armedAt: now(), armedAfterMessageId: head?.sourceMessageId ?? 0 };
+  };
   return {
     request: (userId: string, id: string) =>
       db.request.findFirst({ where: { userId, id } }),
@@ -153,14 +172,14 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       };
     },
     createRequest: (userId: string, input: CreateRequestInput) =>
-      connected(userId, (tx) =>
-        tx.request.create({ data: { userId, ...input } }),
+      connected(userId, async (tx) =>
+        tx.request.create({ data: { userId, ...input, ...(await arm(tx)) } }),
       ),
     editRequest: (userId: string, id: string, input: CreateRequestInput) =>
       connected(userId, async (tx) => {
         const result = await tx.request.updateMany({
           where: { id, userId, status: "ACTIVE", claimToken: null },
-          data: input,
+          data: { ...input, ...(await arm(tx)), ...emptyTrigger },
         });
         if (!result.count) throw conflict();
         return tx.request.findUniqueOrThrow({ where: { id } });
@@ -174,7 +193,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             userId,
             status: "ACTIVE",
             deliveryStartedAt: null,
-            executionPhase: { in: ["WAITING_QUOTE", "CLAIMED"] },
+            executionPhase: { in: ["WAITING_TRADE", "CLAIMED"] },
           },
           data: {
             status: "CANCELLED",
@@ -186,51 +205,98 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         if (!result.count) throw conflict();
         return tx.request.findUniqueOrThrow({ where: { id } });
       }),
-    requestCandidates: (quote: number) =>
+    initializeTradeRequests: (groupId: number | bigint) =>
+      db.$transaction(async (tx) => {
+        const chatId = BigInt(groupId);
+        await lockTradeStream(tx, chatId);
+        const latest = await latestGroupTrade(tx, chatId);
+        await tx.tradeRequestCursor.upsert({
+          where: { chatId },
+          create: { chatId, sourceMessageId: latest?.sourceMessageId ?? 0 },
+          update: {},
+        });
+      }),
+    claimTradeRequests: (groupId: number | bigint) =>
+      db.$transaction(async (tx) => {
+        const chatId = BigInt(groupId);
+        await lockTradeStream(tx, chatId);
+        const cursor = await tx.tradeRequestCursor.findUniqueOrThrow({
+          where: { chatId },
+        });
+        const trade = await latestGroupTrade(tx, chatId);
+        if (!trade || trade.sourceMessageId <= cursor.sourceMessageId) return;
+        const fresh = isFreshTrade(trade.announcedAt, now());
+        let claimed = 0;
+        if (fresh) {
+          const candidates = await tx.request.findMany({
+            where: {
+              status: "ACTIVE",
+              executionPhase: "WAITING_TRADE",
+              claimToken: null,
+              armedAt: { lt: trade.announcedAt },
+              armedAfterMessageId: { lt: trade.sourceMessageId },
+              OR: [
+                { condition: "GTE", targetPrice: { lte: trade.compactPrice } },
+                { condition: "LTE", targetPrice: { gte: trade.compactPrice } },
+              ],
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          });
+          for (const row of candidates) {
+            const result = await tx.request.updateMany({
+              where: {
+                id: row.id,
+                status: "ACTIVE",
+                executionPhase: "WAITING_TRADE",
+                claimToken: null,
+                condition: row.condition,
+                targetPrice: row.targetPrice,
+                action: row.action,
+                units: row.units,
+                updatedAt: row.updatedAt,
+                armedAt: row.armedAt,
+                armedAfterMessageId: row.armedAfterMessageId,
+              },
+              data: {
+                claimToken: randomUUID(),
+                executionPhase: "CLAIMED",
+                ...tradeTrigger(trade),
+              },
+            });
+            claimed += result.count;
+          }
+        }
+        await tx.tradeRequestCursor.update({
+          where: { chatId },
+          data: { sourceMessageId: trade.sourceMessageId },
+        });
+        return {
+          messageId: trade.sourceMessageId,
+          claimed,
+          reason: fresh ? "EVALUATED" : "STALE_OR_FUTURE",
+        };
+      }),
+    pendingTradeRequests: () =>
       db.request.findMany({
         where: {
           status: "ACTIVE",
-          claimToken: null,
-          OR: [
-            { condition: "GTE", targetPrice: { lte: quote } },
-            { condition: "LTE", targetPrice: { gte: quote } },
-          ],
+          executionPhase: "CLAIMED",
+          deliveryStartedAt: null,
+          triggerSource: "TRADE",
+          claimToken: { not: null },
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
-    claimRequest: async (
-      id: string,
-      userId: string,
-      token: string,
-      quote?: { compactQuote: number; sourceMessageId: number },
-    ) => {
+    claimRequest: async (id: string, userId: string, token: string) => {
       const result = await db.request.updateMany({
         where: {
           id,
           userId,
           status: "ACTIVE",
+          executionPhase: "WAITING_TRADE",
           claimToken: null,
-          ...(quote
-            ? {
-                OR: [
-                  {
-                    condition: "GTE" as const,
-                    targetPrice: { lte: quote.compactQuote },
-                  },
-                  {
-                    condition: "LTE" as const,
-                    targetPrice: { gte: quote.compactQuote },
-                  },
-                ],
-              }
-            : {}),
         },
-        data: {
-          claimToken: token,
-          executionPhase: "CLAIMED",
-          triggeredQuote: quote?.compactQuote,
-          triggeredMessageId: quote?.sourceMessageId,
-        },
+        data: { claimToken: token, executionPhase: "CLAIMED", ...emptyTrigger },
       });
       return result.count
         ? db.request.findUniqueOrThrow({ where: { id } })
@@ -257,40 +323,91 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
           completedAt: now(),
         },
       }),
-    markSending: (id: string, claimToken: string, startedAt = now()) =>
+    markSending: (id: string, claimToken: string) =>
       db.$transaction(async (tx) => {
-        const row = await tx.request.findUnique({
-          where: { id },
-          select: { userId: true },
-        });
-        if (!row) return { count: 0 };
-        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${row.userId} FOR UPDATE`;
+        const initial = await tx.request.findUnique({ where: { id } });
+        if (!initial) return { count: 0, row: null };
+        if (initial.triggeredChatId !== null)
+          await lockTradeStream(tx, initial.triggeredChatId);
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${initial.userId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "Request" WHERE "id" = ${id} FOR UPDATE`;
+        const row = await tx.request.findUniqueOrThrow({ where: { id } });
+        if (
+          row.claimToken !== claimToken ||
+          row.status !== "ACTIVE" ||
+          row.executionPhase !== "CLAIMED" ||
+          row.deliveryStartedAt !== null
+        )
+          return { count: 0, row: null };
         const session = await tx.telegramSession.findUnique({
           where: { userId: row.userId },
         });
         if (!session || session.state !== "ACTIVE" || !session.runtimeReady)
-          return { count: 0 };
-        return tx.request.updateMany({
+          throw new AppError("SESSION_REQUIRED", "اتصال تلگرام فعال نیست.");
+        let startedAt = now();
+        let trigger: Partial<ReturnType<typeof tradeTrigger>> = {};
+        if (row.triggerSource === "TRADE") {
+          const trade =
+            row.triggeredChatId === null
+              ? null
+              : await latestGroupTrade(tx, row.triggeredChatId);
+          startedAt = now();
+          if (!eligibleTrade(row, trade, startedAt)) {
+            await tx.request.update({
+              where: { id },
+              data: {
+                executionPhase: "WAITING_TRADE",
+                claimToken: null,
+                ...emptyTrigger,
+              },
+            });
+            return { count: 0, row: null, reason: "TRADE_INVALID" as const };
+          }
+          trigger = tradeTrigger(trade);
+        }
+        const started = await tx.request.update({
+          where: { id },
+          data: {
+            ...trigger,
+            executionPhase: "SENDING",
+            deliveryStartedAt: startedAt,
+          },
+        });
+        return { count: 1, row: started };
+      }),
+    recoverRequests: () =>
+      db.$transaction(async (tx) => {
+        // Claims without a send can be safely resumed. Legacy/manual claims are rearmed.
+        await tx.request.updateMany({
           where: {
-            id,
-            claimToken,
             status: "ACTIVE",
             executionPhase: "CLAIMED",
             deliveryStartedAt: null,
+            OR: [{ triggerSource: null }, { triggerSource: "QUOTE" }],
           },
-          data: { executionPhase: "SENDING", deliveryStartedAt: startedAt },
+          data: {
+            executionPhase: "WAITING_TRADE",
+            claimToken: null,
+            ...emptyTrigger,
+          },
         });
-      }),
-    recoverRequests: () =>
-      db.request.updateManyAndReturn({
-        where: { status: "ACTIVE", claimToken: { not: null } },
-        data: {
-          status: "UNKNOWN",
-          executionPhase: "UNKNOWN",
-          resolutionState: "UNRESOLVED",
-          completedAt: now(),
-          failureReason: "سرویس هنگام اجرا متوقف شد؛ نتیجه ارسال مشخص نیست.",
-        },
+        return tx.request.updateManyAndReturn({
+          where: {
+            status: "ACTIVE",
+            OR: [
+              { executionPhase: "SENDING" },
+              { deliveryStartedAt: { not: null } },
+            ],
+          },
+          data: {
+            status: "UNKNOWN",
+            executionPhase: "UNKNOWN",
+            resolutionState: "UNRESOLVED",
+            completedAt: now(),
+            unknownReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
+            failureReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
+          },
+        });
       }),
     pruneRequests: () =>
       db.request.deleteMany({

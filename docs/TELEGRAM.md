@@ -29,17 +29,17 @@ The worker's connected sessions subscribe to incoming messages in `TELEGRAM_GROU
 
 The worker executes user trading requests (`Request`):
 
-1. **Matching**: When a fresh quote ($\le 60$s old) is recorded, the worker checks pending `WAITING_QUOTE` requests against their target price and condition (`GTE` or `LTE`).
+1. **Matching**: When a confirmed trade is recorded, the worker durably claims eligible `WAITING_TRADE` requests. Both initial matching and the atomic transition to sending require a trade at most 60 seconds old, newer than request creation/editing. Quotes never trigger requests. See `docs/OPERATIONS.md` for restart recovery.
 2. **Atomic Claim**: The request is transitioned to `CLAIMED` inside a database transaction using an atomic update with a unique `claimToken`.
 3. **Delivery**: The session transitions the request to `SENDING` and posts the formatted order command (e.g. `1خ105020`) to the Telegram group using MTProto.
 4. **Completion**: Upon successful delivery, the request is marked `DONE` with `outgoingMessageId`. If transmission fails, it transitions to `FAILED` with error metadata.
-5. **Immediate Execution («ارسال فوری»)**: Users may bypass quote matching via `requests.forceSend`, which claims and sends the order immediately.
+5. **Immediate Execution («ارسال فوری»)**: Users may bypass trade matching via `requests.forceSend`, which claims and sends the order immediately.
 
 ## Session lifecycle and failure handling
 
 - **Network Interruption**: Network outages retain session authorization files. Reconnection uses exponential backoff (from 10 seconds up to a 5-minute ceiling) and marks connection status `DEGRADED`.
 - **Revocation**: Disconnect requests immediately record `REVOKING` in PostgreSQL. The worker then logs out the MTProto client, closes the SQLite database, deletes the session files (`<hex>.sqlite`), and marks the state `REVOKED`.
-- **Offline Resilience**: Session cancellation and revocation are transactionally committed to PostgreSQL by the server before asynchronous worker dispatch. Unsent `WAITING_QUOTE` or `CLAIMED` requests are cancelled under database row locks, guaranteeing user logout succeeds even if the worker is restarting.
+- **Offline Resilience**: Session cancellation and revocation are transactionally committed to PostgreSQL by the server before asynchronous worker dispatch. Unsent `WAITING_TRADE` or `CLAIMED` requests are cancelled under database row locks, guaranteeing user logout succeeds even if the worker is restarting.
 
 ## Asynchronous operations (Contract v3)
 

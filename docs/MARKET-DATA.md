@@ -267,7 +267,7 @@ stateDiagram-v2
 The Home terminal reads market data via `GET /rpc/market.snapshot`:
 
 - `QuoteHistory` provides the authoritative official quote; completed bot receipts in `Trade` provide the latest trade and recent trades list.
-- The server (`MarketState`) evaluates market heads via `store.marketHeads()`, querying the latest quote and up to 10 recent completed trades ordered by `[announcedAt DESC, sourceMessageId DESC]`.
+- The server (`MarketState`) evaluates market heads via `store.marketHeads()`, querying the latest quote and up to 10 recent completed trades ordered by `sourceMessageId DESC`.
 - Market heads are cached in memory on the server (5-second cache when offline/degraded, 60-second cache when connected).
 - The web client (`useMarket`) polls `market.snapshot` every 3 seconds via TanStack Query (`marketPolling`).
 - Monotonic head merging (`mergeMarketSnapshot`) prevents late HTTP responses from regressing visible market heads on the client.
@@ -294,4 +294,4 @@ A strict distinction is maintained between **database retention** and **analytic
 
 ### 6.3 QuoteHistory retention
 
-QuoteHistory and Trade are retained permanently. Retaining raw QuoteHistory preserves canonical reference data for audit, debugging, and analytics. The two heads and their revision never replace the Quote used by Request matching.
+QuoteHistory and Trade are retained permanently. Retaining raw QuoteHistory preserves canonical reference data for audit, debugging, and analytics. Official quotes remain the reference for shorthand message parsing. Request matching uses only confirmed trades, independently of dashboard caching.

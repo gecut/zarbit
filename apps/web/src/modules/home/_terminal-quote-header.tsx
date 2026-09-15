@@ -39,8 +39,8 @@ export function TerminalQuoteHeader({
   error,
   onRefresh,
 }: TerminalQuoteHeaderProps) {
-  const quote = data?.quote;
-  const trade = data?.trade;
+  const primary = data?.trade;
+  const secondary = data?.quote;
   const difference =
     data?.tradeQuoteDifference != null
       ? marketDifferenceDetails(data.tradeQuoteDifference)
@@ -50,7 +50,7 @@ export function TerminalQuoteHeader({
     <Card variant="tertiary">
       <Card.Header>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Card.Title>مظنه رسمی طلا</Card.Title>
+          <Card.Title>آخرین معامله تأییدشده</Card.Title>
           <div className="flex items-center gap-2">
             <span role="status" aria-label="وضعیت جریان بازار">
               <Chip
@@ -96,22 +96,22 @@ export function TerminalQuoteHeader({
             <div className="flex flex-col gap-1">
               <div className="flex items-baseline gap-1">
                 <strong className="text-3xl font-bold sm:text-4xl">
-                  {quote
-                    ? formatTomanFromCompactPrice(quote.compactPrice)
+                  {primary
+                    ? formatTomanFromCompactPrice(primary.compactPrice)
                     : "ثبت‌نشده"}
                 </strong>
-                {quote && <TomanIcon className="text-muted size-6" />}
+                {primary && <TomanIcon className="text-muted size-6" />}
               </div>
 
-              <QuoteAge announcedAt={quote?.announcedAt} asOf={data?.asOf} />
+              <QuoteAge announcedAt={primary?.announcedAt} asOf={data?.asOf} />
             </div>
 
-            {quote && (
+            {primary && (
               <time
                 className="text-muted text-xs tabular-nums"
-                dateTime={quote.announcedAt}
+                dateTime={primary.announcedAt}
               >
-                {formatTime(quote.announcedAt)}
+                {formatTime(primary.announcedAt)}
               </time>
             )}
           </div>
@@ -132,14 +132,14 @@ export function TerminalQuoteHeader({
 
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="text-muted">آخرین معامله تأییدشده</span>
+            <span className="text-muted">مظنه رسمی طلا</span>
 
-            {trade && (
+            {secondary && (
               <time
                 className="text-muted tabular-nums"
-                dateTime={trade.announcedAt}
+                dateTime={secondary.announcedAt}
               >
-                {formatTime(trade.announcedAt)}
+                {formatTime(secondary.announcedAt)}
               </time>
             )}
           </div>
@@ -147,15 +147,15 @@ export function TerminalQuoteHeader({
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1 text-lg">
               <b className="font-semibold">
-                {trade
-                  ? formatTomanFromCompactPrice(trade.compactPrice)
+                {secondary
+                  ? formatTomanFromCompactPrice(secondary.compactPrice)
                   : "در انتظار ثبت"}
               </b>
 
-              {trade && <TomanIcon className="text-muted mb-0.5 size-4" />}
+              {secondary && <TomanIcon className="text-muted mb-0.5 size-4" />}
             </span>
 
-            {trade && difference && (
+            {secondary && difference && (
               <span
                 className={cn(
                   "text-sm",
@@ -165,7 +165,7 @@ export function TerminalQuoteHeader({
                       ? "text-danger"
                       : "text-muted",
                 )}
-                title="مقایسه با مظنه فعلی، نه مظنه زمان معامله"
+                title="اختلاف آخرین معامله با مظنه رسمی فعلی"
               >
                 {difference.text}
               </span>

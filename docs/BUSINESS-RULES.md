@@ -65,3 +65,7 @@ rounded per-trade amounts. API points remain unit-weighted quote differences
 rounded to two decimals for display. No raw trades or schemas are rewritten.
 Deploy server and web together, restart server caches, and reload existing web
 tabs: older web bundles still multiply monetary P&L by 100.
+
+## Automatic request trigger
+
+Only a confirmed Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses targetPrice, not triggeredPrice. SENDING with an uncertain outcome must never be automatically retried.

@@ -1,6 +1,5 @@
 import type { Store } from "@zarbit/db";
 import {
-  isFreshQuote,
   parseCanonicalBotOrder,
   parseCanonicalBotQuote,
   parseTradeReceipt,
@@ -21,11 +20,7 @@ export interface AuthoritativeHandlerDependencies {
     canonical: CanonicalOrderObservation,
   ) => Promise<void>;
   readonly onQuoteRecorded?: (compactQuote: number) => void;
-  readonly match?: (quote: {
-    compactQuote: number;
-    sourceMessageId: number;
-    announcedAt: Date;
-  }) => Promise<void>;
+  readonly onTradeRecorded?: () => void;
 }
 
 export function createAuthoritativeHandler(
@@ -37,7 +32,7 @@ export function createAuthoritativeHandler(
     activeOrders,
     resolveIdentity,
     onQuoteRecorded,
-    match,
+    onTradeRecorded,
   } = deps;
 
   return async (userId: string, event: QuoteEvent): Promise<void> => {
@@ -65,16 +60,6 @@ export function createAuthoritativeHandler(
           messageId: event.messageId,
           sessionRef: sessionRef(userId),
         });
-        if (
-          (recorded.latestUpdated ?? recorded.historyRecorded) &&
-          isFreshQuote(event.date, receivedAt)
-        ) {
-          await match?.({
-            compactQuote,
-            sourceMessageId: event.messageId,
-            announcedAt: event.date,
-          });
-        }
       } else {
         workerLog.info("telegram.quote.duplicate", {
           chatId: event.chatId,
@@ -117,6 +102,7 @@ export function createAuthoritativeHandler(
       deduplicator.add(event.messageId, "trade");
 
       if (recorded.tradeRecorded) {
+        onTradeRecorded?.();
         workerLog.info("telegram.trade.recorded", {
           buyerAlias: receipt.buyerAlias,
           chatId: event.chatId,

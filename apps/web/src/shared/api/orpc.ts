@@ -1,3 +1,4 @@
+import { mergeMarketQueryData } from "./merge-market-snapshot";
 import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
@@ -109,6 +110,7 @@ export function createRpcUtils(
       snapshot: {
         queryOptions: {
           ...marketPolling,
+          structuralSharing: mergeMarketQueryData,
         },
       },
     },

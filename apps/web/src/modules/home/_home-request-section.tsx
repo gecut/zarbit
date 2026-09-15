@@ -5,10 +5,12 @@ import { ExecutionStrip } from "./_execution-strip";
 import { Card } from "@heroui/react";
 
 interface HomeRequestSectionProps {
-  currentQuote?: number;
+  currentTradePrice?: number;
 }
 
-export function HomeRequestSection({ currentQuote }: HomeRequestSectionProps) {
+export function HomeRequestSection({
+  currentTradePrice,
+}: HomeRequestSectionProps) {
   const [createRequestOpen, setCreateRequestOpen] = useState(false);
   const [createAction, setCreateAction] =
     useState<CreateRequestInput["action"]>("BUY");
@@ -29,7 +31,7 @@ export function HomeRequestSection({ currentQuote }: HomeRequestSectionProps) {
         createOpen={createRequestOpen}
         onOpenCreateChange={setCreateRequestOpen}
         initialAction={createAction}
-        currentQuote={currentQuote}
+        currentTradePrice={currentTradePrice}
       />
     </Card>
   );

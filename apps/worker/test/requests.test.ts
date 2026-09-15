@@ -1,72 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Store } from "@zarbit/db";
-
 import { createRequestExecutor } from "../src/requests";
-
-test("matches compact requests and sends their compact target price", async () => {
-  const row = {
-    id: "request-1",
-    userId: "user-1",
-    action: "BUY" as const,
-    targetPrice: 96_120,
-    units: 2,
-  };
-  let candidateQuote: number | undefined;
-  let claimedQuote:
-    { compactQuote: number; sourceMessageId: number } | undefined;
-  let sentMessage: string | undefined;
-  const store = {
-    requestCandidates: async (quote: number) => {
-      candidateQuote = quote;
-      return [row];
-    },
-    claimRequest: async (
-      _id: string,
-      _userId: string,
-      _token: string,
-      quote?: { compactQuote: number; sourceMessageId: number },
-    ) => {
-      claimedQuote = quote;
-      return row;
-    },
-    completeRequest: async () => ({ count: 1 }),
-    markSending: async () => ({ count: 1 }),
-    owner: async () => ({ telegramUserId: "telegram-user-1" }),
-  } as unknown as Pick<
-    Store,
-    | "requestCandidates"
-    | "claimRequest"
-    | "completeRequest"
-    | "owner"
-    | "markSending"
-  >;
-
-  const requests = createRequestExecutor(store, {
-    ready: async () => undefined,
-    group: async (_userId, text) => {
-      sentMessage = text;
-      return 1;
-    },
-    private: async () => 2,
-  });
-
-  const announcedAt = new Date("2026-09-08T10:00:00Z");
-  await requests.match({
-    compactQuote: 96_120,
-    sourceMessageId: 9,
-    announcedAt,
-  });
-
-  assert.equal(candidateQuote, 96_120);
-  assert.deepEqual(claimedQuote, {
-    compactQuote: 96_120,
-    sourceMessageId: 9,
-    announcedAt,
-  });
-  assert.equal(sentMessage, "2خ96120");
-});
 
 type ExecutorStore = Parameters<typeof createRequestExecutor>[0];
 type RequestRow = NonNullable<
@@ -80,8 +15,19 @@ const example: RequestRow = {
   targetPrice: 96155,
   units: null,
   status: "ACTIVE",
-  claimToken: null,
-  triggeredQuote: null,
+  claimToken: "auto-token",
+  executionPhase: "CLAIMED",
+  outcomeCode: null,
+  deliveryStartedAt: null,
+  unknownReason: null,
+  resolutionState: "NOT_APPLICABLE",
+  armedAt: new Date(0),
+  armedAfterMessageId: 0,
+  triggeredChatId: -1001n,
+  triggeredPrice: null,
+  triggerSource: null,
+  triggeredTradeId: null,
+  triggeredAt: null,
   triggeredMessageId: null,
   outgoingMessageId: null,
   completedAt: null,
@@ -90,10 +36,13 @@ const example: RequestRow = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
-const trigger = {
-  compactQuote: 96200,
-  sourceMessageId: 42,
-  announcedAt: new Date("2026-09-08T10:00:00Z"),
+const trigger: RequestRow = {
+  ...example,
+  triggeredPrice: 96200,
+  triggeredMessageId: 42,
+  triggerSource: "TRADE",
+  triggeredTradeId: "trade-42",
+  triggeredAt: new Date("2026-09-08T10:00:00Z"),
 };
 function setup(
   options: {
@@ -111,7 +60,13 @@ function setup(
   const results: Array<Parameters<ExecutorStore["completeRequest"]>[2]> = [];
   const row = options.row ?? example;
   const store: ExecutorStore = {
-    markSending: async () => ({ count: 1 }),
+    markSending: async () =>
+      options.claim === false
+        ? { count: 0, row: null }
+        : {
+            count: 1,
+            row: { ...row, ...trigger, action: row.action, units: row.units },
+          },
     owner: async () => ({
       id: "user-1",
       telegramUserId: "100",
@@ -121,7 +76,6 @@ function setup(
       updatedAt: new Date(),
     }),
     claimRequest: async () => (options.claim === false ? null : row),
-    requestCandidates: async () => [row],
     completeRequest:
       options.complete ??
       (async (_id, _token, result) => {

@@ -18,7 +18,7 @@ export function HomePage() {
       />
 
       <HomeRequestSection
-        currentQuote={market.snapshot.data?.quote?.compactPrice}
+        currentTradePrice={market.snapshot.data?.trade?.compactPrice}
       />
 
       <RecentTradesTape data={market.snapshot.data} />

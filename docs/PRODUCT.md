@@ -70,3 +70,11 @@ rounded per-trade amounts. API points remain unit-weighted quote differences
 rounded to two decimals for display. No raw trades or schemas are rewritten.
 Deploy server and web together, restart server caches, and reload existing web
 tabs: older web bundles still multiply monetary P&L by 100.
+
+## Primary price and request behavior
+
+The primary Home price is the latest confirmed trade; the official quote is secondary. The spread remains latest trade minus official quote. A connected feed does not imply a fresh trade.
+
+New and edited requests wait for a subsequent confirmed trade. Automatic BUY, SELL and ALERT matching requires a non-future trade at most 60 seconds old. The worker rechecks the latest trade immediately before starting delivery: an invalid condition or expired price returns the request to waiting; a newer qualifying trade replaces the trigger metadata. BUY/SELL messages always use the user's target price. DONE means delivered, not filled. Manual execution remains explicit and bypasses the automatic trade condition.
+
+The form prefills only from a fresh trade; otherwise the price is blank for manual entry. It never substitutes the official quote or a synthetic price.

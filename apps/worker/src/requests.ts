@@ -14,17 +14,11 @@ import { workerLog } from "./logger";
 
 type RequestStore = Pick<
   Store,
-  | "requestCandidates"
-  | "claimRequest"
-  | "completeRequest"
-  | "owner"
-  | "markSending"
+  "claimRequest" | "completeRequest" | "owner" | "markSending"
 >;
-type Quote = {
-  compactQuote: number;
-  sourceMessageId: number;
-  announcedAt: Date;
-};
+type ClaimedRequest = NonNullable<
+  Awaited<ReturnType<RequestStore["claimRequest"]>>
+>;
 export function createRequestExecutor(
   store: RequestStore,
   delivery: {
@@ -38,13 +32,17 @@ export function createRequestExecutor(
   },
   timeoutMs = 15_000,
 ) {
-  const execute = async (userId: string, id: string, quote?: Quote) => {
+  const execute = async (
+    userId: string,
+    id: string,
+    claimed?: ClaimedRequest,
+  ) => {
     // Manual execution must reject before consuming a disconnected request.
-    if (!quote) await delivery.ready(userId);
-    const token = randomUUID();
-    const row = await store.claimRequest(id, userId, token, quote);
+    if (!claimed) await delivery.ready(userId);
+    const token = claimed?.claimToken ?? randomUUID();
+    let row = claimed ?? (await store.claimRequest(id, userId, token));
     if (!row) {
-      if (!quote)
+      if (!claimed)
         throw new AppError(
           "REQUEST_CONFLICT",
           "درخواست اجرا شده یا در حال اجراست.",
@@ -62,18 +60,37 @@ export function createRequestExecutor(
       await delivery.ready(userId);
       if (!owner) throw new AppError("NOT_FOUND", "صاحب درخواست پیدا نشد.");
       const started = await store.markSending(id, token);
-      if (!started.count)
-        throw new AppError(
-          "REQUEST_CONFLICT",
-          "درخواست لغو شده یا اتصال آماده نیست.",
-        );
+      if (!started.count || !started.row) {
+        if (!claimed)
+          throw new AppError(
+            "REQUEST_CONFLICT",
+            "درخواست لغو شده یا در حال اجراست.",
+          );
+        workerLog.info("request.returned_to_waiting_or_cancelled", {
+          requestId: id,
+          reason: started.reason,
+        });
+        return;
+      }
+      row = started.row;
       sending = true;
       const price = row.targetPrice;
       const send =
         row.action === "ALERT"
           ? delivery.private(
               owner.telegramUserId,
-              formatAlertMessage({ ...row, trigger: quote }),
+              formatAlertMessage({
+                ...row,
+                trigger:
+                  row.triggerSource === "TRADE" &&
+                  row.triggeredPrice !== null &&
+                  row.triggeredAt
+                    ? {
+                        compactPrice: row.triggeredPrice,
+                        announcedAt: row.triggeredAt,
+                      }
+                    : undefined,
+              }),
               { requestId: id },
             )
           : delivery.group(
@@ -157,7 +174,7 @@ export function createRequestExecutor(
             ...row,
             status,
             failure,
-            manual: !quote,
+            manual: !claimed,
             groupText:
               row.action === "ALERT"
                 ? undefined
@@ -181,19 +198,5 @@ export function createRequestExecutor(
       }
     }
   };
-  return {
-    execute,
-    match: async (quote: Quote) => {
-      const candidates = await store.requestCandidates(quote.compactQuote);
-      await Promise.all(
-        candidates.map((row) =>
-          execute(row.userId, row.id, quote).catch((error: unknown) =>
-            workerLog.failure("request.processing.failed", error, {
-              requestId: row.id,
-            }),
-          ),
-        ),
-      );
-    },
-  };
+  return { execute };
 }

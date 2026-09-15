@@ -33,7 +33,7 @@ export const requestStatusSchema = z.enum([
   "UNKNOWN",
 ]);
 export const requestExecutionPhaseSchema = z.enum([
-  "WAITING_QUOTE",
+  "WAITING_TRADE",
   "CLAIMED",
   "SENDING",
   "DONE",
@@ -74,7 +74,10 @@ export const requestSchema = requestFields.extend({
   deliveryStartedAt: z.string().datetime().nullable().optional(),
   unknownReason: z.string().nullable().optional(),
   resolutionState: requestResolutionStateSchema.optional(),
-  triggeredQuote: requestInteger.nullable(),
+  triggeredPrice: requestInteger.nullable(),
+  triggerSource: z.enum(["QUOTE", "TRADE"]).nullable(),
+  triggeredTradeId: z.string().nullable(),
+  triggeredAt: z.string().datetime().nullable(),
   triggeredMessageId: z.number().int().nullable(),
   outgoingMessageId: z.number().int().nullable(),
   completedAt: z.string().datetime().nullable(),

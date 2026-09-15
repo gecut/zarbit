@@ -32,7 +32,7 @@ The database schema (`packages/db/prisma/schema/schema.prisma`) manages 9 primar
 2. **`TelegramSession`**: User MTProto session state (`PENDING_OTP`, `ACTIVE`, `NOT_IN_GROUP`, `REVOKED`, `REVOKING`, `ERROR`), connection state (`CONNECTED`, `CONNECTING`, `OFFLINE`, `DEGRADED`), and storage key.
 3. **`TelegramOperation`**: Asynchronous Telegram command ledger (`@@id([userId, id])`), tracking operation type, status (`ACCEPTED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCEL_REQUESTED`, `CANCELLED`, `INTERRUPTED`), and timestamps.
 4. **`LoginRateLimit`**: Phone and user rate limiting counters for OTP request throttling (max 3 sends per 15-minute window).
-5. **`Request`**: Conditional orders and alerts (`condition`: `GTE`/`LTE`, `action`: `ALERT`/`BUY`/`SELL`, `targetPrice`, `units`). Execution phase machine: `WAITING_QUOTE` → `CLAIMED` (atomic `claimToken`) → `SENDING` → `DONE`/`FAILED`/`CANCELLED`.
+5. **`Request`**: Conditional orders and alerts (`condition`: `GTE`/`LTE`, `action`: `ALERT`/`BUY`/`SELL`, `targetPrice`, `units`). Execution phase machine: `WAITING_TRADE` → `CLAIMED` (atomic `claimToken`) → `SENDING` → `DONE`/`FAILED`/`CANCELLED`.
 6. **`QuoteHistory`**: Authoritative gold quotes from canonical bot announcements (`compactQuote`, `sourceMessageId` unique).
 7. **`Participant`**: OTC market actors identified by canonical bot alias (`id` string). Stores optional unique `telegramUserId` and resolution status (`UNRESOLVED`, `CANDIDATE`, `VERIFIED`, `CONFLICT`, `CONFLICT_FLAGGED`).
 8. **`TradingAction`**: Observed human order commands and taker actions (`ORDER_BUY`, `ORDER_SELL`, `TAKE_ALL`, `TAKE_QUANTITY`, `CANCEL`) with effective `side` (`BUY`/`SELL`) and reply context. Enforces `@@unique([chatId, sourceMessageId])`.
@@ -42,7 +42,7 @@ The database schema (`packages/db/prisma/schema/schema.prisma`) manages 9 primar
 
 - **Permanent Retention**: Both `Trade` and `QuoteHistory` records are **permanently retained**. They are never automatically pruned or deleted.
 - **7-Day Rolling Analytics Window**: The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) used by `analytics.traders` to calculate participant volume, win rate, and realized P&L. It must never be applied as a data retention TTL.
-- **Latest Trade Derivation**: The dashboard derives the latest completed trade directly from `Trade` using an indexed scan on `@@index([announcedAt, sourceMessageId])` with `LIMIT 1`. No separate or duplicate singleton table is used.
+- **Latest Trade Derivation**: The dashboard derives the latest completed trade directly from `Trade` using an indexed scan on `@@index([sourceMessageId])` with `LIMIT 1`. No separate or duplicate singleton table is used.
 - **Idempotency**: All message-based tables enforce uniqueness on `sourceMessageId` (or `(chatId, sourceMessageId)`), allowing concurrent worker sessions to observe the same Telegram messages safely with `createMany({ skipDuplicates: true })`.
 
 ## Migrations
@@ -58,3 +58,12 @@ Migrations live in `packages/db/prisma/migrations/`:
 - `20260914010000_telegram_operations`: Asynchronous Telegram operations ledger table.
 
 Apply migrations using `prisma migrate deploy` (or `node /app/deploy/migrate.mjs` in Compose). Never run `prisma db push` in production environments.
+
+## Trade-based request processing
+
+- `TradeRequestCursor` stores the last evaluated message ID per group. Existing Trade rows are the durable input; no second trade ledger or external queue is introduced.
+- Matching and cursor advancement commit atomically. The group advisory lock also orders receipt inserts against the final send decision. Telegram calls remain outside transactions.
+- Request `armedAt` and `armedAfterMessageId` fence creation and editing. Only a strictly later Telegram timestamp and message ID can trigger; ambiguous same-second events are skipped.
+- Trigger metadata stores `triggeredPrice`, `triggerSource`, `triggeredTradeId`, `triggeredChatId`, `triggeredMessageId`, and `triggeredAt`. Historical official triggers retain `QUOTE`; new automatic triggers use `TRADE`.
+- Migration `20260915010000_trade_request_triggers` rearms active test requests, initializes cursor heads, and preserves all raw market history.
+- Run destructive database tests only against an isolated local database whose name ends in `_test`; the suite enforces this guard.

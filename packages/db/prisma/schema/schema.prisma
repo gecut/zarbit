@@ -26,7 +26,7 @@ enum TelegramConnectionState {
 }
 
 enum RequestExecutionPhase {
-  WAITING_QUOTE
+  WAITING_TRADE
   CLAIMED
   SENDING
   DONE
@@ -139,28 +139,34 @@ enum RequestStatus {
 }
 
 model Request {
-  id                 String           @id @default(cuid())
-  userId             String
-  condition          RequestCondition
-  action             RequestAction
-  targetPrice        Int
-  units              Int?
-  status             RequestStatus    @default(ACTIVE)
-  executionPhase     RequestExecutionPhase @default(WAITING_QUOTE)
-  outcomeCode        String?
-  deliveryStartedAt  DateTime?
-  unknownReason      String?
-  resolutionState    RequestResolutionState @default(NOT_APPLICABLE)
-  claimToken         String?          @unique
-  triggeredQuote     Int?
-  triggeredMessageId Int?
-  outgoingMessageId  Int?
-  completedAt        DateTime?
-  failureReason      String?
-  cancellationReason String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  user               TelegramUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(cuid())
+  userId              String
+  condition           RequestCondition
+  action              RequestAction
+  targetPrice         Int
+  units               Int?
+  status              RequestStatus          @default(ACTIVE)
+  executionPhase      RequestExecutionPhase  @default(WAITING_TRADE)
+  outcomeCode         String?
+  deliveryStartedAt   DateTime?
+  unknownReason       String?
+  resolutionState     RequestResolutionState @default(NOT_APPLICABLE)
+  claimToken          String?                @unique
+  armedAt             DateTime               @default(now())
+  armedAfterMessageId Int                    @default(0)
+  triggeredPrice      Int?
+  triggerSource       RequestTriggerSource?
+  triggeredTradeId    String?
+  triggeredChatId     BigInt?
+  triggeredAt         DateTime?
+  triggeredMessageId  Int?
+  outgoingMessageId   Int?
+  completedAt         DateTime?
+  failureReason       String?
+  cancellationReason  String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  user                TelegramUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status, createdAt])
   @@index([status, condition, targetPrice])
@@ -275,4 +281,14 @@ model Trade {
   @@index([buyerParticipantId, announcedAt])
   @@index([sellerParticipantId, announcedAt])
   @@index([referenceNumber])
+}
+
+enum RequestTriggerSource {
+  QUOTE
+  TRADE
+}
+
+model TradeRequestCursor {
+  chatId          BigInt @id
+  sourceMessageId Int    @default(0)
 }

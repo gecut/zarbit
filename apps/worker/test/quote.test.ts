@@ -69,7 +69,7 @@ test("does not record a malformed quote or a message from another source", async
   assert.equal(events.length, 0);
 });
 
-test("passes the actual source timestamp to request matching", async () => {
+test("official quotes never wake trade request processing", async () => {
   const announcedAt = new Date(Date.now() - 1000);
   let received: unknown;
   const record = createQuoteRecorder(
@@ -77,8 +77,8 @@ test("passes the actual source timestamp to request matching", async () => {
       recordQuote: async () => ({ historyRecorded: true, latestUpdated: true }),
     },
     { groupId: -1001, senderId: "55" },
-    async (quote) => {
-      received = quote;
+    () => {
+      received = true;
     },
   );
   await record("user-1", 1, {
@@ -88,9 +88,43 @@ test("passes the actual source timestamp to request matching", async () => {
     text: "مظنه: 96200",
     date: announcedAt,
   });
-  assert.deepEqual(received, {
-    compactQuote: 96200,
-    sourceMessageId: 42,
-    announcedAt,
-  });
+  assert.equal(received, undefined);
+});
+
+test("only a committed authoritative receipt wakes trade processing", async () => {
+  let wakeups = 0;
+  let committed = false;
+  let fail = false;
+  const record = createQuoteRecorder(
+    {
+      recordQuote: async () => ({ historyRecorded: true, latestUpdated: true }),
+      recordTrade: async () => {
+        if (fail) throw new Error("database failure");
+        const first = !committed;
+        committed = true;
+        return { tradeRecorded: first };
+      },
+    },
+    { groupId: -1001, senderId: "55" },
+    () => {
+      assert.equal(committed, true);
+      wakeups++;
+    },
+  );
+  const event = {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 43,
+    date: new Date(),
+    text: "🔵 خریدار : خریدار تست\n🔴 فروشنده : فروشنده تست\n✅ تعداد: 2 قیمت: 99٬990٬000 ✅\n⏱️ ساعت: 15:18:50 1405/06/19\n🔖 شماره حواله: 9368",
+  };
+  await record("one", 1, { ...event, senderId: "wrong" });
+  assert.equal(wakeups, 0);
+  fail = true;
+  await assert.rejects(record("one", 1, event));
+  assert.equal(wakeups, 0);
+  fail = false;
+  await record("one", 1, event);
+  await record("two", 1, event);
+  assert.equal(wakeups, 1);
 });

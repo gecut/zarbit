@@ -1,3 +1,4 @@
+import { createTradeRequestProcessor } from "./trade-request-processor";
 import { createRequestExecutor } from "./requests";
 import { serve } from "@hono/node-server";
 import {
@@ -86,7 +87,12 @@ export async function startWorker() {
   workerLog.info("telegram.sessions.initialized", {
     durationMs: Date.now() - initializeStartedAt,
   });
+  await store.initializeTradeRequests(env.TELEGRAM_GROUP_ID!);
   const recoveredRequests = await store.recoverRequests();
+  if (recoveredRequests.length)
+    workerLog.info("request.recovery.unknown", {
+      count: recoveredRequests.length,
+    });
   const requests = createRequestExecutor(store, {
     ready: async (userId) => {
       await sessions.requireConnected(userId);
@@ -94,6 +100,12 @@ export async function startWorker() {
     group: (userId, text) => sessions.sendGroup(userId, text),
     private: notify,
   });
+  const tradeRequests = createTradeRequestProcessor(
+    store,
+    requests,
+    env.TELEGRAM_GROUP_ID!,
+  );
+  tradeRequests.wake();
   sessions.forceSend = (userId, id) => requests.execute(userId, id);
   sessions.onQuote = createMarketIngestion(
     store,
@@ -101,7 +113,7 @@ export async function startWorker() {
       groupId: env.TELEGRAM_GROUP_ID!,
       senderId: env.QUOTE_SENDER_ID!,
     },
-    requests.match,
+    tradeRequests.wake,
   );
   const server = serve({
     fetch: createWorkerApp(
@@ -169,6 +181,7 @@ export async function startWorker() {
     clearInterval(timer);
     clearInterval(pruneTimer);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await tradeRequests.stop();
     await sessions.stop();
     await operations.stop();
     await prisma.$disconnect();

@@ -15,7 +15,7 @@ const labels = {
   UNKNOWN: "نامشخص",
 } as const;
 export const executionPhaseLabels = {
-  WAITING_QUOTE: "در انتظار مظنه",
+  WAITING_TRADE: "در انتظار معاملهٔ تازه",
   CLAIMED: "در صف اجرا",
   SENDING: "در حال ارسال",
   DONE: "ارسال شد",

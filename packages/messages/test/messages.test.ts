@@ -27,11 +27,11 @@ test("Markdown escapes every reserved character and keeps code contents intact",
   assert.equal(inlineCode("a`b\\c"), "`a\\`b\\\\c`");
 });
 
-test("automatic alert distinguishes source quote, target and Tehran time; manual has no source", () => {
+test("automatic alert distinguishes source trade, target and Tehran time; manual has no source", () => {
   const automatic = formatAlertMessage({
     ...request,
     trigger: {
-      compactQuote: 96200,
+      compactPrice: 96200,
       announcedAt: new Date("2026-09-08T11:02:00Z"),
     },
   });
@@ -41,7 +41,7 @@ test("automatic alert distinguishes source quote, target and Tehran time; manual
   const manual = formatAlertMessage({ ...request, condition: "LTE" });
   assert.match(manual, /اجرای دستی/);
   assert.match(manual, /برابر یا کمتر/);
-  assert.doesNotMatch(manual, /مظنه دریافتی|زمان مظنه/);
+  assert.doesNotMatch(manual, /قیمت معاملهٔ محرک|زمان معاملهٔ محرک/);
 });
 
 test("results describe delivery, preserve group text and distinguish private uncertainty", () => {

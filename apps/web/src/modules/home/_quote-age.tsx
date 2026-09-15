@@ -9,10 +9,10 @@ interface QuoteAgeProps {
 export function QuoteAge({ announcedAt, asOf }: QuoteAgeProps) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const stale = announcedAt != null && now - Date.parse(announcedAt) >= 300_000;
+  const stale = announcedAt != null && now - Date.parse(announcedAt) > 60_000;
   return (
     <div className="text-muted grid gap-1 text-xs">
       <span>
@@ -21,7 +21,7 @@ export function QuoteAge({ announcedAt, asOf }: QuoteAgeProps) {
       </span>
       {stale && (
         <span role="status" className="text-warning-soft-foreground">
-          مظنه قدیمی است؛ بیش از ۵ دقیقه از اعلام آن گذشته است.
+          معامله قدیمی است؛ اجرای خودکار منتظر معاملهٔ تازه است.
         </span>
       )}
     </div>

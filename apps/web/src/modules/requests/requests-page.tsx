@@ -30,7 +30,7 @@ interface RequestListProps {
   createOpen?: boolean;
   onOpenCreateChange?: (open: boolean) => void;
   initialAction?: CreateRequestInput["action"];
-  currentQuote?: number;
+  currentTradePrice?: number;
 }
 
 export function RequestsPage({
@@ -40,7 +40,7 @@ export function RequestsPage({
   createOpen: externalCreateOpen,
   onOpenCreateChange: externalOnOpenCreateChange,
   initialAction,
-  currentQuote,
+  currentTradePrice,
 }: RequestListProps) {
   const api = useApi(useIdentity().telegramUserId);
   const client = useQueryClient();
@@ -219,7 +219,7 @@ export function RequestsPage({
                 key={row.id}
                 onDetails={() => setSelectedRequest(row)}
                 row={row}
-                currentQuote={currentQuote}
+                currentTradePrice={currentTradePrice}
                 compact={!history}
               />
             ))}

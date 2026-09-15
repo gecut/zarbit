@@ -1,3 +1,4 @@
+import { isFreshTrade } from "@zarbit/domain";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIdentity } from "../../shared/auth/auth";
 import { useRequestActions } from "./_use-request-actions";
@@ -29,7 +30,7 @@ const compactPriceFormatOptions = {
   maximumFractionDigits: 0,
 } satisfies Intl.NumberFormatOptions;
 
-const fallbackTargetPrice = 10_000;
+const emptyTargetPrice = Number.NaN;
 
 export function RequestFormDrawer({
   open,
@@ -49,18 +50,18 @@ export function RequestFormDrawer({
     useState<CreateRequestInput["action"]>(initialAction);
   const [condition, setCondition] =
     useState<CreateRequestInput["condition"]>("LTE");
-  const [price, setPrice] = useState(fallbackTargetPrice);
+  const [price, setPrice] = useState(emptyTargetPrice);
   const [units, setUnits] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
-  const initialPriceRef = useRef(fallbackTargetPrice);
+  const initialPriceRef = useRef(emptyTargetPrice);
   const priceEditedRef = useRef(false);
   const quoteRequestRef = useRef(0);
   const isDirty =
     action !== initialAction ||
     condition !== "LTE" ||
-    price !== initialPriceRef.current ||
+    !Object.is(price, initialPriceRef.current) ||
     units > 0;
 
   useEffect(() => {
@@ -69,8 +70,8 @@ export function RequestFormDrawer({
     setAction(initialAction);
     const requestId = ++quoteRequestRef.current;
     priceEditedRef.current = false;
-    initialPriceRef.current = fallbackTargetPrice;
-    setPrice(fallbackTargetPrice);
+    initialPriceRef.current = emptyTargetPrice;
+    setPrice(emptyTargetPrice);
     setError(null);
 
     void queryClient
@@ -79,13 +80,17 @@ export function RequestFormDrawer({
         if (requestId !== quoteRequestRef.current || priceEditedRef.current)
           return;
 
-        const latestPrice = dashboard.quote?.compactPrice;
+        const latestPrice =
+          dashboard.trade &&
+          isFreshTrade(new Date(dashboard.trade.announcedAt), new Date())
+            ? dashboard.trade.compactPrice
+            : undefined;
         const nextPrice =
           typeof latestPrice === "number" &&
           Number.isSafeInteger(latestPrice) &&
           latestPrice > 0
             ? latestPrice
-            : fallbackTargetPrice;
+            : emptyTargetPrice;
         initialPriceRef.current = nextPrice;
         setPrice(nextPrice);
       })
@@ -93,8 +98,8 @@ export function RequestFormDrawer({
         if (requestId !== quoteRequestRef.current || priceEditedRef.current)
           return;
 
-        initialPriceRef.current = fallbackTargetPrice;
-        setPrice(fallbackTargetPrice);
+        initialPriceRef.current = emptyTargetPrice;
+        setPrice(emptyTargetPrice);
       });
 
     return () => {
@@ -105,9 +110,9 @@ export function RequestFormDrawer({
   const reset = () => {
     setAction(initialAction);
     setCondition("LTE");
-    initialPriceRef.current = fallbackTargetPrice;
+    initialPriceRef.current = emptyTargetPrice;
     priceEditedRef.current = false;
-    setPrice(fallbackTargetPrice);
+    setPrice(emptyTargetPrice);
     setUnits(0);
     setError(null);
   };
@@ -174,7 +179,7 @@ export function RequestFormDrawer({
         open={open}
         icon={<AddCircleIcon size={22} />}
         title="ثبت درخواست جدید"
-        description="با رسیدن قیمت به مقدار هدف، درخواست شما اجرا یا ثبت می‌شود."
+        description="با معاملهٔ تأییدشدهٔ بعدی، شرط بررسی و سفارش با قیمت هدف شما ارسال می‌شود."
         footer={
           <div className="flex w-full gap-4">
             <Button

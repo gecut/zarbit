@@ -14,7 +14,7 @@ export type RequestMessageInput = Pick<
 >;
 export type RequestFailure =
   "connection" | "group_permission" | "private_permission" | "unknown";
-export type RequestTrigger = { compactQuote: number; announcedAt: Date };
+export type RequestTrigger = { compactPrice: number; announcedAt: Date };
 
 const labels = { BUY: "خرید", SELL: "فروش", ALERT: "هشدار" } as const;
 
@@ -28,11 +28,11 @@ export function formatAlertMessage(
         : "🔔 هشدار شما به‌صورت دستی اجرا شد",
     ),
     ...(input.trigger
-      ? [`مظنه دریافتی: ${bold(formatPrice(input.trigger.compactQuote))}`]
+      ? [`قیمت معاملهٔ محرک: ${bold(formatPrice(input.trigger.compactPrice))}`]
       : []),
     `شرط شما: ${escapeMarkdown(input.condition === "GTE" ? "برابر یا بیشتر از" : "برابر یا کمتر از")} ${escapeMarkdown(formatPrice(input.targetPrice))}`,
     input.trigger
-      ? `زمان مظنه: ${formatTime(input.trigger.announcedAt)}`
+      ? `زمان معاملهٔ محرک: ${formatTime(input.trigger.announcedAt)}`
       : "اجرای دستی",
   ].join("\n");
 }

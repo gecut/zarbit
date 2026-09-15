@@ -70,7 +70,7 @@ export function createTradingActionHandler(
         observedAt: event.date,
       });
 
-      deduplicator.add(event.messageId, "action");
+      deduplicator.add(event.messageId, "action", event.chatId);
 
       if (recorded.actionRecorded) {
         workerLog.info("telegram.action.recorded", {
@@ -87,7 +87,7 @@ export function createTradingActionHandler(
           sessionRef: sessionRef(userId),
         });
       } else {
-        workerLog.info("telegram.action.duplicate", {
+        workerLog.debug("telegram.action.duplicate", {
           chatId: event.chatId,
           messageId: event.messageId,
           sessionRef: sessionRef(userId),

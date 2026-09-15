@@ -49,7 +49,7 @@ export function createAuthoritativeHandler(
         sourceMessageId: event.messageId,
         chatId: event.chatId,
       });
-      deduplicator.add(event.messageId, "quote");
+      deduplicator.add(event.messageId, "quote", event.chatId);
 
       if (recorded.historyRecorded) {
         workerLog.info("telegram.quote.recorded", {
@@ -61,7 +61,7 @@ export function createAuthoritativeHandler(
           sessionRef: sessionRef(userId),
         });
       } else {
-        workerLog.info("telegram.quote.duplicate", {
+        workerLog.debug("telegram.quote.duplicate", {
           chatId: event.chatId,
           compactQuote,
           messageId: event.messageId,
@@ -99,7 +99,7 @@ export function createAuthoritativeHandler(
         receiptTimeText: receipt.rawTimeText,
         announcedAt: event.date,
       });
-      deduplicator.add(event.messageId, "trade");
+      deduplicator.add(event.messageId, "trade", event.chatId);
 
       if (recorded.tradeRecorded) {
         onTradeRecorded?.();
@@ -114,7 +114,7 @@ export function createAuthoritativeHandler(
           sessionRef: sessionRef(userId),
         });
       } else {
-        workerLog.info("telegram.trade.duplicate", {
+        workerLog.debug("telegram.trade.duplicate", {
           chatId: event.chatId,
           messageId: event.messageId,
           referenceNumber: receipt.referenceNumber,
@@ -149,6 +149,7 @@ export function createAuthoritativeHandler(
         order: orderResult.data,
         replyToMessageId: event.replyToMessageId ?? null,
       });
+      deduplicator.add(event.messageId, "order", event.chatId);
       workerLog.debug("telegram.order.observed", {
         chatId: event.chatId,
         compactPrice: orderResult.data.compactPrice,

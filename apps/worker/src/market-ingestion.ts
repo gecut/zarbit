@@ -3,6 +3,7 @@ import type { Store } from "@zarbit/db";
 import type { QuoteEvent } from "./transport";
 import { sessionRef, workerLog } from "./logger";
 import { BoundedMessageDeduplicator } from "./message-deduplicator";
+import { KeyedSingleFlight } from "./keyed-single-flight";
 import { BoundedOrderCache } from "./order-cache";
 import {
   resolveParticipantIdentity,
@@ -30,6 +31,7 @@ export function createMarketIngestion(
   onTradeRecorded?: () => void,
 ) {
   const deduplicator = new BoundedMessageDeduplicator(2_000);
+  const singleFlight = new KeyedSingleFlight();
   const activeOrders = new BoundedOrderCache(2_000);
   let latestCompactQuote: number | null = null;
 
@@ -156,9 +158,9 @@ export function createMarketIngestion(
       return;
     }
 
-    const seenKind = deduplicator.has(event.messageId);
+    const seenKind = deduplicator.has(event.messageId, event.chatId);
     if (seenKind === "quote") {
-      workerLog.info("telegram.quote.duplicate", {
+      workerLog.debug("telegram.quote.duplicate", {
         chatId: event.chatId,
         messageId: event.messageId,
         sessionRef: sessionRef(userId),
@@ -166,7 +168,7 @@ export function createMarketIngestion(
       return;
     }
     if (seenKind === "trade") {
-      workerLog.info("telegram.trade.duplicate", {
+      workerLog.debug("telegram.trade.duplicate", {
         chatId: event.chatId,
         messageId: event.messageId,
         sessionRef: sessionRef(userId),
@@ -174,7 +176,15 @@ export function createMarketIngestion(
       return;
     }
     if (seenKind === "action") {
-      workerLog.info("telegram.action.duplicate", {
+      workerLog.debug("telegram.action.duplicate", {
+        chatId: event.chatId,
+        messageId: event.messageId,
+        sessionRef: sessionRef(userId),
+      });
+      return;
+    }
+    if (seenKind === "order") {
+      workerLog.debug("telegram.order.duplicate", {
         chatId: event.chatId,
         messageId: event.messageId,
         sessionRef: sessionRef(userId),
@@ -182,11 +192,29 @@ export function createMarketIngestion(
       return;
     }
 
-    if (event.senderId === config.senderId) {
-      await authoritativeHandler(userId, event);
-    } else {
-      await tradingActionHandler(userId, event);
-    }
+    const messageKey = BoundedMessageDeduplicator.key(
+      event.chatId,
+      event.messageId,
+    );
+
+    await singleFlight.execute(
+      messageKey,
+      async () => {
+        if (event.senderId === config.senderId) {
+          await authoritativeHandler(userId, event);
+        } else {
+          await tradingActionHandler(userId, event);
+        }
+      },
+      () => {
+        workerLog.debug("telegram.message.duplicate", {
+          chatId: event.chatId,
+          messageId: event.messageId,
+          sessionRef: sessionRef(userId),
+          coalesced: true,
+        });
+      },
+    );
   };
 }
 

@@ -34,7 +34,9 @@ test(
       },
       private: async () => 556,
     });
-    const processor = createTradeRequestProcessor(store, executor, groupId);
+    const processor = createTradeRequestProcessor(store, executor, groupId, {
+      intervalMs: 500,
+    });
     try {
       const row = await store.createRequest(user.id, {
         action: "BUY",

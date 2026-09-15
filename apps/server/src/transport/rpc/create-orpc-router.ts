@@ -14,7 +14,10 @@ import { createRequestsRouter } from "../../modules/requests/create-requests-rou
 import { createTelegramRouter } from "../../modules/telegram/create-telegram-router";
 import { createAnalyticsRouter } from "../../modules/analytics/create-analytics-router";
 import { AnalyticsService } from "../../modules/analytics/analytics-service";
-import type { ParticipantAnalyticsSummary } from "@zarbit/contracts";
+import type {
+  ParticipantAnalyticsDetail,
+  ParticipantAnalyticsSummary,
+} from "@zarbit/contracts";
 import { ResponseCache } from "../../platform/cache/response-cache";
 import { serverLog } from "../../platform/observability/server-log";
 import { RpcMetrics } from "../../platform/observability/rpc-metrics";
@@ -29,6 +32,7 @@ import {
 export function createOrpcRouter(
   deps: AppDependencies,
   runtime: MarketRuntime = createMarketRuntime(deps.store),
+  analyticsCapacity = new ReadCapacity(1, 3000),
 ) {
   const metrics = new RpcMetrics((snapshot) =>
     serverLog.info({ event: "rpc.metrics", ...snapshot }, "rpc.metrics"),
@@ -62,10 +66,19 @@ export function createOrpcRouter(
     maxEntries: 10,
     observe: observe("analytics.traders"),
   });
+  const traderDetail = new ResponseCache<ParticipantAnalyticsDetail | null>({
+    ttlMs: 5000,
+    staleMs: 5000,
+    maxEntries: 50,
+    observe: observe("analytics.traderDetail"),
+  });
   const analyticsService = new AnalyticsService(deps.store);
 
-  const read = <T>(name: string, load: () => Promise<T>) =>
+  const realtimeRead = <T>(name: string, load: () => Promise<T>) =>
     runtime.read(name, () => metrics.measure(`db.${name}`, load));
+
+  const analyticsRead = <T>(name: string, load: () => Promise<T>) =>
+    analyticsCapacity.run(() => metrics.measure(`db.${name}`, load));
 
   const os = implement(rpcContract)
     .$context<{ headers: Headers; requestId: string; resHeaders?: Headers }>()
@@ -104,7 +117,7 @@ export function createOrpcRouter(
           ].includes(path.at(-1) ?? "");
           limiter.consume(identity.telegramUserId, mutation);
           const user = await users.get(JSON.stringify(identity), () =>
-            read("identity", () => deps.store.user(identity)),
+            realtimeRead("identity", () => deps.store.user(identity)),
           );
           return await next({
             context: { user: { id: user.id, ...identity } },
@@ -159,13 +172,14 @@ export function createOrpcRouter(
       store: deps.store,
       command: deps.command,
       active,
-      read,
+      read: realtimeRead,
     }),
     analytics: createAnalyticsRouter(os.analytics, {
       store: deps.store,
       service: analyticsService,
       tradersCache: traders,
-      read,
+      traderDetailCache: traderDetail,
+      read: analyticsRead,
     }),
   });
 }

@@ -5,13 +5,14 @@ import type {
   TraderListQuery,
 } from "@zarbit/contracts";
 import type { AppDependencies } from "../../app-dependencies";
-import type { ResponseCache } from "../../platform/cache/response-cache";
+import { ResponseCache } from "../../platform/cache/response-cache";
 import { AnalyticsService } from "./analytics-service";
 
 export interface AnalyticsRouterDependencies {
   store: AppDependencies["store"];
   service: AnalyticsService;
   tradersCache: ResponseCache<ParticipantAnalyticsSummary[]>;
+  traderDetailCache?: ResponseCache<ParticipantAnalyticsDetail | null>;
   read: <T>(name: string, load: () => Promise<T>) => Promise<T>;
 }
 
@@ -34,6 +35,14 @@ export function createAnalyticsRouter<TTradersProcedure, TDetailProcedure>(
   },
   deps: AnalyticsRouterDependencies,
 ): { traders: TTradersProcedure; traderDetail: TDetailProcedure } {
+  const traderDetailCache =
+    deps.traderDetailCache ??
+    new ResponseCache<ParticipantAnalyticsDetail | null>({
+      ttlMs: 5000,
+      staleMs: 5000,
+      maxEntries: 50,
+    });
+
   return {
     traders: builder.traders.handler(async ({ input }) => {
       const query: TraderListQuery = {
@@ -49,8 +58,10 @@ export function createAnalyticsRouter<TTradersProcedure, TDetailProcedure>(
       );
     }),
     traderDetail: builder.traderDetail.handler(async ({ input }) => {
-      return deps.read("analytics.traderDetail", () =>
-        deps.service.getTraderDetail(input.alias),
+      return traderDetailCache.get(input.alias, () =>
+        deps.read("analytics.traderDetail", () =>
+          deps.service.getTraderDetail(input.alias),
+        ),
       );
     }),
   };

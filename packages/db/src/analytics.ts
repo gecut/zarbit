@@ -24,25 +24,16 @@ export function createAnalyticsDataStore(prisma: PrismaClient) {
       windowStart: Date,
       windowEnd: Date,
     ): Promise<string[]> => {
-      const trades = await prisma.trade.findMany({
-        where: {
-          announcedAt: {
-            gte: windowStart,
-            lte: windowEnd,
-          },
-        },
-        select: {
-          buyerParticipantId: true,
-          sellerParticipantId: true,
-        },
-      });
-
-      const aliases = new Set<string>();
-      for (const trade of trades) {
-        aliases.add(trade.buyerParticipantId);
-        aliases.add(trade.sellerParticipantId);
-      }
-      return Array.from(aliases);
+      const rows = await prisma.$queryRaw<Array<{ alias: string }>>`
+        SELECT "buyerParticipantId" AS "alias"
+        FROM "Trade"
+        WHERE "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
+        UNION
+        SELECT "sellerParticipantId" AS "alias"
+        FROM "Trade"
+        WHERE "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
+      `;
+      return rows.map((r) => r.alias);
     },
 
     /**

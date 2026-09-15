@@ -10,13 +10,21 @@ export class ReadCapacity {
     private readonly timeoutMs = 3000,
   ) {}
 
+  get activeCount(): number {
+    return this.active;
+  }
+
+  get capacityLimit(): number {
+    return this.limit;
+  }
+
   async run<T>(load: () => Promise<T>): Promise<T> {
     if (this.active >= this.limit) throw busyError();
     this.active++;
     const work = Promise.resolve()
       .then(load)
       .finally(() => {
-        this.active--;
+        this.active = Math.max(0, this.active - 1);
       });
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {

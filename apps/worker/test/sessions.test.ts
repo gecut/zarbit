@@ -128,6 +128,7 @@ async function createSessions(
   options?: {
     clock?: { value: number };
     timeoutMs?: number;
+    membershipTtlMs?: number;
     notify?: (userId: string, event: SessionNotification) => Promise<void>;
   },
 ) {
@@ -148,6 +149,7 @@ async function createSessions(
       factory: transportFactory(transport),
       now: () => clock.value,
       notify: options?.notify,
+      membershipTtlMs: options?.membershipTtlMs ?? 30_000,
       ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
     }),
   };

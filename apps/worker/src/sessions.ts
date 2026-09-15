@@ -109,6 +109,7 @@ export interface SessionOptions {
   files: SessionFiles;
   factory: TransportFactory;
   timeoutMs?: number;
+  membershipTtlMs?: number;
   now?: () => number;
   notify?: (userId: string, event: SessionNotification) => Promise<void>;
 }
@@ -284,6 +285,24 @@ export class Sessions {
         ...context,
         state: event.state,
       });
+      if (event.state === "connected" && rt && !rt.online) {
+        void this.serial(userId, async () => {
+          if (
+            this.runtimes.get(userId) !== rt ||
+            rt.abort.signal.aborted ||
+            rt.online
+          )
+            return;
+          const record = await this.store.session(userId);
+          if (record && record.state === "ACTIVE") {
+            await this.recoverRuntime(record);
+          }
+        }).catch((error: unknown) =>
+          workerLog.failure("telegram.session.reconnect_failed", error, {
+            sessionRef: sessionRef(userId),
+          }),
+        );
+      }
     } else if (event.type === "connection_dc") {
       workerLog.debug("telegram.connection.dc_selected", {
         ...context,
@@ -795,9 +814,15 @@ export class Sessions {
       });
       await this.close(rt, "runtime_failure");
       const count = (this.retry.get(rt.userId)?.count ?? 0) + 1;
+      const safe = safeError(error);
+      const retryAtFromSafe = safe.retryAt ? Date.parse(safe.retryAt) : NaN;
+      const baseDelay = Math.min(300_000, 5000 * 2 ** Math.min(count, 6));
+      const retryAt = !isNaN(retryAtFromSafe)
+        ? Math.max(this.now() + baseDelay, retryAtFromSafe)
+        : this.now() + baseDelay;
       this.retry.set(rt.userId, {
         count,
-        at: this.now() + Math.min(300_000, 5000 * 2 ** Math.min(count, 6)),
+        at: retryAt,
       });
       workerLog.failure("telegram.session.runtime_failed", error, {
         retryCount: count,
@@ -1168,11 +1193,17 @@ export class Sessions {
         if (!isRevoked(error)) {
           await this.close(rt, "logout_failed");
           const count = (this.retry.get(userId)?.count ?? 0) + 1;
+          const safe = safeError(error);
+          const retryAtFromSafe = safe.retryAt ? Date.parse(safe.retryAt) : NaN;
+          const baseDelay = Math.min(300_000, 5000 * 2 ** Math.min(count, 6));
+          const retryAt = !isNaN(retryAtFromSafe)
+            ? Math.max(this.now() + baseDelay, retryAtFromSafe)
+            : this.now() + baseDelay;
           this.retry.set(userId, {
             count,
-            at: this.now() + Math.min(300_000, 5000 * 2 ** Math.min(count, 6)),
+            at: retryAt,
           });
-          throw safeError(error);
+          throw safe;
         }
       }
       await this.close(rt, "logout_completed");
@@ -1243,18 +1274,22 @@ export class Sessions {
             );
             if ((this.retry.get(record.userId)?.at ?? 0) > this.now()) return;
             const rt = this.runtimes.get(record.userId);
-            if (
+            const membershipTtl = this.options.membershipTtlMs ?? 15 * 60_000;
+            const needsRecovery =
               !rt ||
+              !rt.online ||
               !current.membershipCheckedAt ||
-              this.now() - current.membershipCheckedAt.getTime() > 30_000
-            ) {
+              this.now() - current.membershipCheckedAt.getTime() >
+                membershipTtl;
+            if (needsRecovery) {
               recoveryAttempts++;
               await this.recoverRuntime(current);
-            } else
+            } else if (current.runtimeReady !== rt.online) {
               await this.store.updateSession(record.userId, current.revision, {
                 runtimeCheckedAt: new Date(this.now()),
                 runtimeReady: rt.online,
               });
+            }
           }),
         ),
       );

@@ -4,8 +4,10 @@ import { ReadCapacity } from "../../platform/resilience/read-capacity";
 import { RpcMetrics } from "../../platform/observability/rpc-metrics";
 import { serverLog } from "../../platform/observability/server-log";
 
-export function createMarketRuntime(store: Store) {
-  const capacity = new ReadCapacity();
+export function createMarketRuntime(
+  store: Store,
+  capacity = new ReadCapacity(3, 3000),
+) {
   const metrics = new RpcMetrics((data) =>
     serverLog.info({ event: "market.metrics", ...data }, "market.metrics"),
   );

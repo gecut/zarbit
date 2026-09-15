@@ -129,7 +129,10 @@ export async function startWorker() {
     (error: unknown) =>
       workerLog.failure("request.recovery_notifications.failed", error),
   );
+  let syncing = false;
   const sync = async () => {
+    if (syncing) return;
+    syncing = true;
     const startedAt = Date.now();
     try {
       const result = await sessions.synchronize();
@@ -159,6 +162,8 @@ export async function startWorker() {
         phase: "load_sessions",
         ...databasePoolStats(),
       });
+    } finally {
+      syncing = false;
     }
   };
   const pruneTimer = setInterval(() => {
@@ -171,7 +176,7 @@ export async function startWorker() {
   await store.pruneRequests();
   const timer = setInterval(() => {
     void sync();
-  }, 5000);
+  }, 30_000);
   void sync();
   let stopping = false;
   const stop = async () => {

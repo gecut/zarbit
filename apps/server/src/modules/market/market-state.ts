@@ -69,7 +69,12 @@ export class MarketState {
           asOf: new Date().toISOString(),
         });
         this.verifiedAt = Date.now();
+        this.connected = true;
         return this.value;
+      })
+      .catch((error: unknown) => {
+        this.connected = false;
+        throw error;
       })
       .finally(() => {
         this.flight = null;

@@ -51,7 +51,7 @@ export function RequestFormDrawer({
   const [condition, setCondition] =
     useState<CreateRequestInput["condition"]>("LTE");
   const [price, setPrice] = useState(emptyTargetPrice);
-  const [units, setUnits] = useState(0);
+  const [units, setUnits] = useState(1);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -249,14 +249,14 @@ export function RequestFormDrawer({
           >
             <h3 className="text-sm font-medium">شرط اجرا</h3>
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4">
               {conditionOptions.map((option) => (
                 <Button
                   data-base-ui-swipe-ignore
                   key={option.value}
                   onPress={() => setCondition(option.value)}
                   type="button"
-                  className="flex h-auto flex-1 flex-col gap-1 py-2 text-sm"
+                  className="flex h-auto w-full gap-4 py-2 text-sm"
                   variant={condition === option.value ? "primary" : "secondary"}
                 >
                   <option.Icon className="size-6" />

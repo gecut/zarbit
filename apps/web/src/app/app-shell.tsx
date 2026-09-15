@@ -70,13 +70,13 @@ export function AppShell() {
 
       <div className="h-screen pt-20">
         <div className="max-w-124 relative mx-auto w-full min-w-0 overflow-auto pb-24">
-          <PwaUpdate />
-
           <AuthGate>
             <Outlet />
           </AuthGate>
         </div>
       </div>
+
+      <PwaUpdate />
 
       <nav
         className="max-w-124 border-border bg-surface/80 shadow-surface rounded-4xl fixed inset-x-3 bottom-[max(0.65rem,env(safe-area-inset-bottom),var(--tg-safe-bottom,0px))] z-20 mx-auto grid grid-cols-4 border p-1 backdrop-blur-sm"

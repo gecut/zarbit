@@ -41,9 +41,9 @@ export default defineConfig(({ command, mode }) => {
         registerType: "prompt",
         workbox: { navigateFallbackDenylist: [/^\/api\//], runtimeCaching: [] },
         manifest: {
-          name: "zarbit",
-          short_name: "zarbit",
-          description: "zarbit - PWA Application",
+          name: "Zarbit",
+          short_name: "Zarbit",
+          description: "Zarbit - PWA Application",
           theme_color: "#0c0c0c",
         },
         pwaAssets: { disabled: false, config: true },

@@ -1,29 +1,49 @@
+import { useState } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { Button, Card } from "@heroui/react";
-import { useIsMutating } from "@tanstack/react-query";
+import { Alert, Button } from "@heroui/react";
+
 export function PwaUpdate() {
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const {
     needRefresh: [ready],
     updateServiceWorker,
   } = useRegisterSW();
-  const mutating = useIsMutating();
+
   if (!ready) return null;
+
+  async function handleUpdate() {
+    setIsUpdating(true);
+
+    try {
+      await updateServiceWorker(true);
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   return (
-    <Card
-      className="border-border bg-surface shadow-surface mt-4 grid gap-3 rounded-[var(--radius-2xl)] border p-[1.15rem] sm:p-[1.45rem]"
-      role="status"
-    >
-      <p className="text-foreground text-sm leading-7">
-        نسخه جدید زربیت آماده است. ابتدا ورود یا تغییرات فرم خود را تمام کنید.
-      </p>
-      <Button
-        isDisabled={mutating > 0}
-        onPress={() => {
-          void updateServiceWorker(true);
-        }}
-      >
-        بارگذاری نسخه جدید
-      </Button>
-    </Card>
+    <div className="bottom-22 fixed inset-x-4 z-50 mx-auto max-w-md">
+      <Alert status="success" className="bg-surface/20 backdrop-blur-sm shadow-none border border-border">
+        <Alert.Indicator />
+
+        <Alert.Content>
+          <Alert.Title>نسخه جدید آماده است</Alert.Title>
+          <Alert.Description className="text-xs">
+            برای دریافت آخرین بهبودها، مینی‌اپ را بروزرسانی کنید.
+          </Alert.Description>
+
+          <Button
+            className="ms-auto mt-2 text-xs"
+            size="sm"
+            variant="primary"
+            isPending={isUpdating}
+            onPress={() => void handleUpdate()}
+          >
+            {isUpdating ? "در حال بروزرسانی..." : "بارگذاری نسخه جدید"}
+          </Button>
+        </Alert.Content>
+      </Alert>
+    </div>
   );
 }

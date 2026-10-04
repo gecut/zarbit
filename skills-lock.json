@@ -221,7 +221,7 @@
       "source": "prisma/skills",
       "sourceType": "github",
       "skillPath": "prisma-cli/SKILL.md",
-      "computedHash": "129e77cba93984b88d66cf0f66d5788f5487431f17f189a1ab2d839976874e3b"
+      "computedHash": "aaec1e0169bb8ae74b0e3c4b39a4ed00cef79741df42fb9c93771736fccf378f"
     },
     "prisma-client-api": {
       "source": "prisma/skills",
@@ -233,7 +233,7 @@
       "source": "prisma/skills",
       "sourceType": "github",
       "skillPath": "prisma-database-setup/SKILL.md",
-      "computedHash": "6a991a2530a6da7131e3fc71c353e8278702d0146b8b6e1d2fdfc2d3d0a21bd2"
+      "computedHash": "0e11bb75ddfba8c6ee3dd776742699f7fe993d530497273232f1ffac80025e15"
     },
     "safe-refactor": {
       "source": "JuliusBrussee/caveman",
@@ -269,7 +269,7 @@
       "source": "vercel/turborepo",
       "sourceType": "github",
       "skillPath": "skills/turborepo/SKILL.md",
-      "computedHash": "4289866858fc5314e10ca21584d00c48ddb7e6bc353e262283958f8e4b9bec87"
+      "computedHash": "9681d8dfeb5e6cdff767f1bcaba5d7ac55732a9d6c02ee120f44229f8ec25e7e"
     },
     "using-git-worktrees": {
       "source": "obra/superpowers",

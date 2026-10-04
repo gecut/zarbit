@@ -3,6 +3,7 @@ import { createORPCClient } from "@orpc/client";
 import {
   AppError,
   createRequestInputSchema,
+  updateRequestInputSchema,
   requestDetailSchema,
   requestHistoryPageSchema,
   marketSnapshotSchema,
@@ -140,7 +141,7 @@ export function createMarketMock(
           const row = rows.find((item) => item.id === id);
           if (!row) throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
           if ("data" in parsed)
-            Object.assign(row, createRequestInputSchema.parse(parsed.data));
+            Object.assign(row, updateRequestInputSchema.parse(parsed.data));
           if (procedure === "requests.cancel") row.status = "CANCELLED";
           if (procedure === "requests.forceSend") {
             row.status = "DONE";

@@ -386,6 +386,7 @@ test("creating a request seeds an empty active cache and invalidates every reque
       condition: "GTE",
       targetPrice: 95900,
       units: null,
+      creationKey: "11111111-2222-3333-4444-555555555555",
     });
     assert.deepEqual(client.getQueryData(api.requests.active.queryKey()), [
       created,
@@ -412,6 +413,7 @@ test("creating a request seeds an empty active cache and invalidates every reque
       condition: "GTE",
       targetPrice: 95900,
       units: null,
+      creationKey: "11111111-2222-3333-4444-555555555555",
     });
     assert.deepEqual(
       client.getQueryData(api.requests.active.queryKey()),

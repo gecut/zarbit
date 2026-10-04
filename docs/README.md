@@ -9,20 +9,20 @@ Authoritative documentation repository for Zarbit, an Iranian OTC gold trading i
 
 ## Documentation Map
 
-| Document | Primary Role | Trigger / When to Consult |
-| :--- | :--- | :--- |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | System boundaries, process topology, connection pooling, deployment networks | Modifying service boundaries, adding inter-process endpoints, or altering connection topology |
-| [`GLOSSARY.md`](GLOSSARY.md) | Ubiquitous language for OTC gold trading, compact pricing, and avoided aliases | Introducing or refactoring domain terms, naming entities, or resolving terminology conflicts |
-| [`BUSINESS-RULES.md`](BUSINESS-RULES.md) | Invariants, pricing conversions, 7-day FIFO accounting, identity thresholds | Modifying P&L formulas, order trigger logic, or identity verification criteria |
-| [`GROUP-TRADING-PROTOCOL.md`](GROUP-TRADING-PROTOCOL.md) | Telegram group message structures (quotes, receipts, active orders, actions) | Changing message parsers, regexes, normalization routines, or protocol definitions |
-| [`TELEGRAM.md`](TELEGRAM.md) | MTProto worker architecture, session SQLite storage, OTP lifecycle, execution | Updating Telegram login flow, session locking, MTProto commands, or order transmission |
-| [`RPC.md`](RPC.md) | oRPC v1.15 contracts, data planes, cache ownership, rate limits, batching | Adding/editing RPC endpoints, configuring client query hooks, or adjusting cache TTLs |
-| [`POSTGRES.md`](POSTGRES.md) | Database models, pool limits, migrations, permanent retention semantics | Changing Prisma schema, creating migrations, or tuning database query parameters |
-| [`MARKET-DATA.md`](MARKET-DATA.md) | In-memory cache structures, snapshot monotonic merge, head derivations | Refining market feeds, real-time quote/trade aggregation, or cache synchronization |
-| [`PRODUCT.md`](PRODUCT.md) | Telegram Mini App specifications, user journeys, navigation tabs, UI design | Building or refactoring UI components, theme logic, or user-facing features |
-| [`OPERATIONS.md`](OPERATIONS.md) | Dokploy deployment, Compose topology, environment variables, health checks | Deploying to staging/production, configuring environments, or diagnosing container health |
-| [`ROADMAP.md`](ROADMAP.md) | Strategic product roadmap across Phase 1, Phase 2, and Phase 3 | Scoping feature releases or verifying whether a capability is supported in the current phase |
-| [`adr/`](adr/) | Architectural Decision Records capturing non-reversible choices and trade-offs | Reviewing why foundational architectural patterns and constraints exist |
+| Document                                                 | Primary Role                                                                   | Trigger / When to Consult                                                                     |
+| :------------------------------------------------------- | :----------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md)                     | System boundaries, process topology, connection pooling, deployment networks   | Modifying service boundaries, adding inter-process endpoints, or altering connection topology |
+| [`GLOSSARY.md`](GLOSSARY.md)                             | Ubiquitous language for OTC gold trading, compact pricing, and avoided aliases | Introducing or refactoring domain terms, naming entities, or resolving terminology conflicts  |
+| [`BUSINESS-RULES.md`](BUSINESS-RULES.md)                 | Invariants, pricing conversions, 7-day FIFO accounting, identity thresholds    | Modifying P&L formulas, order trigger logic, or identity verification criteria                |
+| [`GROUP-TRADING-PROTOCOL.md`](GROUP-TRADING-PROTOCOL.md) | Telegram group message structures (quotes, receipts, active orders, actions)   | Changing message parsers, regexes, normalization routines, or protocol definitions            |
+| [`TELEGRAM.md`](TELEGRAM.md)                             | MTProto worker architecture, session SQLite storage, OTP lifecycle, execution  | Updating Telegram login flow, session locking, MTProto commands, or order transmission        |
+| [`RPC.md`](RPC.md)                                       | oRPC v1.15 contracts, data planes, cache ownership, rate limits, batching      | Adding/editing RPC endpoints, configuring client query hooks, or adjusting cache TTLs         |
+| [`POSTGRES.md`](POSTGRES.md)                             | Database models, pool limits, migrations, permanent retention semantics        | Changing Prisma schema, creating migrations, or tuning database query parameters              |
+| [`MARKET-DATA.md`](MARKET-DATA.md)                       | In-memory cache structures, snapshot monotonic merge, head derivations         | Refining market feeds, real-time quote/trade aggregation, or cache synchronization            |
+| [`PRODUCT.md`](PRODUCT.md)                               | Telegram Mini App specifications, user journeys, navigation tabs, UI design    | Building or refactoring UI components, theme logic, or user-facing features                   |
+| [`OPERATIONS.md`](OPERATIONS.md)                         | Dokploy deployment, Compose topology, environment variables, health checks     | Deploying to staging/production, configuring environments, or diagnosing container health     |
+| [`ROADMAP.md`](ROADMAP.md)                               | Strategic product roadmap across Phase 1, Phase 2, and Phase 3                 | Scoping feature releases or verifying whether a capability is supported in the current phase  |
+| [`adr/`](adr/)                                           | Architectural Decision Records capturing non-reversible choices and trade-offs | Reviewing why foundational architectural patterns and constraints exist                       |
 
 ---
 

@@ -283,4 +283,3 @@ cache key باید `analyticsRevision` را شامل شود. completion و revie
 9. migration را additive و production-safe نگه دار؛ حذف یا rewrite Trade/QuoteHistory ممنوع.
 10. پس از تغییر معنادار، Graphify را refresh و importهای runtime image را audit کن.
 11. در گزارش نهایی، checks اجراشده، baseline failures، prerequisites و unverified production/Telegram lanes را جدا اعلام کن.
-

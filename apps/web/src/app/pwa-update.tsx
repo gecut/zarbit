@@ -24,7 +24,10 @@ export function PwaUpdate() {
 
   return (
     <div className="bottom-22 fixed inset-x-4 z-50 mx-auto max-w-md">
-      <Alert status="success" className="bg-surface/20 backdrop-blur-sm shadow-none border border-border">
+      <Alert
+        status="success"
+        className="bg-surface/20 border-border border shadow-none backdrop-blur-sm"
+      >
         <Alert.Indicator />
 
         <Alert.Content>

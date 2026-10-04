@@ -18,7 +18,7 @@ export class MarketState {
 
   read(force = false): Promise<MarketSnapshot> {
     // Periodic authoritative verification also repairs a lost notification.
-    const lifetime = this.connected ? 60_000 : 5_000;
+    const lifetime = this.connected ? 3_000 : 1_000;
     if (!force && this.value && Date.now() - this.verifiedAt < lifetime) {
       this.observe("warm");
       return Promise.resolve(this.value);

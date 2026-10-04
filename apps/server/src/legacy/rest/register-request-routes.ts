@@ -8,7 +8,9 @@ import type { Hono } from "hono";
 import type { AppDependencies } from "../../app-dependencies";
 import type { AppEnv } from "../../transport/http/app-env";
 
-function parseInput(schema: typeof createRequestInputSchema, value: unknown) {
+import type { z } from "zod";
+
+function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success)
     throw new AppError(
@@ -60,6 +62,10 @@ export function registerRequestRoutes(
       await c.req.json().catch(() => null),
     );
     const userId = c.get("user").id;
+    const existing = await deps.store.findRequestCreation?.(userId, input);
+    if (existing) {
+      return c.json({ data: requestView(existing) }, 200);
+    }
     await requireSession(userId);
     return c.json(
       { data: requestView(await deps.store.createRequest(userId, input)) },

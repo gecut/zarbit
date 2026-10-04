@@ -54,7 +54,9 @@ export function createMarketFixtures(scenario: MarketScenario, now: number) {
         id: "trade-1",
         compactPrice: 102_450,
         quantity: 2,
-        announcedAt: new Date(now - (scenario === "stale" ? 120_000 : 1000)).toISOString(),
+        announcedAt: new Date(
+          now - (scenario === "stale" ? 120_000 : 1000),
+        ).toISOString(),
         sourceMessageId: 102,
       }
     : null;

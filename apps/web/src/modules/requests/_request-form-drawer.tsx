@@ -22,6 +22,11 @@ import {
   conditionOptions,
   userMessage,
 } from "./_request-view-model";
+import {
+  clearCreationIntent,
+  getOrCreateCreationIntent,
+  loadCreationIntent,
+} from "./_request-creation-intent";
 
 const compactPriceFormatOptions = {
   style: "decimal",
@@ -43,7 +48,8 @@ export function RequestFormDrawer({
   onDone: () => Promise<void>;
   initialAction?: CreateRequestInput["action"];
 }) {
-  const api = useApi(useIdentity().telegramUserId);
+  const identity = useIdentity();
+  const api = useApi(identity.telegramUserId);
   const queryClient = useQueryClient();
   const { create } = useRequestActions();
   const [action, setAction] =
@@ -55,6 +61,7 @@ export function RequestFormDrawer({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const submittingRef = useRef(false);
   const initialPriceRef = useRef(emptyTargetPrice);
   const priceEditedRef = useRef(false);
   const quoteRequestRef = useRef(0);
@@ -66,6 +73,18 @@ export function RequestFormDrawer({
 
   useEffect(() => {
     if (!open) return;
+
+    const saved = loadCreationIntent(identity.telegramUserId);
+    if (saved) {
+      setAction(saved.action);
+      setCondition(saved.condition);
+      setPrice(saved.targetPrice);
+      setUnits(saved.units ?? 1);
+      priceEditedRef.current = true;
+      initialPriceRef.current = saved.targetPrice;
+      setError(null);
+      return;
+    }
 
     setAction(initialAction);
     const requestId = ++quoteRequestRef.current;
@@ -105,9 +124,10 @@ export function RequestFormDrawer({
     return () => {
       quoteRequestRef.current += 1;
     };
-  }, [api, initialAction, open, queryClient]);
+  }, [api, identity.telegramUserId, initialAction, open, queryClient]);
 
   const reset = () => {
+    clearCreationIntent(identity.telegramUserId);
     setAction(initialAction);
     setCondition("LTE");
     initialPriceRef.current = emptyTargetPrice;
@@ -131,6 +151,8 @@ export function RequestFormDrawer({
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current || pending) return;
+
     const targetPrice = price;
     const requestedUnits = units;
 
@@ -146,20 +168,39 @@ export function RequestFormDrawer({
       return;
     }
 
+    submittingRef.current = true;
     setPending(true);
     setError(null);
+
+    const intent = getOrCreateCreationIntent(identity.telegramUserId, {
+      action,
+      condition,
+      targetPrice,
+      units: action === "ALERT" ? null : requestedUnits,
+    });
+
     try {
       await create.mutateAsync({
-        action,
-        condition,
-        targetPrice,
-        units: action === "ALERT" ? null : requestedUnits,
+        action: intent.action,
+        condition: intent.condition,
+        targetPrice: intent.targetPrice,
+        units: intent.units,
+        creationKey: intent.creationKey,
       });
+      clearCreationIntent(identity.telegramUserId);
       reset();
-      await onDone();
+      try {
+        await onDone();
+      } catch (doneError) {
+        console.error(
+          "onDone callback failed after request creation:",
+          doneError,
+        );
+      }
     } catch (submitError) {
       setError(userMessage(submitError));
     } finally {
+      submittingRef.current = false;
       setPending(false);
     }
   };

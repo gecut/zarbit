@@ -1,6 +1,6 @@
 # Web/Server RPC
 
-The only Web transport is oRPC **1.15.0**, mounted via contract-first Hono handlers on `/rpc/*` and `/api/openapi.json`. Contracts are defined in `packages/contracts/src/rpc.ts`; market schemas live in `market.ts`, telegram schemas in `telegram.ts`, and analytics schemas in `analytics.ts`. PostgreSQL is the single source of truth.
+The only Web transport is oRPC **1.15.0**, mounted via contract-first Hono handlers on `/rpc/*` and `/api/openapi.json` (see [ADR 0003](adr/0003-contract-first-orpc-router.md)). Contracts are defined in `packages/contracts/src/rpc.ts`; market schemas live in `market.ts`, telegram schemas in `telegram.ts`, and analytics schemas in `analytics.ts`. PostgreSQL is the single source of truth.
 
 ## Data planes
 
@@ -18,7 +18,7 @@ Every procedure verifies `X-Telegram-Init-Data` with the bot token HMAC, 86,400-
 
 | Data                    | Key/scope and owner                            | Lifetime / refresh                                                                                                 | Failure / invalidation                                                                                  |
 | ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Market heads            | Server `MarketState`                           | Single-flight DB query (`store.marketHeads()`); 5 s cache when degraded/offline, 60 s cache when connected         | Retains last known valid heads; expired verification failure returns RPC error                          |
+| Market heads            | Server `MarketState`                           | Single-flight DB query (`store.marketHeads()`); 1 s cache when degraded/offline, 3 s cache when connected          | Retains last known valid heads; expired verification failure returns RPC error                          |
 | Web market snapshot     | Shared provider Market key, TanStack Query     | `marketPolling`: 1 s staleTime, 3 s refetchInterval, no background polling, refetch on window focus/reconnect      | Monotonic head merge (`mergeMarketSnapshot`) prevents late HTTP responses from regressing visible state |
 | Active Requests         | Server owner key (1 s); Web owner key          | Server 1 s; Web 4 s visible interval when active requests exist (`length > 0`), disabled when list is empty        | Invalidation on create, update, cancel, forceSend, and Telegram session changes; manual refresh         |
 | Request detail/history  | Web owner + input                              | Cursor-based infinite pagination for history; detail on demand                                                     | Mutation hooks invalidate active and history query caches; no automatic polling                         |
@@ -50,3 +50,9 @@ Under Vite DEV, `/?marketScenario=normal` activates deterministic in-browser moc
 - [oRPC contract-first implementation](https://v1.orpc.dev/docs/contract-first/implement-contract)
 - [oRPC batching](https://v1.orpc.dev/docs/plugins/batch-requests)
 - [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
+
+## Settlement Analytics V2
+
+`analytics.tradersV2` and `analytics.traderDetailV2` expose strict V2 schemas on `/analytics/v2/traders` and `/analytics/v2/traders/{alias}`. NORMAL recent trades have a receipt source ID and counterparty; SETTLEMENT trades have a settlement message ID, null receipt source and null counterparty. Normal, settlement and total contributions share the same WACB replay; total rounding is preserved, with the residual assigned to the settlement bucket. Historical same-alias records retain both participant sides in list and detail.
+
+P&L is null without a valid bootstrap or when the seven-day window crosses that unproven baseline. Unverified later coverage is explicitly provisional; baseline validity, coverage status and P&L reliability are independent metadata. Cache keys include the durable analytics revision. After the first applied Settlement, V1 rejects with `CLIENT_UPDATE_REQUIRED` rather than presenting incomplete totals. Release server, worker and web together before activation.

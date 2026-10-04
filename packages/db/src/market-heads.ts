@@ -23,6 +23,7 @@ export function createMarketHeadsStore(db: PrismaClient) {
           select: quoteSelect,
         }),
         db.trade.findMany({
+          where: { type: "NORMAL" },
           orderBy: { sourceMessageId: "desc" },
           take: 10,
           select: tradeSelect,
@@ -46,7 +47,7 @@ export function createMarketHeadsStore(db: PrismaClient) {
           : null;
       }
       const row = await db.trade.findFirst({
-        where: { sourceMessageId: event.sourceMessageId },
+        where: { type: "NORMAL", sourceMessageId: event.sourceMessageId },
         select: tradeSelect,
       });
       return row

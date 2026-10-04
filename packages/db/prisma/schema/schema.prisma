@@ -164,12 +164,29 @@ model Request {
   completedAt         DateTime?
   failureReason       String?
   cancellationReason  String?
+  creationKey         String?                @db.Uuid
+  creationPayloadHash String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
   user                TelegramUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, creationKey])
   @@index([userId, status, createdAt])
   @@index([status, condition, targetPrice])
+}
+
+model RequestCreationIdentity {
+  id                  String        @id @default(cuid())
+  userId              String
+  creationKey         String        @db.Uuid
+  creationPayloadHash String
+  requestId           String        @unique
+  status              RequestStatus
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+
+  @@unique([userId, creationKey])
+  @@index([userId, createdAt])
 }
 
 model QuoteHistory {
@@ -183,6 +200,7 @@ model QuoteHistory {
 
   @@index([announcedAt])
   @@index([announcedAt, sourceMessageId])
+  @@index([chatId, sourceMessageId])
 }
 
 enum ParticipantResolutionStatus {
@@ -210,6 +228,17 @@ model Participant {
 enum TradingSide {
   BUY
   SELL
+}
+
+enum TradeType {
+  NORMAL
+  SETTLEMENT
+}
+
+enum SettlementStatus {
+  RECEIVED
+  APPLIED
+  REVIEW_REQUIRED
 }
 
 enum TradingActionType {
@@ -247,33 +276,36 @@ model TradingAction {
   observedAt           DateTime
   createdAt            DateTime            @default(now())
 
-  participant          Participant?        @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
 
   @@unique([chatId, sourceMessageId])
+  @@unique([chatId, confirmedByMessageId])
   @@index([sourceMessageId])
   @@index([senderId, observedAt])
   @@index([participantId, observedAt])
   @@index([targetOrderMessageId])
   @@index([observedAt, sourceMessageId])
-  @@unique([chatId, confirmedByMessageId])
 }
 
 model Trade {
-  id                  String      @id @default(cuid())
+  id                  String    @id @default(cuid())
   chatId              BigInt
-  sourceMessageId     Int
+  sourceMessageId     Int?
+  type                TradeType @default(NORMAL)
   referenceNumber     String?
-  buyerParticipantId  String
-  sellerParticipantId String
+  buyerParticipantId  String?
+  sellerParticipantId String?
+  settlementMessageId Int?
   quantity            Int
   compactPrice        Int
   rawPrice            BigInt
   receiptTimeText     String?
   announcedAt         DateTime
-  createdAt           DateTime    @default(now())
+  createdAt           DateTime  @default(now())
 
-  buyerParticipant    Participant @relation("BuyerTrades", fields: [buyerParticipantId], references: [id])
-  sellerParticipant   Participant @relation("SellerTrades", fields: [sellerParticipantId], references: [id])
+  buyerParticipant  Participant? @relation("BuyerTrades", fields: [buyerParticipantId], references: [id], onDelete: Restrict)
+  sellerParticipant Participant? @relation("SellerTrades", fields: [sellerParticipantId], references: [id], onDelete: Restrict)
+  settlement        Settlement?  @relation(fields: [chatId, settlementMessageId], references: [chatId, sourceMessageId], onDelete: Restrict, map: "Trade_settlement_fkey")
 
   @@unique([chatId, sourceMessageId])
   @@index([sourceMessageId])
@@ -281,6 +313,55 @@ model Trade {
   @@index([buyerParticipantId, announcedAt])
   @@index([sellerParticipantId, announcedAt])
   @@index([referenceNumber])
+  @@index([chatId, settlementMessageId])
+}
+
+model Settlement {
+  id                 String           @id @default(cuid())
+  chatId             BigInt
+  sourceMessageId    Int
+  senderId           String
+  compactPrice       Int
+  announcedAt        DateTime
+  payloadHash        String
+  status             SettlementStatus @default(RECEIVED)
+  reviewReason       String?
+  coverageDigest     String?
+  coverageReviewedBy String?
+  isBootstrap        Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  trades             Trade[]
+
+  @@unique([chatId, sourceMessageId])
+}
+
+model FinancialInbox {
+  id              String    @id @default(cuid())
+  chatId          BigInt
+  sourceMessageId Int
+  senderId        String
+  eventKind       String
+  rawText         String?
+  payloadHash     String
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  errorCode       String?
+
+  @@unique([chatId, sourceMessageId, eventKind, payloadHash], map: "FinancialInbox_observation_key")
+}
+
+model GroupIngestionState {
+  chatId                           BigInt   @id
+  historyRecoveryRequired          Boolean  @default(false)
+  historyRecoveryGeneration        Int      @default(0)
+  scannedThroughMessageId          Int      @default(0)
+  appliedThroughMessageId          Int      @default(0)
+  coverageVerifiedThroughMessageId Int      @default(0)
+  coverageDigest                   String?
+  gateStatus                       String   @default("OPEN")
+  analyticsRevision                Int      @default(0)
+  updatedAt                        DateTime @updatedAt
 }
 
 enum RequestTriggerSource {

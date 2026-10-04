@@ -5,9 +5,14 @@ import path from "node:path";
 import test from "node:test";
 import { tl } from "@mtcute/node";
 import { SessionFiles } from "../src/session-files";
+import { AppError } from "@zarbit/contracts";
 import type { SessionNotification } from "@zarbit/messages";
 import { Sessions, type SessionStore } from "../src/sessions";
-import type { TelegramTransport, TransportFactory } from "../src/transport";
+import type {
+  TelegramLifecycleObserver,
+  TelegramTransport,
+  TransportFactory,
+} from "../src/transport";
 
 const userId = "user-1";
 const telegramUserId = "100";
@@ -130,6 +135,7 @@ async function createSessions(
     timeoutMs?: number;
     membershipTtlMs?: number;
     notify?: (userId: string, event: SessionNotification) => Promise<void>;
+    factory?: TransportFactory;
   },
 ) {
   const directory = await mkdtemp(path.join(tmpdir(), "zarbit-worker-test-"));
@@ -146,7 +152,7 @@ async function createSessions(
       secret: "test-secret",
       allowlist: new Set([telegramUserId]),
       files,
-      factory: transportFactory(transport),
+      factory: options?.factory ?? transportFactory(transport),
       now: () => clock.value,
       notify: options?.notify,
       membershipTtlMs: options?.membershipTtlMs ?? 30_000,
@@ -537,4 +543,127 @@ test("an empty worker permits first login and reports available capacity", async
   });
   assert.equal(login.login?.step, "CODE");
   assert.equal(sessions.runtimeHealth().remainingCapacity, 0);
+});
+
+test("transport offline event synchronously invalidates canSend and historyReady", async (t) => {
+  let observer: TelegramLifecycleObserver | undefined;
+  const transport = baseTransport({
+    latestMessageId: async () => 42,
+    history: async () => [],
+    sendGroup: async () => 101,
+  });
+  const { directory, sessions } = await createSessions(transport, {
+    factory: (_path, obs) => {
+      observer = obs;
+      return transport;
+    },
+  });
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+
+  const login = await sessions.command(userId, {
+    type: "login",
+    phone: "+989121234567",
+  });
+  const completed = await sessions.command(userId, {
+    type: "code",
+    id: login.login!.id,
+    code: "12345",
+  });
+  assert.equal(completed.connection, "CONNECTED");
+  assert.equal(await sessions.latestMessageId(), 42);
+
+  // Trigger offline event synchronously
+  observer?.({ type: "connection_state", state: "offline" });
+
+  const offlineStatus = await sessions.command(userId, { type: "status" });
+  assert.equal(offlineStatus.connection, "OFFLINE");
+
+  // requireConnected throws SESSION_REQUIRED
+  await assert.rejects(
+    sessions.requireConnected(userId),
+    (err: unknown) =>
+      err instanceof AppError && err.code === "SESSION_REQUIRED",
+  );
+
+  // latestMessageId throws No active Telegram history session
+  await assert.rejects(
+    sessions.latestMessageId(),
+    /No active Telegram history session/,
+  );
+});
+
+test("transport disconnect during onReady aborts session activation due to epoch increment", async (t) => {
+  let observer: TelegramLifecycleObserver | undefined;
+  const transport = baseTransport({});
+  const { directory, sessions } = await createSessions(transport, {
+    factory: (_path, obs) => {
+      observer = obs;
+      return transport;
+    },
+  });
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+
+  let onReadyStarted = false;
+  sessions.onReady = async () => {
+    onReadyStarted = true;
+    // Simulate transport disconnect during onReady execution
+    observer?.({ type: "connection_state", state: "offline" });
+  };
+
+  const login = await sessions.command(userId, {
+    type: "login",
+    phone: "+989121234567",
+  });
+  const completed = await sessions.command(userId, {
+    type: "code",
+    id: login.login!.id,
+    code: "12345",
+  });
+  assert.equal(onReadyStarted, true);
+  // Activation should have aborted: connection must be OFFLINE, not CONNECTED
+  assert.equal(completed.connection, "OFFLINE");
+  await assert.rejects(
+    sessions.requireConnected(userId),
+    (err: unknown) =>
+      err instanceof AppError && err.code === "SESSION_REQUIRED",
+  );
+});
+
+test("latestMessageId and history are accessible during onReady when historyReady is true", async (t) => {
+  const transport = baseTransport({
+    latestMessageId: async () => 99,
+    history: async () => [
+      {
+        chatId: -1001234567890,
+        senderId: "123456789",
+        messageId: 98,
+        text: "test",
+        date: new Date(),
+      },
+    ],
+  });
+  const { directory, sessions } = await createSessions(transport);
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+
+  let capturedHead: number | undefined;
+  let capturedHistoryLen: number | undefined;
+  sessions.onReady = async () => {
+    // During onReady, canSend is false, but historyReady is true
+    capturedHead = await sessions.latestMessageId();
+    const items = await sessions.history(90, 100);
+    capturedHistoryLen = items.length;
+  };
+
+  const login = await sessions.command(userId, {
+    type: "login",
+    phone: "+989121234567",
+  });
+  const completed = await sessions.command(userId, {
+    type: "code",
+    id: login.login!.id,
+    code: "12345",
+  });
+  assert.equal(capturedHead, 99);
+  assert.equal(capturedHistoryLen, 1);
+  assert.equal(completed.connection, "CONNECTED");
 });

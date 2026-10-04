@@ -1,3 +1,4 @@
+import { createSettlementStore } from "./settlement";
 import { createTelegramOperationStore } from "./telegram-operations";
 import { createMarketHeadsStore } from "./market-heads";
 import { createMarketDataStore } from "./market-data";
@@ -41,6 +42,7 @@ export function createStore(
     ...createRequestStore(prisma, now),
     ...createTelegramOperationStore(prisma, now),
     ...createMarketDataStore(prisma, now),
+    ...createSettlementStore(prisma),
     ...createMarketHeadsStore(prisma),
     ...createAnalyticsDataStore(prisma),
     user: (identity: Identity) =>
@@ -266,6 +268,17 @@ export function createStore(
     latestQuote: async (): Promise<QuoteRecord | null> =>
       prisma.quoteHistory.findFirst({
         orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
+      }),
+    quoteBeforeMessage: async (
+      chatId: bigint | number,
+      sourceMessageId: number,
+    ): Promise<QuoteRecord | null> =>
+      prisma.quoteHistory.findFirst({
+        where: {
+          chatId: BigInt(chatId),
+          sourceMessageId: { lt: sourceMessageId },
+        },
+        orderBy: [{ sourceMessageId: "desc" }, { id: "desc" }],
       }),
     quotesSince: async (announcedAt: Date): Promise<QuoteRecord[]> =>
       prisma.quoteHistory.findMany({

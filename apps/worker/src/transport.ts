@@ -18,6 +18,9 @@ export interface QuoteEvent {
   replyToMessageId?: number | null;
   replyToSenderId?: string | null;
 }
+export type TelegramMutation =
+  | { kind: "EDIT"; event: QuoteEvent }
+  | { kind: "DELETE"; chatId: number; messageId: number };
 export type TelegramConnectionState =
   "offline" | "connecting" | "updating" | "connected";
 export type TelegramLifecycleEvent =
@@ -44,7 +47,16 @@ export interface TelegramTransport {
   password(password: string, signal: AbortSignal): Promise<Account>;
   getMe(): Promise<Account>;
   membership(): Promise<boolean>;
-  subscribe(handler: (event: QuoteEvent) => void): Promise<() => void>;
+  subscribe(
+    handler: (event: QuoteEvent) => void,
+    onMutation?: (event: TelegramMutation) => void,
+  ): Promise<() => void>;
+  history?(
+    chatId: number,
+    afterMessageId: number,
+    beforeMessageId: number,
+  ): Promise<QuoteEvent[]>;
+  latestMessageId?(chatId: number): Promise<number>;
   sendGroup(text: string): Promise<number>;
   logout(): Promise<void>;
   close(): Promise<void>;

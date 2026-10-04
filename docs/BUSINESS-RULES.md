@@ -3,7 +3,7 @@
 ## Quote and market data
 
 - **Authoritative Quote Source**: Canonical bot quote messages (`🟡 مظنه: <number> 🟡`) from the group management bot serve as the authoritative persisted quote source in `QuoteHistory`. The parser normalizes Persian/Arabic digits, grouped commas, and whitespace.
-- **Authoritative Trade Source**: Trades exist strictly upon observing authoritative bot receipts (`حواله`). Canonical order messages (`🔵 ... / 🔴 ...`) represent active liquidity only and are never treated as confirmed trades.
+- **Authoritative Trade Source**: `NORMAL` trades come from authoritative bot receipts (`حواله`). `SETTLEMENT` trades are synthetic accounting closes created only after an accepted settlement announcement and reviewed receipt coverage. Canonical orders represent active liquidity and are never confirmed trades.
 - **Permanent Retention**: `Trade` and `QuoteHistory` records are permanently retained in PostgreSQL. The rolling 7-day window is an analytics query filter, never a data pruning boundary.
 - **Reference Numbers**: Empirical group data proves receipt reference numbers (`شماره حواله`) are not globally unique. The database primary key constraint is `UNIQUE(chatId, sourceMessageId)`. Reference numbers are stored as searchable metadata.
 
@@ -41,7 +41,7 @@
 
 ## Home terminal invariants
 
-1. Official Quote comes only from `QuoteHistory`; completed Trade comes only from an authoritative receipt in `Trade`.
+1. Official Quote comes only from `QuoteHistory`; market trade heads come only from `NORMAL` receipts in `Trade`. Synthetic `SETTLEMENT` trades contribute to Analytics, never market prices or request triggers.
 2. `tradeQuoteDifference = latest Trade compact price - latest Quote compact price`. It reflects current head-to-head spread (premium or discount), not historical slippage or execution-time spread.
 3. Message IDs strictly order each event stream. Gaps in Telegram message IDs are normal. A higher Trade message ID never suppresses a valid lower-ID Quote.
 4. `announcedAt` reflects Telegram message timestamp. Receipt times and cache intervals never alter announced timestamps. All UI times format in `Asia/Tehran` with Persian digits (`fa-IR`).
@@ -68,4 +68,6 @@ tabs: older web bundles still multiply monetary P&L by 100.
 
 ## Automatic request trigger
 
-Only a confirmed Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses targetPrice, not triggeredPrice. SENDING with an uncertain outcome must never be automatically retried.
+Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses targetPrice, not triggeredPrice. SENDING with an uncertain outcome must never be automatically retried.
+
+See [GLOSSARY.md](GLOSSARY.md) for canonical domain terms, [README.md](README.md) for document directory, and [adr/](adr/) for underlying architectural decisions.

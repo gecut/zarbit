@@ -1,30 +1,78 @@
 # Agent Operating Contract
 
-## Project Contract
+Zarbit is an Iranian OTC gold trading intelligence and execution engine (Turborepo TypeScript monorepo: React 19 web, Hono server, MTProto worker, Prisma PostgreSQL).
 
-Zarbit is a pnpm/Turborepo TypeScript monorepo with `apps/web`, `apps/server`, `apps/worker`, and shared packages under `packages/`. Runtime boundaries include the web client, server API, Telegram/MTProto worker, PostgreSQL data layer, and shared contracts/config/logger/domain packages. Before changing code, read the nearest applicable instructions, current worktree status, the affected package manifest and TypeScript/ESLint configuration, then trace the caller-to-effect path. The authoritative product and operational contracts are in `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, `docs/BUSINESS-RULES.md`, `docs/TELEGRAM.md`, `docs/POSTGRES.md`, `docs/OPERATIONS.md`, `docs/GROUP-TRADING-PROTOCOL.md`, `docs/MARKET-DATA.md`, and `docs/ROADMAP.md`; consult the relevant documents rather than copying their rules here.
+Authoritative product, domain, and operational contracts live in [`docs/`](docs/README.md). Consult them as the single source of truth; never guess boundaries, schemas, or terminology.
 
-Instruction precedence is: (1) explicit user/task instructions; (2) the nearest applicable `AGENTS.md` and project contracts in `docs/`; (3) applicable Nexload skills as the mandatory initial engineering baseline; (4) current source/configuration and relevant official technology documentation; (5) existing implementation patterns as evidence only. A more specific project contract may specialize or override generic Nexload guidance.
+**Precedence**: (1) User task; (2) `AGENTS.md` and `docs/`; (3) Nexload baseline; (4) Official docs; (5) Existing code.
 
-## Nexload Skills
+---
 
-For engineering work, consult every applicable project-local Nexload skill before implementation. These are baseline engineering guidelines, not the complete Zarbit specification; `docs/`, source contracts, and explicit requirements still decide behavior.
+## The Zarbit Pipeline
 
-- `nexload-code` (`.agents/skills/nexload-code/SKILL.md`) is the baseline for TypeScript implementation/refactoring, naming, trust boundaries, ownership, dependency restraint, and focused verification.
-- `nexload-react` (`.agents/skills/nexload-react/SKILL.md`) routes React components, hooks, state/effect ownership, client boundaries, and component entrypoints. Compose with `nexload-code` for language-wide concerns.
-- `nexload-design` (`.agents/skills/nexload-design/SKILL.md`) routes visual-system, layout, responsive, spacing, surface, and RTL work. Inspect approved/current rendered states before changing visual behavior.
-- `nexload-cto-review` (`.agents/skills/nexload-cto-review/SKILL.md`) is only for an explicit CTO, final technical, architecture, approval, or production-readiness review. It is review-only and must not be loaded as normal implementation guidance.
+Execute all engineering work through this strict sequence. Satisfy each phase's completion criterion before crossing into the next.
 
-Do not duplicate skill text in repository docs. Use the narrowest relevant package scripts and report checks actually run; separate scoped results from unrelated baseline failures.
+### 1. Triage, Ideation, and Planning
 
-## Graphify
+- **`triage`** ([`SKILL.md`](.agents/skills/triage/SKILL.md)): When processing raw issues, bugs, or PRs. Categorize, verify claims against code, and write agent-ready briefs.
+- **`wayfinder`** ([`SKILL.md`](.agents/skills/wayfinder/SKILL.md)): When tackling multi-session initiatives or loose scopes. Chart milestones as decision tickets with explicit blocking edges.
+- **Graphify**: When starting codebase reconnaissance, consult `graphify-out/` before broad search to inspect god nodes, topological clusters, and dependency seams.
+- **`domain-modeling`** ([`SKILL.md`](.agents/skills/domain-modeling/SKILL.md)): When negotiating codebase terminology or boundaries. Maintain [`docs/GLOSSARY.md`](docs/GLOSSARY.md) and record ADRs in [`docs/adr/`](docs/adr/).
+- **`codebase-design`** ([`SKILL.md`](.agents/skills/codebase-design/SKILL.md)): When architecting interfaces and modules. Maximize depth (narrow interface, deep implementation), place seams intentionally, and design for testability.
+- **`systematic-debugging`** ([`SKILL.md`](.agents/skills/systematic-debugging/SKILL.md)): When addressing bugs or test failures. Gather hard evidence, reproduce in a _tight_ red loop, and formulate hypotheses before modifying source code.
+- **`writing-plans`** ([`SKILL.md`](.agents/skills/writing-plans/SKILL.md)): When planning multi-step features or refactors. Formulate checklist-driven implementation plans with explicit types, interfaces, and test gates.
+- **`grill-me`** ([`SKILL.md`](.agents/skills/grill-me/SKILL.md)) / **`grill-with-docs`** ([`SKILL.md`](.agents/skills/grill-with-docs/SKILL.md)): Gate for plan approval. Relentlessly interview and stress-test assumptions, capturing decisions in [`docs/adr/`](docs/adr/) and [`docs/GLOSSARY.md`](docs/GLOSSARY.md) until all ambiguity is cleared.
+  **Completion criterion**: Root cause proven with failing test (bugs), or plan checklist approved via grilling, domain terms synced in [`docs/GLOSSARY.md`](docs/GLOSSARY.md), and architectural boundaries verified against [`docs/`](docs/README.md).
 
-Graphify is the preferred repository-navigation and relationship tool for architecture, dependencies, cross-file relationships, and impact analysis. The current baseline lives in `graphify-out/` and was generated from the repository with normal code-only extraction. Query it before broad grep or loading many files when traversal can answer the question; use query, path, explain, god-node, and related capabilities as appropriate. Treat graph output as extracted facts or inferences, distinguish ambiguous relationships, and verify important conclusions against source code and the authoritative docs.
+### 2. Execution and Implementation
 
-After meaningful repository changes, refresh the graph incrementally or rebuild it when stale. Avoid deep/LLM analysis unless the task genuinely requires it. Graphify assists discovery; it never overrides source code, project contracts, or explicit requirements. Current extraction has a known limitation: SQL syntax is not indexed when the optional `tree_sitter_sql` dependency is unavailable.
+- **`using-git-worktrees`** ([`SKILL.md`](.agents/skills/using-git-worktrees/SKILL.md)): When starting non-trivial features, refactors, or parallel streams. Isolate execution in a dedicated worktree to protect the primary branch.
+- **Dispatch Policy**:
+  - **Native Inline (`executing-plans`)** ([`SKILL.md`](.agents/skills/executing-plans/SKILL.md)): Default approach for single-developer flow, tightly-coupled tasks, and rapid linear execution without context switching.
+  - **Subagent-Driven (`subagent-driven-development`)** ([`SKILL.md`](.agents/skills/subagent-driven-development/SKILL.md)): Use when implementing multi-step plans with independent tasks. Dispatches fresh implementer subagents per task to eliminate context pollution, followed by per-task review gates.
+  - **Parallel Agents (`dispatching-parallel-agents`)** ([`SKILL.md`](.agents/skills/dispatching-parallel-agents/SKILL.md)): Use strictly when facing 2+ fully independent tasks with no shared state or sequential ordering.
+- **Code Standards**:
+  - **`nexload-code`** ([`SKILL.md`](.agents/skills/nexload-code/SKILL.md)): Mandatory baseline for TypeScript module ownership, boundaries, dependency restraint, and internal imports.
+  - **`nexload-react`** ([`SKILL.md`](.agents/skills/nexload-react/SKILL.md)): Component structure, pure rendering, state and effect ownership, and narrow client boundaries.
+  - **`nexload-design`** ([`SKILL.md`](.agents/skills/nexload-design/SKILL.md)): Semantic design tokens, RTL-safe geometry, surface roles, and spacing.
+  - **`heroui-react`** ([`SKILL.md`](.agents/skills/heroui-react/SKILL.md)): HeroUI v3 component implementation and Tailwind CSS v4 styling.
+  - **`using-mtcute`** ([`SKILL.md`](.agents/skills/using-mtcute/SKILL.md)): Telegram MTProto interactions, TL types, and client lifecycle in the worker.
+  - **`prisma-client-api`** ([`SKILL.md`](.agents/skills/prisma-client-api/SKILL.md)): Database models, queries, filters, and transactional integrity.
+    **Completion criterion**: Every task in the plan implemented and committed, adhering strictly to Nexload standards, with zero unresolved compiler or lint errors.
 
-For every Node service release, inspect the built `dist` artifact's external imports and verify each one is available from the production runtime layout; do not assume a transitive pnpm dependency is present in a Docker image. Bundle dependency families with `tsdown` when the runtime image does not install their full transitive tree, and run this audit for every service after build changes.
+### 3. Verification and Review
 
-## Caveman
+- **`code-review`** ([`SKILL.md`](.agents/skills/code-review/SKILL.md)): Self-audit changes along two independent axes:
+  1. _Spec_: Did the implementation fulfill the exact originating requirements without scope creep?
+  2. _Standards_: Does the code adhere to repository idioms, clean architecture, and type safety?
+- **`verification-before-completion`** ([`SKILL.md`](.agents/skills/verification-before-completion/SKILL.md)): **Hard gate.** Prove all changes work with fresh terminal command evidence. Run typechecks (`pnpm check-types`), linter (`pnpm lint`), tests, and assertions. Never claim "done" without command-line evidence.
+- **`nexload-cto-review`** ([`SKILL.md`](.agents/skills/nexload-cto-review/SKILL.md)): Trigger only upon explicit user request for architectural assessment or production readiness scoring.
+  **Completion criterion**: All automated checks pass (`check-types`, `lint`, tests) with terminal logs produced and verified; zero regressions against contract boundaries.
 
-Caveman is an optional token-efficiency skill installed at `.agents/skills/caveman/SKILL.md`. It is not a source of truth and is not required for every task. Use it conservatively for large, low-signal command output, logs, search results, or similarly verbose context. Preserve exact code, commands, paths, errors, identifiers, requirements, architectural decisions, security/review findings, and other evidence needed for a correct change. If compression might hide useful context, do not use it. This repository intentionally uses only the skill; do not add Caveman Proxy, Cavemem, Agent SDK, routing, interception, or global infrastructure unless a future task explicitly requires it.
+### 4. Documentation and Delivery
+
+- **`writing-for-agents`** ([`SKILL.md`](.agents/skills/writing-for-agents/SKILL.md)): Apply when modifying `AGENTS.md`, `docs/`, or skills. Use leading words, precise context pointers, and ruthless pruning.
+- **`writing-skills`** ([`SKILL.md`](.agents/skills/writing-skills/SKILL.md)): Apply when authoring or editing reusable skills. Test-drive instructions and close edge-case gaps.
+- **`caveman`** ([`SKILL.md`](.agents/skills/caveman/SKILL.md)): Use for ultra-compressed communication of verbose logs or large terminal outputs while preserving exact identifiers and errors.
+  **Completion criterion**: All relevant `docs/` updated inline (including [`docs/GLOSSARY.md`](docs/GLOSSARY.md) and [`docs/adr/`](docs/adr/)); diffs and evidence reported concisely.
+
+---
+
+## Authoritative Documentation Map
+
+When working on specific subsystems, consult the corresponding authoritative document in [`docs/`](docs/README.md):
+
+| Subsystem / Context         | Authoritative File                                                 | Focus Area                                                                        |
+| :-------------------------- | :----------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| **System Topology & Seams** | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                     | Boundaries, inter-process communication, connection pools, deployment layout      |
+| **Domain Terminology**      | [`docs/GLOSSARY.md`](docs/GLOSSARY.md)                             | Ubiquitous language for OTC gold trading, compact pricing, and avoided aliases    |
+| **Business Invariants**     | [`docs/BUSINESS-RULES.md`](docs/BUSINESS-RULES.md)                 | Calculation formulas, P&L accounting, request matching rules, identity thresholds |
+| **Telegram Protocols**      | [`docs/GROUP-TRADING-PROTOCOL.md`](docs/GROUP-TRADING-PROTOCOL.md) | Canonical bot quote, receipt, and human order message parsers                     |
+| **MTProto Gateway**         | [`docs/TELEGRAM.md`](docs/TELEGRAM.md)                             | Worker session lifecycle, SQLite storage lock, OTP flow, execution engine         |
+| **API Contracts**           | [`docs/RPC.md`](docs/RPC.md)                                       | oRPC v1.15 routers, data planes, cache ownership, rate limits, headers            |
+| **Database & Persistence**  | [`docs/POSTGRES.md`](docs/POSTGRES.md)                             | PostgreSQL schemas, Prisma migrations, pooling parameters, retention policies     |
+| **Market Data Pipeline**    | [`docs/MARKET-DATA.md`](docs/MARKET-DATA.md)                       | Snapshot caching, stream monotonic merge, head derivation                         |
+| **Product & UI Specs**      | [`docs/PRODUCT.md`](docs/PRODUCT.md)                               | Mini App UX, screen navigation, theme contracts, access allowlist                 |
+| **Operations & Deploy**     | [`docs/OPERATIONS.md`](docs/OPERATIONS.md)                         | Dokploy Compose setup, migration cutovers, container healthchecks                 |
+| **Roadmap & Strategy**      | [`docs/ROADMAP.md`](docs/ROADMAP.md)                               | Phase definitions (Phase 1 Ingestion, Phase 2 Analytics, Phase 3 Whale Copy)      |
+| **Architectural Decisions** | [`docs/adr/`](docs/adr/)                                           | Irreversible trade-offs and structural choices                                    |

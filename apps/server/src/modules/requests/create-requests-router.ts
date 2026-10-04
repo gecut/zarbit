@@ -124,6 +124,13 @@ export function createRequestsRouter<
     }),
     create: builder.create.handler(({ context, input }) =>
       changeRequest(context.user.id, async () => {
+        const existing = await deps.store.findRequestCreation?.(
+          context.user.id,
+          input,
+        );
+        if (existing) {
+          return requestView(existing);
+        }
         await requireLiveSession(deps.command, context.user.id);
         return requestView(
           await deps.store.createRequest(context.user.id, input),

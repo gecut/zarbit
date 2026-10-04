@@ -10,10 +10,20 @@ import {
 import {
   AppError,
   type CreateRequestInput,
+  type UpdateRequestInput,
   type RequestDetail,
 } from "@zarbit/contracts";
-import type { PrismaClient, Prisma } from "../prisma/generated/client";
-import type { Request as RequestRecord } from "../prisma/generated/client";
+import type {
+  PrismaClient,
+  Prisma,
+  Request as RequestRecord,
+} from "../prisma/generated/client";
+import {
+  computeCreationPayloadHash,
+  findRequestCreation,
+} from "./request-creation";
+
+export * from "./request-creation";
 
 type RequestViewRow = Omit<
   RequestRecord,
@@ -110,6 +120,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
     });
   const arm = async (tx: Prisma.TransactionClient) => {
     const head = await tx.trade.findFirst({
+      where: { type: "NORMAL" },
       orderBy: { sourceMessageId: "desc" },
       select: { sourceMessageId: true },
     });
@@ -171,11 +182,55 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             : null,
       };
     },
+    findRequestCreation: (userId: string, input: CreateRequestInput) =>
+      findRequestCreation(db, userId, input),
     createRequest: (userId: string, input: CreateRequestInput) =>
-      connected(userId, async (tx) =>
-        tx.request.create({ data: { userId, ...input, ...(await arm(tx)) } }),
-      ),
-    editRequest: (userId: string, id: string, input: CreateRequestInput) =>
+      connected(userId, async (tx) => {
+        const creationKey = input.creationKey || randomUUID();
+        const payloadHash = computeCreationPayloadHash(input);
+        const existing = input.creationKey
+          ? await findRequestCreation(tx, userId, input)
+          : null;
+        if (existing) return existing;
+
+        const armed = await arm(tx);
+        try {
+          const row = await tx.request.create({
+            data: {
+              userId,
+              ...input,
+              creationKey,
+              creationPayloadHash: payloadHash,
+              ...armed,
+            },
+          });
+          await tx.requestCreationIdentity.create({
+            data: {
+              userId,
+              creationKey,
+              creationPayloadHash: payloadHash,
+              requestId: row.id,
+              status: row.status,
+            },
+          });
+          return row;
+        } catch (error) {
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code: string }).code === "P2002"
+          ) {
+            const recheck = await findRequestCreation(tx, userId, {
+              ...input,
+              creationKey,
+            });
+            if (recheck) return recheck;
+          }
+          throw error;
+        }
+      }),
+    editRequest: (userId: string, id: string, input: UpdateRequestInput) =>
       connected(userId, async (tx) => {
         const result = await tx.request.updateMany({
           where: { id, userId, status: "ACTIVE", claimToken: null },
@@ -187,6 +242,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
     cancelRequest: (userId: string, id: string) =>
       db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
+        const completedAt = now();
         const result = await tx.request.updateMany({
           where: {
             id,
@@ -198,11 +254,18 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
           data: {
             status: "CANCELLED",
             executionPhase: "CANCELLED",
-            completedAt: now(),
+            completedAt,
             cancellationReason: "لغو توسط کاربر",
           },
         });
         if (!result.count) throw conflict();
+        await tx.requestCreationIdentity.updateMany({
+          where: { requestId: id },
+          data: {
+            status: "CANCELLED",
+            completedAt,
+          },
+        });
         return tx.request.findUniqueOrThrow({ where: { id } });
       }),
     initializeTradeRequests: (groupId: number | bigint) =>
@@ -220,11 +283,20 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       db.$transaction(async (tx) => {
         const chatId = BigInt(groupId);
         await lockTradeStream(tx, chatId);
+        const ingestion = await tx.groupIngestionState.findUnique({
+          where: { chatId },
+        });
+        if (ingestion?.gateStatus === "REVIEW_REQUIRED") return;
         const cursor = await tx.tradeRequestCursor.findUniqueOrThrow({
           where: { chatId },
         });
         const trade = await latestGroupTrade(tx, chatId);
-        if (!trade || trade.sourceMessageId <= cursor.sourceMessageId) return;
+        if (
+          !trade ||
+          trade.sourceMessageId === null ||
+          trade.sourceMessageId <= cursor.sourceMessageId
+        )
+          return;
         const fresh = isFreshTrade(trade.announcedAt, now());
         let claimed = 0;
         if (fresh) {
@@ -311,24 +383,72 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         failureReason?: string;
       },
     ) =>
-      db.request.updateMany({
-        where: { id, claimToken, status: "ACTIVE" },
-        data: {
-          ...result,
-          executionPhase: result.status,
-          resolutionState:
-            result.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
-          unknownReason:
-            result.status === "UNKNOWN" ? result.failureReason : null,
-          completedAt: now(),
-        },
+      db.$transaction(async (tx) => {
+        const completedAt = now();
+        const updateResult = await tx.request.updateMany({
+          where: { id, claimToken, status: "ACTIVE" },
+          data: {
+            ...result,
+            executionPhase: result.status,
+            resolutionState:
+              result.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
+            unknownReason:
+              result.status === "UNKNOWN" ? result.failureReason : null,
+            completedAt,
+          },
+        });
+        if (updateResult.count > 0) {
+          await tx.requestCreationIdentity.updateMany({
+            where: { requestId: id },
+            data: {
+              status: result.status,
+              completedAt,
+            },
+          });
+        }
+        return updateResult;
       }),
-    markSending: (id: string, claimToken: string) =>
+    markSending: (
+      id: string,
+      claimToken: string,
+      destinationChatId?: bigint | number,
+    ) =>
       db.$transaction(async (tx) => {
         const initial = await tx.request.findUnique({ where: { id } });
         if (!initial) return { count: 0, row: null };
-        if (initial.triggeredChatId !== null)
-          await lockTradeStream(tx, initial.triggeredChatId);
+        const targetChatId =
+          initial.triggeredChatId !== null
+            ? initial.triggeredChatId
+            : destinationChatId !== undefined
+              ? BigInt(destinationChatId)
+              : null;
+        if (targetChatId !== null) {
+          await lockTradeStream(tx, targetChatId);
+          const ingestion = await tx.groupIngestionState.findUnique({
+            where: { chatId: targetChatId },
+          });
+          if (ingestion?.gateStatus === "REVIEW_REQUIRED") {
+            await tx.request.updateMany({
+              where: {
+                id,
+                claimToken,
+                status: "ACTIVE",
+                executionPhase: "CLAIMED",
+                deliveryStartedAt: null,
+              },
+              data: {
+                executionPhase: "WAITING_TRADE",
+                claimToken: null,
+                ...emptyTrigger,
+              },
+            });
+            return {
+              count: 0,
+              row: null,
+              reason: "FINANCIAL_REVIEW_REQUIRED" as const,
+            };
+          }
+        }
         await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${initial.userId} FOR UPDATE`;
         await tx.$queryRaw`SELECT "id" FROM "Request" WHERE "id" = ${id} FOR UPDATE`;
         const row = await tx.request.findUniqueOrThrow({ where: { id } });
@@ -391,7 +511,8 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             ...emptyTrigger,
           },
         });
-        return tx.request.updateManyAndReturn({
+        const completedAt = now();
+        const recovered = await tx.request.updateManyAndReturn({
           where: {
             status: "ACTIVE",
             OR: [
@@ -403,11 +524,23 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             status: "UNKNOWN",
             executionPhase: "UNKNOWN",
             resolutionState: "UNRESOLVED",
-            completedAt: now(),
+            completedAt,
             unknownReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
             failureReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
           },
         });
+        if (recovered.length > 0) {
+          await tx.requestCreationIdentity.updateMany({
+            where: {
+              requestId: { in: recovered.map((r) => r.id) },
+            },
+            data: {
+              status: "UNKNOWN",
+              completedAt,
+            },
+          });
+        }
+        return recovered;
       }),
     pruneRequests: () =>
       db.request.deleteMany({

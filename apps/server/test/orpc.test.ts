@@ -190,6 +190,7 @@ test("invalid input, cross-user detail and force-send cannot bypass ownership", 
       condition: "GTE",
       targetPrice: -1,
       units: null,
+      creationKey: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     }),
     (error: unknown) => error instanceof ORPCError && error.status === 400,
   );
@@ -214,6 +215,7 @@ test("mutations bypass cached readiness; revoke persists before worker command",
       condition: "GTE",
       targetPrice: 100,
       units: null,
+      creationKey: "b1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     }),
     (error: unknown) => error instanceof ORPCError && error.code === "CONFLICT",
   );
@@ -248,8 +250,10 @@ test("OpenAPI includes every contract operation and authentication scheme", asyn
         ).length,
       0,
     ),
-    14,
+    16,
   );
+  assert.ok(spec.paths?.["/analytics/v2/traders"]);
+  assert.ok(spec.paths?.["/analytics/v2/traders/{alias}"]);
   assert.ok(spec.components?.securitySchemes?.telegram);
 });
 
@@ -350,6 +354,7 @@ test("request writes preserve compact values, conditions, dates and invalidate a
     condition: "LTE",
     targetPrice: 95900,
     units: null,
+    creationKey: "c1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
   });
   assert.equal(created.targetPrice, 95900);
   assert.equal(created.condition, "LTE");
@@ -372,4 +377,98 @@ test("request writes preserve compact values, conditions, dates and invalidate a
   assert.deepEqual(writes, ["status", "status", "status", "force-send"]);
   await client.requests.history({ cursor: "next" });
   assert.equal((await client.requests.detail({ id: "owned" })).id, "owned");
+});
+
+test("oRPC requests.create supports idempotent replay and rejects conflicting payload", async () => {
+  const existingRow = {
+    id: "req-123",
+    userId: "alice",
+    action: "ALERT" as const,
+    condition: "GTE" as const,
+    targetPrice: 96000,
+    units: null,
+    status: "ACTIVE" as const,
+    claimToken: null,
+    triggeredPrice: null,
+    triggerSource: null,
+    triggeredTradeId: null,
+    triggeredAt: null,
+    triggeredMessageId: null,
+    outgoingMessageId: null,
+    completedAt: null,
+    failureReason: null,
+    cancellationReason: null,
+    createdAt: new Date("2026-09-08T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-08T00:00:00.000Z"),
+  };
+  let createCalled = false;
+  const app = createApp({
+    authenticate: () => ({ telegramUserId: "alice" }),
+    acceptCommand: async () => ({
+      operationId: "1",
+      acceptedAt: new Date().toISOString(),
+    }),
+    command: async () => ({
+      ...sessionFixture(),
+      connection: "OFFLINE", // offline session should not block replay!
+    }),
+    store: {
+      user: async () => ({ id: "alice" }),
+      findRequestCreation: async (
+        _userId: string,
+        input: { creationKey: string; targetPrice: number },
+      ) => {
+        if (input.creationKey === "d1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d") {
+          if (input.targetPrice !== 96000) {
+            throw new AppError(
+              "REQUEST_CREATION_CONFLICT",
+              "این تلاش ثبت با اطلاعات دیگری انجام شده است؛ وضعیت درخواست را بررسی کنید.",
+              409,
+            );
+          }
+          return existingRow;
+        }
+        return null;
+      },
+      createRequest: async () => {
+        createCalled = true;
+        return existingRow;
+      },
+    },
+  } as unknown as AppDependencies);
+
+  const client: RpcClient = createORPCClient(
+    new RPCLink({
+      url: "http://server/rpc",
+      fetch: (req) => Promise.resolve(app.request(req)),
+    }),
+  );
+
+  // Matching replay succeeds and returns existing without checking session or calling createRequest
+  const replayed = await client.requests.create({
+    action: "ALERT",
+    condition: "GTE",
+    targetPrice: 96000,
+    units: null,
+    creationKey: "d1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+  });
+  assert.equal(replayed.id, "req-123");
+  assert.equal(createCalled, false);
+
+  // Conflicting replay throws 409
+  await assert.rejects(
+    client.requests.create({
+      action: "ALERT",
+      condition: "GTE",
+      targetPrice: 97000,
+      units: null,
+      creationKey: "d1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    }),
+    (error: unknown) =>
+      error instanceof ORPCError &&
+      error.status === 409 &&
+      error.code === "CONFLICT" &&
+      (error.data as { appCode: string }).appCode ===
+        "REQUEST_CREATION_CONFLICT",
+  );
 });

@@ -14,6 +14,16 @@ export const env = createEnv({
     WEB_APP_URL: z.url().optional(),
     TELEGRAM_GROUP_ID: z.coerce.number().int().safe().negative().optional(),
     QUOTE_SENDER_ID: z.string().min(1).optional(),
+    SETTLEMENT_SENDER_ID: z.string().regex(/^\d+$/).optional(),
+    SETTLEMENT_BOOTSTRAP_MESSAGE_ID: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional(),
+    SETTLEMENT_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     TELEGRAM_SESSIONS_DIR: z.string().min(1).default("./telegram-sessions"),
     MAX_TELEGRAM_SESSIONS: z.coerce.number().int().min(1).max(20).default(20),
     WORKER_INTERNAL_TOKEN: z.string().min(32).optional(),

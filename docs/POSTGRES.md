@@ -16,7 +16,7 @@ MIGRATION_DATABASE_URL=postgresql://postgres:<password>@<db-host>:5432/<database
 
 ### Connection pooling and sizing
 
-Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@prisma/adapter-pg`:
+Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@prisma/adapter-pg` (see [ADR 0001](adr/0001-direct-pg-pool-no-pgbouncer.md)):
 
 - Connection pool size: capped by `DATABASE_POOL_MAX` (default 5 connections per process).
 - Checkout timeout: 5,000 ms (`connectionTimeoutMillis`).
@@ -26,7 +26,7 @@ Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@pris
 
 ## Schema and entities
 
-The database schema (`packages/db/prisma/schema/schema.prisma`) manages 9 primary models:
+The database schema (`packages/db/prisma/schema/schema.prisma`) includes these primary persistence models:
 
 1. **`TelegramUser`**: Canonical user record created from verified Mini App identity (`telegramUserId` unique).
 2. **`TelegramSession`**: User MTProto session state (`PENDING_OTP`, `ACTIVE`, `NOT_IN_GROUP`, `REVOKED`, `REVOKING`, `ERROR`), connection state (`CONNECTED`, `CONNECTING`, `OFFLINE`, `DEGRADED`), and storage key.
@@ -36,14 +36,17 @@ The database schema (`packages/db/prisma/schema/schema.prisma`) manages 9 primar
 6. **`QuoteHistory`**: Authoritative gold quotes from canonical bot announcements (`compactQuote`, `sourceMessageId` unique).
 7. **`Participant`**: OTC market actors identified by canonical bot alias (`id` string). Stores optional unique `telegramUserId` and resolution status (`UNRESOLVED`, `CANDIDATE`, `VERIFIED`, `CONFLICT`, `CONFLICT_FLAGGED`).
 8. **`TradingAction`**: Observed human order commands and taker actions (`ORDER_BUY`, `ORDER_SELL`, `TAKE_ALL`, `TAKE_QUANTITY`, `CANCEL`) with effective `side` (`BUY`/`SELL`) and reply context. Enforces `@@unique([chatId, sourceMessageId])`.
-9. **`Trade`**: Completed trades recorded strictly upon receiving authoritative bot receipts (`حواله`). Enforces `@@unique([chatId, sourceMessageId])`.
+9. **`Trade`**: `NORMAL` receipts and synthetic `SETTLEMENT` position closes. `@@unique([chatId, sourceMessageId])` remains for non-null receipt message IDs; SQL separately enforces one synthetic trade per Settlement and participant.
+10. **`Settlement`**: Accepted announcement identity, immutable payload hash, bootstrap boundary, application status and coverage review metadata. Composite group/message references prevent synthetic trades from linking across groups.
+11. **`FinancialInbox`**: Immutable financial message observations and correction/review state. Transport observations never prove full receipt coverage by themselves.
+12. **`GroupIngestionState`**: Durable history cursor, recovery requirement, applied boundary, coverage watermark, financial gate and analytics cache revision.
 
 ## Data retention and query semantics
 
 - **Permanent Retention**: Both `Trade` and `QuoteHistory` records are **permanently retained**. They are never automatically pruned or deleted.
 - **7-Day Rolling Analytics Window**: The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) used by `analytics.traders` to calculate participant volume, win rate, and realized P&L. It must never be applied as a data retention TTL.
-- **Latest Trade Derivation**: The dashboard derives the latest completed trade directly from `Trade` using an indexed scan on `@@index([sourceMessageId])` with `LIMIT 1`. No separate or duplicate singleton table is used.
-- **Idempotency**: All message-based tables enforce uniqueness on `sourceMessageId` (or `(chatId, sourceMessageId)`), allowing concurrent worker sessions to observe the same Telegram messages safely with `createMany({ skipDuplicates: true })`.
+- **Latest Trade Derivation**: The dashboard derives the latest `NORMAL` completed trade directly from `Trade` using an indexed message-ID scan with `LIMIT 1`. Synthetic settlements never become a market head.
+- **Idempotency**: Receipt, quote, action, and Settlement messages retain their source-message uniqueness. Synthetic Trades have null `sourceMessageId` and a separate settlement/participant unique index. Concurrent MTProto sessions use durable database idempotency with `skipDuplicates: true` (see [ADR 0004](adr/0004-idempotent-db-ingestion-with-skip-duplicates.md)); transport is not exactly once.
 
 ## Migrations
 

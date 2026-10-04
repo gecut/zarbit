@@ -62,14 +62,7 @@ TypeScript compilation (`pnpm check-types`), linting (`pnpm lint`), production b
 
 ### Analytics monetary conversion
 
-Each historical and new trading unit represents 100 grams of 18-karat gold.
-Recorded compact prices remain 17-karat mithqal quotes. Realized monetary P&L
-is `Math.round(sumOfUnroundedPoints * 100 / 4.3318 * 1000)`; negative zero becomes zero.
-Sum unrounded closing P&L over the rolling window before converting; never sum
-rounded per-trade amounts. API points remain unit-weighted quote differences
-rounded to two decimals for display. No raw trades or schemas are rewritten.
-Deploy server and web together, restart server caches, and reload existing web
-tabs: older web bundles still multiply monetary P&L by 100.
+See [BUSINESS-RULES.md](BUSINESS-RULES.md#financial-calculations-and-conversions) for the authoritative conversion formula (`sumOfUnroundedPoints * 100 / 4.3318 * 1000`), rounding rules, and deploy-order requirements.
 
 ## Primary price and request behavior
 

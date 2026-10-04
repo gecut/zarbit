@@ -26,7 +26,7 @@ The PostgreSQL data model in `packages/db` is extended to persist four primary e
 
 1. **`Participant`**: Canonical market actor identified by the bot-emitted alias.
 2. **`TradingAction`**: Observed raw human trading intents (orders, takes, cancels) with full reply context.
-3. **`Trade`**: Completed trades created strictly upon receipt of an authoritative bot receipt (`حواله`).
+3. **`Trade`**: `NORMAL` completed receipts and synthetic `SETTLEMENT` accounting closes. Only `NORMAL` trades contribute to market heads and request triggers.
 4. **`QuoteHistory`**: Authoritative reference quotes from the group.
 
 ```mermaid
@@ -115,7 +115,7 @@ erDiagram
 
 #### C. `Trade`
 
-- **Confirmation Boundary:** A `Trade` exists **ONLY after an authoritative bot receipt (`حواله`)** is observed.
+- **Confirmation Boundary:** A `NORMAL` Trade exists only after an authoritative bot receipt (`حواله`). A `SETTLEMENT` Trade is a position close derived from a separately accepted Settlement event after coverage review.
 - **Rule of Truth:** Canonical order messages (`🔵 ... 1 خ 104900 (مانده: 1)`) represent active liquidity, NOT completed trades. Even if an order's `مانده` decreases, the authoritative trade confirmation is strictly the bot receipt.
 - **Non-Uniqueness of Reference Numbers:** Empirical analysis of 3,820 real group messages proved that `شماره حواله` is **NOT globally unique** (e.g. reference `6380` was issued twice on the same trading day for two completely different trades). Therefore:
   - `sourceMessageId` (Telegram message ID of the receipt) is the unique primary key constraint.
@@ -175,7 +175,7 @@ flowchart TD
 
 ### 3.2 Idempotency Rules
 
-1. **Source Message Keying:** All ingested records (`QuoteHistory`, `Trade`, `TradingAction`) enforce a `UNIQUE` index on `sourceMessageId`.
+1. **Source Message Keying:** Received `QuoteHistory`, `NORMAL Trade`, and `TradingAction` records retain Telegram message-ID uniqueness. Synthetic `SETTLEMENT Trade` rows have null `sourceMessageId` and are unique by settlement boundary and participant.
 2. **Transaction Isolation:** Inserts are executed using `createMany({ skipDuplicates: true })` or `INSERT ... ON CONFLICT (sourceMessageId) DO NOTHING`.
 3. **Observation Settlement:**
    - The first session transaction to commit persists the record and returns `count === 1`.
@@ -266,12 +266,12 @@ stateDiagram-v2
 
 The Home terminal reads market data via `GET /rpc/market.snapshot`:
 
-- `QuoteHistory` provides the authoritative official quote; completed bot receipts in `Trade` provide the latest trade and recent trades list.
+- `QuoteHistory` provides the authoritative official quote; completed `NORMAL` receipts in `Trade` provide the latest trade and recent trades list.
 - The server (`MarketState`) evaluates market heads via `store.marketHeads()`, querying the latest quote and up to 10 recent completed trades ordered by `sourceMessageId DESC`.
 - Market heads are cached in memory on the server (5-second cache when offline/degraded, 60-second cache when connected).
 - The web client (`useMarket`) polls `market.snapshot` every 3 seconds via TanStack Query (`marketPolling`).
 - Monotonic head merging (`mergeMarketSnapshot`) prevents late HTTP responses from regressing visible market heads on the client.
-- The signed spread on the dashboard is computed as `latest Trade compact price - latest Quote compact price`.
+- The signed spread on the dashboard is computed as `latest NORMAL Trade compact price - latest Quote compact price`.
 - Only headline metrics convert to full Tomans (`compactPrice × 1000`). All secondary prices and request targets remain compact integers.
 
 ---

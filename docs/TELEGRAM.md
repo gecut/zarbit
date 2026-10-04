@@ -33,9 +33,11 @@ The worker executes user trading requests (`Request`):
 2. **Atomic Claim**: The request is transitioned to `CLAIMED` inside a database transaction using an atomic update with a unique `claimToken`.
 3. **Delivery**: The session transitions the request to `SENDING` and posts the formatted order command (e.g. `1خ105020`) to the Telegram group using MTProto.
 4. **Completion**: Upon successful delivery, the request is marked `DONE` with `outgoingMessageId`. If transmission fails, it transitions to `FAILED` with error metadata.
-5. **Immediate Execution («ارسال فوری»)**: Users may bypass trade matching via `requests.forceSend`, which claims and sends the order immediately.
+5. **Immediate Execution («ارسال فوری»)**: Users may bypass trade matching via `requests.forceSend`, which claims and sends the order immediately, subject to the active session state and group financial review gate (`REVIEW_REQUIRED`).
 
 ## Session lifecycle and failure handling
+
+Worker instances solely own session files with exclusive SQLite OS locks (see [ADR 0002](adr/0002-single-worker-ownership-of-mtproto-sessions.md)).
 
 - **Network Interruption**: Network outages retain session authorization files. Reconnection uses exponential backoff (from 10 seconds up to a 5-minute ceiling) and marks connection status `DEGRADED`.
 - **Revocation**: Disconnect requests immediately record `REVOKING` in PostgreSQL. The worker then logs out the MTProto client, closes the SQLite database, deletes the session files (`<hex>.sqlite`), and marks the state `REVOKED`.
@@ -56,3 +58,9 @@ Operational logging uses Pino JSON with structured correlation metadata:
 
 - Sensitive credentials, phone numbers, OTP codes, 2FA passwords, request bodies, and raw Telegram message texts are redacted or omitted.
 - Logs use opaque references (`sessionRef`, `challengeRef`) and standardized event names (e.g. `telegram.quote.recorded`, `telegram.trade.recorded`, `telegram.login.started`).
+
+## Settlement ingestion
+
+The shared financial coordinator is attached before session initialization. Its durable inbox is independent of per-session serialization and memory deduplication. With settlement enabled, startup/reconnect closes the request/financial gate, reads a fixed group history head and catches up from the durable cursor, initially just before `SETTLEMENT_BOOTSTRAP_MESSAGE_ID`. History scan success is not receipt coverage certification. Failed recovery persists `historyRecoveryRequired` and blocks financial application.
+
+Settlement uses numeric `SETTLEMENT_SENDER_ID`; quotes/receipts continue using `QUOTE_SENDER_ID`. Ambiguous receipt candidates are persisted for review even when the senders differ. The parser remains unavailable until exact raw Telegram evidence is provided, and enabling ingestion currently fails startup. No settlement processing sends Telegram orders or wakes trade requests. See [operations](OPERATIONS.md#settlement-release-and-manual-coverage-review) for coverage approval and correction-detection limits.

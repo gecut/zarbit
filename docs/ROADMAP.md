@@ -2,7 +2,7 @@
 
 > **Status:** Active Roadmap  
 > **Scope:** Multi-phase product evolution from private quote dashboard to autonomous whale-following.  
-> **Key Architecture Decisions:** Data collection first; ACTION COPY (not trade copy); permanent trade retention with rolling 7-day analytics windows; conservative deterministic identity resolution.
+> **Key Architecture Decisions:** Data collection first; [ACTION COPY (not trade copy)](adr/0005-action-copy-over-trade-copy.md); permanent trade retention with rolling 7-day analytics windows; conservative deterministic identity resolution. (See [README.md](README.md) and [GLOSSARY.md](GLOSSARY.md)).
 
 ---
 
@@ -22,7 +22,7 @@ ZarBit transforms a high-velocity, semi-structured Persian Telegram gold trading
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ Phase 2: MARKET INTELLIGENCE & ANALYTICS (Completed in Phases 10–13)    │
-│ - 7-day rolling performance analytics (Volume, P&L, FIFO position)      │
+│ - 7-day rolling performance analytics (Volume, P&L, WACB position)      │
 │ - Leaderboard & Trader Ranking API (`analytics.traders/traderDetail`)   │
 │ - Persian Leaderboard Web UI (`/traders`) with sort bar & detail drawer │
 │ - Data coverage confidence badges (`HIGH`, `ESTIMATED`, `UNVERIFIED`)   │
@@ -71,7 +71,7 @@ Phase 2 built the accounting engine, ranking API, and Persian leaderboard UI.
 ### 2.1 Rolling 7-Day Performance Engine
 
 - Trader rankings evaluate a **rolling 7-day query window** (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`).
-- FIFO inventory replay: Historical trades prior to the 7-day window establish opening position and cost basis at window start; window trades accumulate realized P&L, volumes, and trade counts.
+- WACB inventory replay: Historical trades prior to the 7-day window establish opening position and cost basis at window start; window trades accumulate realized P&L, volumes, and trade counts.
 - Financial unit multiplier: Canonical rule is $\text{compactPrice} \times 1000 = \text{Tomans}$. Realized P&L in Tomans is computed as $\text{unroundedRealizedPnlPoints} \times 100 / 4.3318 \times 1000$.
 - Data coverage confidence: Evaluated from $\max(\text{earliestSystemDate}, \text{firstTradeAt})$.
   - `HIGH`: Confirmed flat-position reset (`hasZeroCrossing === true`) and full 7-day data span.
@@ -121,7 +121,7 @@ Phase 3 introduces autonomous order copying and execution.
 | Permanent Trade Retention                                       |   ✅    |   ✅    |   ✅    |
 | Terminal Dashboard (Latest Quote, Trade, Recent Trades Tape)    |   ✅    |   ✅    |   ✅    |
 | Request Radar & Management (`BUY`, `SELL`, `ALERT`, forceSend)  |   ✅    |   ✅    |   ✅    |
-| Rolling 7-Day Performance Analytics & FIFO Inventory            |   ❌    |   ✅    |   ✅    |
+| Rolling 7-Day Performance Analytics & WACB Inventory            |   ❌    |   ✅    |   ✅    |
 | Leaderboard & Participant Profiling API (`analytics.*`)         |   ❌    |   ✅    |   ✅    |
 | Leaderboard Web UI (`/traders`) & Trader Detail Drawer          |   ❌    |   ✅    |   ✅    |
 | Action-Copy Order Execution Engine                              |   ❌    |   ❌    |   ✅    |

@@ -10,6 +10,23 @@ import type {
   TraderListQuery,
   TraderRecentTrade,
 } from "@zarbit/contracts";
+import { AppError } from "@zarbit/contracts";
+
+type TradeRow = Awaited<
+  ReturnType<Store["participantTradesChronological"]>
+>[number];
+function isNormalTrade(row: TradeRow): row is TradeRow & {
+  sourceMessageId: number;
+  buyerParticipantId: string;
+  sellerParticipantId: string;
+} {
+  return (
+    row.type === "NORMAL" &&
+    row.sourceMessageId !== null &&
+    row.buyerParticipantId !== null &&
+    row.sellerParticipantId !== null
+  );
+}
 
 export class AnalyticsService {
   constructor(
@@ -20,6 +37,13 @@ export class AnalyticsService {
   async getTradersList(
     query: TraderListQuery,
   ): Promise<ParticipantAnalyticsSummary[]> {
+    if (await this.store.hasAppliedSettlement()) {
+      throw new AppError(
+        "CLIENT_UPDATE_REQUIRED",
+        "نسخه برنامه قدیمی است؛ برنامه را به‌روز کنید.",
+        409,
+      );
+    }
     const windowEnd = this.now();
     const windowStart = new Date(windowEnd.getTime() - ROLLING_WINDOW_MS);
 
@@ -42,6 +66,7 @@ export class AnalyticsService {
     }
 
     for (const trade of allTrades) {
+      if (!isNormalTrade(trade)) continue;
       if (tradesByAlias.has(trade.buyerParticipantId)) {
         tradesByAlias.get(trade.buyerParticipantId)!.push({
           id: trade.id,
@@ -125,7 +150,16 @@ export class AnalyticsService {
   async getTraderDetail(
     alias: string,
   ): Promise<ParticipantAnalyticsDetail | null> {
-    const rawTrades = await this.store.participantTradesChronological(alias);
+    if (await this.store.hasAppliedSettlement()) {
+      throw new AppError(
+        "CLIENT_UPDATE_REQUIRED",
+        "نسخه برنامه قدیمی است؛ برنامه را به‌روز کنید.",
+        409,
+      );
+    }
+    const rawTrades = (
+      await this.store.participantTradesChronological(alias)
+    ).filter(isNormalTrade);
     if (rawTrades.length === 0) {
       // Check if participant exists at all
       const participant = await this.store.participant(alias);
@@ -136,14 +170,29 @@ export class AnalyticsService {
     const windowStart = new Date(windowEnd.getTime() - ROLLING_WINDOW_MS);
     const earliestDate = await this.store.earliestTradeDate();
 
-    const participantTrades: ParticipantTrade[] = rawTrades.map((t) => ({
-      id: t.id,
-      sourceMessageId: t.sourceMessageId,
-      side: t.buyerParticipantId === alias ? "BUY" : "SELL",
-      quantity: t.quantity,
-      compactPrice: t.compactPrice,
-      announcedAt: t.announcedAt,
-    }));
+    const participantTrades: ParticipantTrade[] = [];
+    for (const t of rawTrades) {
+      if (t.buyerParticipantId === alias) {
+        participantTrades.push({
+          id: t.id,
+          sourceMessageId: t.sourceMessageId,
+          side: "BUY",
+          quantity: t.quantity,
+          compactPrice: t.compactPrice,
+          announcedAt: t.announcedAt,
+        });
+      }
+      if (t.sellerParticipantId === alias) {
+        participantTrades.push({
+          id: t.id,
+          sourceMessageId: t.sourceMessageId,
+          side: "SELL",
+          quantity: t.quantity,
+          compactPrice: t.compactPrice,
+          announcedAt: t.announcedAt,
+        });
+      }
+    }
 
     const analytics = calculateParticipantAnalytics7D({
       alias,
@@ -176,20 +225,36 @@ export class AnalyticsService {
 
     // Return up to 20 most recent trades (newest first)
     const recentTrades: TraderRecentTrade[] = rawTrades
+      .flatMap((t) => [
+        ...(t.buyerParticipantId === alias
+          ? [
+              {
+                id: t.id,
+                sourceMessageId: t.sourceMessageId,
+                side: "BUY" as const,
+                quantity: t.quantity,
+                compactPrice: t.compactPrice,
+                counterpartyAlias: t.sellerParticipantId,
+                announcedAt: t.announcedAt.toISOString(),
+              },
+            ]
+          : []),
+        ...(t.sellerParticipantId === alias
+          ? [
+              {
+                id: t.id,
+                sourceMessageId: t.sourceMessageId,
+                side: "SELL" as const,
+                quantity: t.quantity,
+                compactPrice: t.compactPrice,
+                counterpartyAlias: t.buyerParticipantId,
+                announcedAt: t.announcedAt.toISOString(),
+              },
+            ]
+          : []),
+      ])
       .slice(-20)
-      .reverse()
-      .map((t) => ({
-        id: t.id,
-        sourceMessageId: t.sourceMessageId,
-        side: t.buyerParticipantId === alias ? "BUY" : "SELL",
-        quantity: t.quantity,
-        compactPrice: t.compactPrice,
-        counterpartyAlias:
-          t.buyerParticipantId === alias
-            ? t.sellerParticipantId
-            : t.buyerParticipantId,
-        announcedAt: t.announcedAt.toISOString(),
-      }));
+      .reverse();
 
     return {
       summary,

@@ -84,3 +84,79 @@ export const traderDetailQuerySchema = z
   })
   .strict();
 export type TraderDetailQuery = z.infer<typeof traderDetailQuerySchema>;
+
+export const analyticsContributionV2Schema = z
+  .object({
+    realizedPnlPoints: z.number().nullable(),
+    realizedPnlTomans: z.number().nullable(),
+    buyVolume: z.number().int().nonnegative(),
+    sellVolume: z.number().int().nonnegative(),
+    totalVolume: z.number().int().nonnegative(),
+    buyTrades: z.number().int().nonnegative(),
+    sellTrades: z.number().int().nonnegative(),
+    totalTrades: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const participantAnalyticsSummaryV2Schema =
+  participantAnalyticsSummarySchema
+    .omit({ realizedPnlPoints: true, realizedPnlTomans: true })
+    .extend({
+      realizedPnlPoints: z.number().nullable(),
+      realizedPnlTomans: z.number().nullable(),
+      contributions: z
+        .object({
+          normal: analyticsContributionV2Schema,
+          settlement: analyticsContributionV2Schema,
+          total: analyticsContributionV2Schema,
+        })
+        .strict(),
+      coverage: z
+        .object({
+          positionBaselineValid: z.boolean(),
+          status: z.enum(["VERIFIED", "REVIEW_REQUIRED", "UNKNOWN"]),
+          pnlReliable: z.boolean(),
+          reason: z.string().nullable(),
+        })
+        .strict(),
+    })
+    .strict();
+export type ParticipantAnalyticsSummaryV2 = z.infer<
+  typeof participantAnalyticsSummaryV2Schema
+>;
+
+const recentTradeV2Base = traderRecentTradeSchema.omit({
+  sourceMessageId: true,
+  counterpartyAlias: true,
+});
+export const traderRecentTradeV2Schema = z.discriminatedUnion("type", [
+  recentTradeV2Base
+    .extend({
+      type: z.literal("NORMAL"),
+      sourceMessageId: z.number().int().positive(),
+      settlementMessageId: z.null(),
+      counterpartyAlias: z.string().min(1),
+    })
+    .strict(),
+  recentTradeV2Base
+    .extend({
+      type: z.literal("SETTLEMENT"),
+      sourceMessageId: z.null(),
+      settlementMessageId: z.number().int().positive(),
+      counterpartyAlias: z.null(),
+    })
+    .strict(),
+]);
+export type TraderRecentTradeV2 = z.infer<typeof traderRecentTradeV2Schema>;
+
+export const participantAnalyticsDetailV2Schema = z
+  .object({
+    summary: participantAnalyticsSummaryV2Schema,
+    windowStart: z.string(),
+    windowEnd: z.string(),
+    recentTrades: z.array(traderRecentTradeV2Schema),
+  })
+  .strict();
+export type ParticipantAnalyticsDetailV2 = z.infer<
+  typeof participantAnalyticsDetailV2Schema
+>;

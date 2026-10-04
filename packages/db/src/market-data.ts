@@ -132,6 +132,46 @@ export function createMarketDataStore(
 
       return db.$transaction(async (tx) => {
         await lockTradeStream(tx, chatId);
+        const boundary = await tx.settlement.findFirst({
+          where: {
+            chatId,
+            status: "APPLIED",
+            sourceMessageId: { gte: input.sourceMessageId },
+          },
+          orderBy: { sourceMessageId: "asc" },
+        });
+        if (boundary) {
+          const duplicate = await tx.trade.findUnique({
+            where: {
+              chatId_sourceMessageId: {
+                chatId,
+                sourceMessageId: input.sourceMessageId,
+              },
+            },
+          });
+          if (duplicate) return { tradeRecorded: false };
+          await tx.financialInbox.updateMany({
+            where: {
+              chatId,
+              sourceMessageId: input.sourceMessageId,
+              eventKind: "NEW",
+            },
+            data: { errorCode: "LATE_RECEIPT" },
+          });
+          await tx.groupIngestionState.upsert({
+            where: { chatId },
+            create: { chatId, gateStatus: "REVIEW_REQUIRED" },
+            update: {
+              gateStatus: "REVIEW_REQUIRED",
+              analyticsRevision: { increment: 1 },
+            },
+          });
+          await tx.settlement.update({
+            where: { id: boundary.id },
+            data: { reviewReason: "LATE_RECEIPT" },
+          });
+          return { tradeRecorded: false };
+        }
         await tx.participant.upsert({
           where: { id: input.buyerAlias },
           create: { id: input.buyerAlias },
@@ -169,7 +209,10 @@ export function createMarketDataStore(
 
     latestTrade: (chatId?: bigint | number): Promise<Trade | null> =>
       db.trade.findFirst({
-        where: chatId !== undefined ? { chatId: BigInt(chatId) } : undefined,
+        where: {
+          type: "NORMAL",
+          ...(chatId !== undefined ? { chatId: BigInt(chatId) } : {}),
+        },
         orderBy: { sourceMessageId: "desc" },
       }),
 
@@ -179,6 +222,7 @@ export function createMarketDataStore(
     ): Promise<Trade[]> =>
       db.trade.findMany({
         where: {
+          type: "NORMAL",
           announcedAt: { gte: announcedAt },
           ...(options?.chatId !== undefined
             ? { chatId: BigInt(options.chatId) }

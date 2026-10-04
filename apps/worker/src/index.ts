@@ -7,6 +7,7 @@ import {
   store,
   prisma,
 } from "@zarbit/db";
+import { SETTLEMENT_PARSER_READY } from "@zarbit/domain";
 import { env, allowedTelegramUserIds } from "@zarbit/env/worker";
 import { Bot } from "grammy";
 import { formatSessionMessage } from "@zarbit/messages";
@@ -20,6 +21,7 @@ import { SessionFiles } from "./session-files";
 import { mtcuteFactory } from "./mtcute";
 import { createWorkerApp } from "./http";
 import { createMarketIngestion } from "./market-ingestion";
+import { createFinancialIngestionCoordinator } from "./financial-ingestion-coordinator";
 import { acquireWorkerOwnership } from "./ownership";
 import { workerLog } from "./logger";
 
@@ -76,6 +78,43 @@ export async function startWorker() {
       });
     },
   });
+  if (
+    env.SETTLEMENT_ENABLED &&
+    (!env.SETTLEMENT_SENDER_ID ||
+      !env.SETTLEMENT_BOOTSTRAP_MESSAGE_ID ||
+      !SETTLEMENT_PARSER_READY)
+  ) {
+    releaseOwnership();
+    throw new Error(
+      "Settlement ingestion requires verified sender/bootstrap message IDs and a finalized raw-message parser",
+    );
+  }
+  let wakeTradeRequests: (() => void) | undefined = undefined;
+  const marketIngestion = createMarketIngestion(
+    store,
+    {
+      groupId: env.TELEGRAM_GROUP_ID!,
+      senderId: env.QUOTE_SENDER_ID!,
+    },
+    () => wakeTradeRequests?.(),
+  );
+  const financialIngestion = createFinancialIngestionCoordinator(
+    store,
+    sessions,
+    {
+      groupId: env.TELEGRAM_GROUP_ID!,
+      quoteSenderId: env.QUOTE_SENDER_ID!,
+      settlementSenderId: env.SETTLEMENT_SENDER_ID,
+      settlementEnabled: env.SETTLEMENT_ENABLED,
+      settlementBootstrapMessageId: env.SETTLEMENT_BOOTSTRAP_MESSAGE_ID,
+    },
+    marketIngestion,
+  );
+  sessions.onQuote = financialIngestion.onMessage;
+  sessions.onMutation = financialIngestion.onMutation;
+  sessions.onReady = financialIngestion.recover;
+  if (env.SETTLEMENT_ENABLED)
+    await store.beginFinancialRecovery(env.TELEGRAM_GROUP_ID!);
   const initializeStartedAt = Date.now();
   const operations = new SessionOperations(store, sessions);
   try {
@@ -93,28 +132,25 @@ export async function startWorker() {
     workerLog.info("request.recovery.unknown", {
       count: recoveredRequests.length,
     });
-  const requests = createRequestExecutor(store, {
-    ready: async (userId) => {
-      await sessions.requireConnected(userId);
+  const requests = createRequestExecutor(
+    store,
+    {
+      ready: async (userId) => {
+        await sessions.requireConnected(userId);
+      },
+      group: (userId, text) => sessions.sendGroup(userId, text),
+      private: notify,
     },
-    group: (userId, text) => sessions.sendGroup(userId, text),
-    private: notify,
-  });
+    env.TELEGRAM_GROUP_ID!,
+  );
   const tradeRequests = createTradeRequestProcessor(
     store,
     requests,
     env.TELEGRAM_GROUP_ID!,
   );
+  wakeTradeRequests = tradeRequests.wake;
   tradeRequests.wake();
   sessions.forceSend = (userId, id) => requests.execute(userId, id);
-  sessions.onQuote = createMarketIngestion(
-    store,
-    {
-      groupId: env.TELEGRAM_GROUP_ID!,
-      senderId: env.QUOTE_SENDER_ID!,
-    },
-    tradeRequests.wake,
-  );
   const server = serve({
     fetch: createWorkerApp(
       sessions,
@@ -188,6 +224,7 @@ export async function startWorker() {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await tradeRequests.stop();
     await sessions.stop();
+    await financialIngestion.drain();
     await operations.stop();
     await prisma.$disconnect();
     releaseOwnership();

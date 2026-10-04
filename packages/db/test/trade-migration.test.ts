@@ -73,6 +73,28 @@ test("trade migration preserves market history and historical quote triggers", a
         .sourceMessageId,
       11,
     );
+    await client.query(
+      await readFile(
+        new URL(
+          "20260920010000_settlement_foundation/migration.sql",
+          directory,
+        ),
+        "utf8",
+      ),
+    );
+    const historical = (
+      await client.query(
+        'SELECT "id", "sourceMessageId", "type", "buyerParticipantId", "sellerParticipantId" FROM "Trade" WHERE "id" = $1',
+        ["trade"],
+      )
+    ).rows[0];
+    assert.deepEqual(historical, {
+      id: "trade",
+      sourceMessageId: 11,
+      type: "NORMAL",
+      buyerParticipantId: "buyer",
+      sellerParticipantId: "seller",
+    });
   } finally {
     await client.query("SET search_path TO public");
     await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);

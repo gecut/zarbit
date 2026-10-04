@@ -50,3 +50,9 @@ Under Vite DEV, `/?marketScenario=normal` activates deterministic in-browser moc
 - [oRPC contract-first implementation](https://v1.orpc.dev/docs/contract-first/implement-contract)
 - [oRPC batching](https://v1.orpc.dev/docs/plugins/batch-requests)
 - [TanStack Query](https://tanstack.com/query/latest/docs/framework/react/overview)
+
+## Settlement Analytics V2
+
+`analytics.tradersV2` and `analytics.traderDetailV2` expose strict V2 schemas on `/analytics/v2/traders` and `/analytics/v2/traders/{alias}`. NORMAL recent trades have a receipt source ID and counterparty; SETTLEMENT trades have a settlement message ID, null receipt source and null counterparty. Normal, settlement and total contributions share the same WACB replay; total rounding is preserved, with the residual assigned to the settlement bucket. Historical same-alias records retain both participant sides in list and detail.
+
+P&L is null without a valid bootstrap or when the seven-day window crosses that unproven baseline. Unverified later coverage is explicitly provisional; baseline validity, coverage status and P&L reliability are independent metadata. Cache keys include the durable analytics revision. After the first applied Settlement, V1 rejects with `CLIENT_UPDATE_REQUIRED` rather than presenting incomplete totals. Release server, worker and web together before activation.

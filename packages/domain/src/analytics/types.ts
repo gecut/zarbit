@@ -10,6 +10,18 @@ export interface ParticipantTrade {
   readonly quantity: number;
   readonly compactPrice: number;
   readonly announcedAt: Date;
+  readonly type?: "NORMAL" | "SETTLEMENT";
+}
+
+export interface AnalyticsContribution {
+  readonly realizedPnlPoints: number;
+  readonly realizedPnlTomans: number;
+  readonly buyVolume: number;
+  readonly sellVolume: number;
+  readonly totalVolume: number;
+  readonly buyTrades: number;
+  readonly sellTrades: number;
+  readonly totalTrades: number;
 }
 
 export interface PositionState {
@@ -67,4 +79,9 @@ export interface ParticipantAnalytics7D {
   readonly unmatchedUnits: number;
   readonly totalObservedTrades: number;
   readonly firstTradeAt: Date | null;
+  readonly contributions: {
+    readonly normal: AnalyticsContribution;
+    readonly settlement: AnalyticsContribution;
+    readonly total: AnalyticsContribution;
+  };
 }

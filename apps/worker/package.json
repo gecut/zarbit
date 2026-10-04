@@ -12,7 +12,8 @@
     "check-types": "tsc --noEmit",
     "dev": "tsx watch src/main.ts",
     "start": "node dist/index.mjs",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "settlement:review": "tsx src/settlement-review.ts"
   },
   "dependencies": {
     "@mtcute/dispatcher": "^0.26.0",

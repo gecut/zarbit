@@ -248,8 +248,10 @@ test("OpenAPI includes every contract operation and authentication scheme", asyn
         ).length,
       0,
     ),
-    14,
+    16,
   );
+  assert.ok(spec.paths?.["/analytics/v2/traders"]);
+  assert.ok(spec.paths?.["/analytics/v2/traders/{alias}"]);
   assert.ok(spec.components?.securitySchemes?.telegram);
 });
 

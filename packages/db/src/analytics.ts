@@ -27,11 +27,13 @@ export function createAnalyticsDataStore(prisma: PrismaClient) {
       const rows = await prisma.$queryRaw<Array<{ alias: string }>>`
         SELECT "buyerParticipantId" AS "alias"
         FROM "Trade"
-        WHERE "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
+        WHERE "buyerParticipantId" IS NOT NULL
+          AND "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
         UNION
         SELECT "sellerParticipantId" AS "alias"
         FROM "Trade"
-        WHERE "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
+        WHERE "sellerParticipantId" IS NOT NULL
+          AND "announcedAt" >= ${windowStart} AND "announcedAt" <= ${windowEnd}
       `;
       return rows.map((r) => r.alias);
     },

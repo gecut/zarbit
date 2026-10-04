@@ -18,6 +18,7 @@ import type {
   Account,
   CodeDelivery,
   QuoteEvent,
+  TelegramMutation,
   TelegramLifecycleEvent,
 } from "./transport";
 
@@ -192,6 +193,32 @@ export class Sessions {
     revision: number,
     event: QuoteEvent,
   ) => Promise<void>;
+  onMutation?: (event: TelegramMutation) => Promise<void>;
+  onReady?: (userId: string, revision: number) => Promise<void>;
+  async latestMessageId(): Promise<number> {
+    const runtime = [...this.runtimes.values()].find(
+      (rt) =>
+        rt.online && !rt.abort.signal.aborted && rt.client.latestMessageId,
+    );
+    if (!runtime?.client.latestMessageId)
+      throw new Error("No active Telegram history session");
+    return runtime.client.latestMessageId(this.options.groupId);
+  }
+  async history(
+    afterMessageId: number,
+    beforeMessageId: number,
+  ): Promise<QuoteEvent[]> {
+    const runtime = [...this.runtimes.values()].find(
+      (rt) => rt.online && !rt.abort.signal.aborted && rt.client.history,
+    );
+    if (!runtime?.client.history)
+      throw new Error("No active Telegram history session");
+    return runtime.client.history(
+      this.options.groupId,
+      afterMessageId,
+      beforeMessageId,
+    );
+  }
   constructor(
     readonly store: SessionStore,
     private readonly options: SessionOptions,
@@ -684,16 +711,28 @@ export class Sessions {
       return false;
     if (!rt.stop)
       rt.stop = await this.io(rt, "subscribe", () =>
-        rt.client.subscribe((event) => {
-          void this.serial(rt.userId, async () => {
-            if (rt.online && !this.stopped)
-              await this.onQuote?.(rt.userId, rt.revision, event);
-          }).catch((error) =>
-            workerLog.failure("telegram.quote.processing_failed", error, {
-              sessionRef: sessionRef(rt.userId),
-            }),
-          );
-        }),
+        rt.client.subscribe(
+          (event) => {
+            void this.serial(rt.userId, async () => {
+              if (this.runtimes.get(rt.userId) === rt && !this.stopped)
+                await this.onQuote?.(rt.userId, rt.revision, event);
+            }).catch((error) =>
+              workerLog.failure("telegram.quote.processing_failed", error, {
+                sessionRef: sessionRef(rt.userId),
+              }),
+            );
+          },
+          (event) => {
+            void this.serial(rt.userId, async () => {
+              if (this.runtimes.get(rt.userId) === rt && !this.stopped)
+                await this.onMutation?.(event);
+            }).catch((error) =>
+              workerLog.failure("telegram.mutation.processing_failed", error, {
+                sessionRef: sessionRef(rt.userId),
+              }),
+            );
+          },
+        ),
       );
     const activated = await this.store.activateSession(rt.userId, rt.revision, {
       state: "ACTIVE",
@@ -710,6 +749,11 @@ export class Sessions {
       return false;
     }
     rt.online = true;
+    void this.onReady?.(rt.userId, rt.revision).catch((error: unknown) =>
+      workerLog.failure("telegram.financial_recovery.failed", error, {
+        sessionRef: sessionRef(rt.userId),
+      }),
+    );
     if (this.outages.connected(rt.userId, rt.revision)) {
       workerLog.info("telegram.session.recovered", {
         reasonCode: "NONE",

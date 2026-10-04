@@ -161,7 +161,7 @@ export function mtcuteFactory(config: {
           throw error;
         }
       },
-      async subscribe(handler) {
+      async subscribe(handler, onMutation) {
         dispatcher.onNewMessage((message) => {
           workerLog.debug("telegram.message.observed", {
             chatId: message.chat.id,
@@ -195,6 +195,28 @@ export function mtcuteFactory(config: {
             replyToSenderId,
           });
         });
+        dispatcher.onEditMessage((message) => {
+          onMutation?.({
+            kind: "EDIT",
+            event: {
+              chatId: message.chat.id,
+              senderId: String(message.sender.id),
+              messageId: message.id,
+              text: message.text,
+              date: message.date,
+            },
+          });
+        });
+        dispatcher.onDeleteMessage((update) => {
+          if (update.channelId === null) return;
+          for (const messageId of update.messageIds) {
+            onMutation?.({
+              kind: "DELETE",
+              chatId: update.channelId,
+              messageId,
+            });
+          }
+        });
         try {
           await client.startUpdatesLoop();
         } catch (error) {
@@ -205,6 +227,29 @@ export function mtcuteFactory(config: {
           dispatcher.removeUpdateHandler("all");
           void client.stopUpdatesLoop();
         };
+      },
+      async latestMessageId(chatId) {
+        const messages = await client.getHistory(chatId, { limit: 1 });
+        return messages[0]?.id ?? 0;
+      },
+      async history(chatId, afterMessageId, beforeMessageId) {
+        const messages = [];
+        for await (const message of client.iterHistory(chatId, {
+          minId: afterMessageId,
+          maxId: beforeMessageId,
+          limit: 10_001,
+        })) {
+          if (messages.length === 10_000)
+            throw new Error("Telegram history safety limit reached");
+          messages.push({
+            chatId: message.chat.id,
+            senderId: String(message.sender.id),
+            messageId: message.id,
+            text: message.text,
+            date: message.date,
+          });
+        }
+        return messages.sort((a, b) => a.messageId - b.messageId);
       },
       async sendGroup(text) {
         return (await client.sendText(config.groupId, text)).id;

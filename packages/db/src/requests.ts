@@ -110,6 +110,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
     });
   const arm = async (tx: Prisma.TransactionClient) => {
     const head = await tx.trade.findFirst({
+      where: { type: "NORMAL" },
       orderBy: { sourceMessageId: "desc" },
       select: { sourceMessageId: true },
     });
@@ -220,11 +221,20 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       db.$transaction(async (tx) => {
         const chatId = BigInt(groupId);
         await lockTradeStream(tx, chatId);
+        const ingestion = await tx.groupIngestionState.findUnique({
+          where: { chatId },
+        });
+        if (ingestion?.gateStatus === "REVIEW_REQUIRED") return;
         const cursor = await tx.tradeRequestCursor.findUniqueOrThrow({
           where: { chatId },
         });
         const trade = await latestGroupTrade(tx, chatId);
-        if (!trade || trade.sourceMessageId <= cursor.sourceMessageId) return;
+        if (
+          !trade ||
+          trade.sourceMessageId === null ||
+          trade.sourceMessageId <= cursor.sourceMessageId
+        )
+          return;
         const fresh = isFreshTrade(trade.announcedAt, now());
         let claimed = 0;
         if (fresh) {
@@ -329,6 +339,32 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         if (!initial) return { count: 0, row: null };
         if (initial.triggeredChatId !== null)
           await lockTradeStream(tx, initial.triggeredChatId);
+        if (initial.triggeredChatId !== null) {
+          const ingestion = await tx.groupIngestionState.findUnique({
+            where: { chatId: initial.triggeredChatId },
+          });
+          if (ingestion?.gateStatus === "REVIEW_REQUIRED") {
+            await tx.request.updateMany({
+              where: {
+                id,
+                claimToken,
+                status: "ACTIVE",
+                executionPhase: "CLAIMED",
+                deliveryStartedAt: null,
+              },
+              data: {
+                executionPhase: "WAITING_TRADE",
+                claimToken: null,
+                ...emptyTrigger,
+              },
+            });
+            return {
+              count: 0,
+              row: null,
+              reason: "FINANCIAL_REVIEW_REQUIRED" as const,
+            };
+          }
+        }
         await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${initial.userId} FOR UPDATE`;
         await tx.$queryRaw`SELECT "id" FROM "Request" WHERE "id" = ${id} FOR UPDATE`;
         const row = await tx.request.findUniqueOrThrow({ where: { id } });

@@ -12,7 +12,7 @@ export async function lockTradeStream(
 
 export function latestGroupTrade(tx: Prisma.TransactionClient, chatId: bigint) {
   return tx.trade.findFirst({
-    where: { chatId },
+    where: { chatId, type: "NORMAL" },
     orderBy: { sourceMessageId: "desc" },
   });
 }
@@ -21,9 +21,11 @@ export function eligibleTrade(
   row: Request,
   trade: Trade | null,
   now: Date,
-): trade is Trade {
+): trade is Trade & { sourceMessageId: number } {
   return (
     trade !== null &&
+    trade.type === "NORMAL" &&
+    trade.sourceMessageId !== null &&
     isFreshTrade(trade.announcedAt, now) &&
     trade.sourceMessageId > row.armedAfterMessageId &&
     trade.announcedAt.getTime() > row.armedAt.getTime() &&
@@ -32,6 +34,9 @@ export function eligibleTrade(
 }
 
 export function tradeTrigger(trade: Trade) {
+  if (trade.type !== "NORMAL" || trade.sourceMessageId === null) {
+    throw new Error("Settlement cannot trigger requests");
+  }
   return {
     triggeredPrice: trade.compactPrice,
     triggerSource: "TRADE" as const,

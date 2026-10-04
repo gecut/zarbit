@@ -15,7 +15,7 @@ export function TradersPage() {
 
   const api = useApi(useIdentity().telegramUserId);
   const tradersQuery = useQuery(
-    api.analytics.traders.queryOptions({
+    api.analytics.tradersV2.queryOptions({
       input: { sortBy, sortOrder, limit: 50 },
       refetchInterval: 30000,
     }),

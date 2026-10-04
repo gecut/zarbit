@@ -24,8 +24,165 @@ async function clean() {
   await prisma.telegramUser.deleteMany();
   await prisma.tradingAction.deleteMany();
   await prisma.trade.deleteMany();
+  await prisma.settlement.deleteMany();
+  await prisma.financialInbox.deleteMany();
+  await prisma.groupIngestionState.deleteMany();
   await prisma.participant.deleteMany();
 }
+
+test("bootstrap and reviewed settlement close both sides exactly once", async () => {
+  const chatId = -1001n;
+  const announcedAt = new Date("2026-09-07T08:00:00.000Z");
+  const bootstrap = await store.recordSettlement({
+    chatId,
+    sourceMessageId: 10,
+    senderId: "55",
+    compactPrice: 100_000,
+    announcedAt,
+    payloadHash: "a".repeat(64),
+    rawText: "test bootstrap",
+  });
+  assert.equal(bootstrap?.isBootstrap, true);
+  await store.beginFinancialRecovery(chatId);
+  await assert.rejects(
+    store.applySettlement(chatId, 10),
+    /history recovery is incomplete/,
+  );
+  await store.completeFinancialRecovery(chatId);
+  await store.applySettlement(chatId, 10);
+  assert.equal(await prisma.trade.count(), 0);
+
+  for (const [sourceMessageId, buyerAlias, sellerAlias] of [
+    [11, "long", "short"],
+    [12, "long", "short"],
+  ] as const) {
+    const payloadHash = sourceMessageId.toString(16).padStart(64, "0");
+    await store.observeFinancialMessage({
+      chatId,
+      sourceMessageId,
+      senderId: "55",
+      rawText: `test receipt ${sourceMessageId}`,
+      eventKind: "NEW",
+      payloadHash,
+    });
+    assert.equal(
+      (
+        await store.recordTrade({
+          chatId,
+          sourceMessageId,
+          buyerAlias,
+          sellerAlias,
+          quantity: 1,
+          compactPrice: 100_000,
+          rawPrice: 100_000_000n,
+          announcedAt,
+        })
+      )?.tradeRecorded,
+      true,
+    );
+    await store.completeFinancialMessage(chatId, sourceMessageId, payloadHash);
+  }
+  await store.recordSettlement({
+    chatId,
+    sourceMessageId: 20,
+    senderId: "55",
+    compactPrice: 102_980,
+    announcedAt,
+    payloadHash: "b".repeat(64),
+    rawText: "test settlement",
+  });
+  await store.markHistoryScanned(chatId, 20);
+  const evidence = await store.coverageEvidence(chatId, 10, 20);
+  assert.equal(evidence.unresolvedCount, 0);
+  await store.applySettlement(chatId, 20, {
+    coverageDigest: evidence.digest,
+    reviewedBy: "integration-test",
+  });
+  await store.applySettlement(chatId, 20, {
+    coverageDigest: evidence.digest,
+    reviewedBy: "integration-test",
+  });
+  const synthetic = await prisma.trade.findMany({
+    where: { type: "SETTLEMENT" },
+  });
+  assert.equal(synthetic.length, 2);
+  assert.deepEqual(
+    synthetic
+      .map((trade) => [
+        trade.quantity,
+        trade.compactPrice,
+        trade.buyerParticipantId,
+        trade.sellerParticipantId,
+      ])
+      .sort((a, b) => String(a[2] ?? a[3]).localeCompare(String(b[2] ?? b[3]))),
+    [
+      [2, 102_980, null, "long"],
+      [2, 102_980, "short", null],
+    ],
+  );
+  assert.equal((await store.latestTrade(chatId))?.sourceMessageId, 12);
+  await assert.rejects(
+    prisma.trade.create({
+      data: {
+        chatId,
+        type: "SETTLEMENT",
+        settlementMessageId: 20,
+        buyerParticipantId: null,
+        sellerParticipantId: "long",
+        quantity: 2,
+        compactPrice: 102_980,
+        rawPrice: 102_980_000n,
+        announcedAt,
+      },
+    }),
+  );
+
+  await store.recordSettlement({
+    chatId,
+    sourceMessageId: 30,
+    senderId: "55",
+    compactPrice: 103_000,
+    announcedAt,
+    payloadHash: "c".repeat(64),
+    rawText: "test zero position",
+  });
+  await store.markHistoryScanned(chatId, 30);
+  const emptyEvidence = await store.coverageEvidence(chatId, 20, 30);
+  await store.applySettlement(chatId, 30, {
+    coverageDigest: emptyEvidence.digest,
+    reviewedBy: "integration-test",
+  });
+  assert.equal(await prisma.trade.count({ where: { type: "SETTLEMENT" } }), 2);
+
+  await store.observeFinancialMessage({
+    chatId,
+    sourceMessageId: 15,
+    senderId: "55",
+    rawText: "late receipt",
+    eventKind: "NEW",
+    payloadHash: "d".repeat(64),
+  });
+  assert.equal(
+    (
+      await store.recordTrade({
+        chatId,
+        sourceMessageId: 15,
+        buyerAlias: "long",
+        sellerAlias: "short",
+        quantity: 1,
+        compactPrice: 101_000,
+        rawPrice: 101_000_000n,
+        announcedAt,
+      })
+    )?.tradeRecorded,
+    false,
+  );
+  assert.equal(
+    (await store.ingestionState(chatId))?.gateStatus,
+    "REVIEW_REQUIRED",
+  );
+  assert.equal(await prisma.trade.count(), 4);
+});
 
 test.beforeEach(async () => {
   currentTime = new Date("2026-09-07T12:00:00.000Z");

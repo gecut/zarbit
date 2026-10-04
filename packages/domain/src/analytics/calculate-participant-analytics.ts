@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import type {
   DataCoverageConfidence,
+  AnalyticsContribution,
   ParticipantAnalytics7D,
   ParticipantTrade,
   PositionState,
@@ -22,6 +23,12 @@ export interface CalculateAnalyticsInput {
   readonly windowEnd: Date;
   /** Earliest date the system began collecting data, used for data span checks. */
   readonly earliestSystemDate?: Date;
+  /** An accepted first settlement resets uncertain historical inventory. */
+  readonly baselineMessageId?: number;
+  /** Supplied only by coverage-aware callers; legacy callers retain their previous rule. */
+  readonly coverageVerified?: boolean;
+  /** The caller already sorted by effective Telegram message ID. */
+  readonly replayByMessageId?: boolean;
 }
 
 /**
@@ -37,6 +44,9 @@ export function calculateParticipantAnalytics7D(
     windowStart,
     windowEnd,
     earliestSystemDate,
+    baselineMessageId,
+    coverageVerified,
+    replayByMessageId,
   } = input;
 
   const windowStartMs = windowStart.getTime();
@@ -45,10 +55,20 @@ export function calculateParticipantAnalytics7D(
   // 1. Separate historical trades (pre-window) from active window trades
   const preWindowTrades: ParticipantTrade[] = [];
   const windowTrades: ParticipantTrade[] = [];
+  const preBaselineWindowTrades: ParticipantTrade[] = [];
 
   for (const trade of allTradesChronological) {
     const tradeTime = trade.announcedAt.getTime();
-    if (tradeTime < windowStartMs) {
+    if (
+      baselineMessageId !== undefined &&
+      trade.sourceMessageId <= baselineMessageId
+    ) {
+      if (tradeTime >= windowStartMs && tradeTime <= windowEndMs) {
+        preBaselineWindowTrades.push(trade);
+      }
+      continue;
+    }
+    if (tradeTime < windowStartMs && !replayByMessageId) {
       preWindowTrades.push(trade);
     } else if (tradeTime <= windowEndMs) {
       windowTrades.push(trade);
@@ -56,7 +76,9 @@ export function calculateParticipantAnalytics7D(
   }
 
   // 2. Replay pre-window trades to establish opening position & cost basis at windowStart
-  let openingState: PositionState = createInitialPositionState();
+  let openingState: PositionState = createInitialPositionState({
+    hasZeroCrossing: baselineMessageId !== undefined,
+  });
   for (const trade of preWindowTrades) {
     const transition = calculatePositionTransition(openingState, trade);
     openingState = transition.nextPosition;
@@ -69,20 +91,53 @@ export function calculateParticipantAnalytics7D(
   let sellVolume = 0;
   let buyTrades = 0;
   let sellTrades = 0;
+  const byType = {
+    NORMAL: {
+      pnl: 0,
+      buyVolume: 0,
+      sellVolume: 0,
+      buyTrades: 0,
+      sellTrades: 0,
+    },
+    SETTLEMENT: {
+      pnl: 0,
+      buyVolume: 0,
+      sellVolume: 0,
+      buyTrades: 0,
+      sellTrades: 0,
+    },
+  };
+  const countTrade = (
+    trade: ParticipantTrade,
+    bucket: typeof byType.NORMAL,
+  ) => {
+    if (trade.side === "BUY") {
+      buyVolume += trade.quantity;
+      buyTrades += 1;
+      bucket.buyVolume += trade.quantity;
+      bucket.buyTrades += 1;
+    } else {
+      sellVolume += trade.quantity;
+      sellTrades += 1;
+      bucket.sellVolume += trade.quantity;
+      bucket.sellTrades += 1;
+    }
+  };
+
+  for (const trade of preBaselineWindowTrades) {
+    countTrade(trade, byType[trade.type ?? "NORMAL"]);
+  }
 
   for (const trade of windowTrades) {
     const transition = calculatePositionTransition(currentState, trade);
     currentState = transition.nextPosition;
+    if (trade.announcedAt.getTime() < windowStartMs) continue;
 
     realizedPnlPoints += transition.unroundedRealizedPnlPoints;
+    const bucket = byType[trade.type ?? "NORMAL"];
+    bucket.pnl += transition.unroundedRealizedPnlPoints;
 
-    if (trade.side === "BUY") {
-      buyVolume += trade.quantity;
-      buyTrades += 1;
-    } else {
-      sellVolume += trade.quantity;
-      sellTrades += 1;
-    }
+    countTrade(trade, bucket);
   }
 
   const totalVolume = buyVolume + sellVolume;
@@ -90,10 +145,19 @@ export function calculateParticipantAnalytics7D(
   const averageTradeSize =
     totalTrades > 0 ? Math.round((totalVolume / totalTrades) * 100) / 100 : 0;
 
-  const firstTradeAt =
-    allTradesChronological.length > 0
-      ? (allTradesChronological[0]?.announcedAt ?? null)
-      : null;
+  const firstTradeAt = allTradesChronological.reduce<Date | null>(
+    (first, trade) => {
+      if (
+        baselineMessageId !== undefined &&
+        trade.sourceMessageId <= baselineMessageId
+      )
+        return first;
+      return first === null || trade.announcedAt < first
+        ? trade.announcedAt
+        : first;
+    },
+    null,
+  );
 
   // 4. Determine Data Coverage Confidence
   // HIGH: Zero crossing occurred AND system/participant history covers at least 7 days
@@ -114,12 +178,41 @@ export function calculateParticipantAnalytics7D(
     const hasFullWindowCoverage =
       windowEndMs - historyStart >= ROLLING_WINDOW_MS;
 
-    if (currentState.hasZeroCrossing && hasFullWindowCoverage) {
+    if (
+      currentState.hasZeroCrossing &&
+      hasFullWindowCoverage &&
+      coverageVerified !== false
+    ) {
       confidence = "HIGH";
     } else {
       confidence = "ESTIMATED";
     }
   }
+
+  const contribution = (
+    bucket: typeof byType.NORMAL,
+  ): AnalyticsContribution => ({
+    realizedPnlPoints: roundAnalyticsPoints(bucket.pnl),
+    realizedPnlTomans: realizedPnlPointsToTomans(bucket.pnl),
+    buyVolume: bucket.buyVolume,
+    sellVolume: bucket.sellVolume,
+    totalVolume: bucket.buyVolume + bucket.sellVolume,
+    buyTrades: bucket.buyTrades,
+    sellTrades: bucket.sellTrades,
+    totalTrades: bucket.buyTrades + bucket.sellTrades,
+  });
+  const totalContribution: AnalyticsContribution = {
+    realizedPnlPoints: roundAnalyticsPoints(realizedPnlPoints),
+    realizedPnlTomans: realizedPnlPointsToTomans(realizedPnlPoints),
+    buyVolume,
+    sellVolume,
+    totalVolume,
+    buyTrades,
+    sellTrades,
+    totalTrades,
+  };
+  const normalContribution = contribution(byType.NORMAL);
+  const settlementContribution = contribution(byType.SETTLEMENT);
 
   return {
     alias,
@@ -141,5 +234,19 @@ export function calculateParticipantAnalytics7D(
     unmatchedUnits: currentState.unmatchedUnits,
     totalObservedTrades: allTradesChronological.length,
     firstTradeAt,
+    contributions: {
+      normal: normalContribution,
+      settlement: {
+        ...settlementContribution,
+        realizedPnlPoints: roundAnalyticsPoints(
+          totalContribution.realizedPnlPoints -
+            normalContribution.realizedPnlPoints,
+        ),
+        realizedPnlTomans:
+          totalContribution.realizedPnlTomans -
+          normalContribution.realizedPnlTomans,
+      },
+      total: totalContribution,
+    },
   };
 }

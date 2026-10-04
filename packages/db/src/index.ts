@@ -1,3 +1,4 @@
+import { createSettlementStore } from "./settlement";
 import { createTelegramOperationStore } from "./telegram-operations";
 import { createMarketHeadsStore } from "./market-heads";
 import { createMarketDataStore } from "./market-data";
@@ -41,6 +42,7 @@ export function createStore(
     ...createRequestStore(prisma, now),
     ...createTelegramOperationStore(prisma, now),
     ...createMarketDataStore(prisma, now),
+    ...createSettlementStore(prisma),
     ...createMarketHeadsStore(prisma),
     ...createAnalyticsDataStore(prisma),
     user: (identity: Identity) =>

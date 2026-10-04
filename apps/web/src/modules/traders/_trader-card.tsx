@@ -1,5 +1,5 @@
 import { Card, Chip, cn } from "@heroui/react";
-import type { ParticipantAnalyticsSummary } from "@zarbit/contracts";
+import type { ParticipantAnalyticsSummaryV2 } from "@zarbit/contracts";
 import { formatNumber } from "@zarbit/format";
 import { DataCoverageBadge } from "./_data-coverage-badge";
 import TomanIcon from "@/shared/ui/_toman-icon";
@@ -9,12 +9,12 @@ export function TraderCard({
   rank,
   onSelect,
 }: {
-  trader: ParticipantAnalyticsSummary;
+  trader: ParticipantAnalyticsSummaryV2;
   rank: number;
   onSelect: (alias: string) => void;
 }) {
-  const isProfitable = trader.realizedPnlPoints > 0;
-  const isLoss = trader.realizedPnlPoints < 0;
+  const isProfitable = (trader.realizedPnlPoints ?? 0) > 0;
+  const isLoss = (trader.realizedPnlPoints ?? 0) < 0;
 
   return (
     <Card
@@ -42,6 +42,7 @@ export function TraderCard({
 
             <DataCoverageBadge
               confidence={trader.confidence}
+              coverage={trader.coverage}
               className="mt-1"
             />
           </div>
@@ -56,10 +57,14 @@ export function TraderCard({
               !isProfitable && !isLoss && "text-muted",
             )}
           >
-            {formatNumber(trader.realizedPnlTomans)}
+            {trader.realizedPnlTomans === null
+              ? "نامطمئن"
+              : formatNumber(trader.realizedPnlTomans)}
             {isProfitable ? "+" : ""}
 
-            <TomanIcon className="text-muted mb-1 size-4" />
+            {trader.realizedPnlTomans !== null && (
+              <TomanIcon className="text-muted mb-1 size-4" />
+            )}
           </div>
         </div>
       </Card.Content>
@@ -75,6 +80,12 @@ export function TraderCard({
           <span className="text-foreground font-semibold">
             {formatNumber(trader.totalTrades)}
           </span>
+          {trader.contributions.settlement.totalTrades > 0 && (
+            <span className="text-muted">
+              ({formatNumber(trader.contributions.settlement.totalTrades)}{" "}
+              تسویه)
+            </span>
+          )}
         </div>
 
         <div>

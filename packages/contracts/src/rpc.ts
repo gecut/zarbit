@@ -14,6 +14,8 @@ import {
   participantAnalyticsDetailSchema,
   traderListQuerySchema,
   traderDetailQuerySchema,
+  participantAnalyticsSummaryV2Schema,
+  participantAnalyticsDetailV2Schema,
 } from "./index";
 
 export const rpcErrorDataSchema = z
@@ -103,6 +105,14 @@ export const rpcContract = {
       .output(requestDetailSchema),
   },
   analytics: {
+    tradersV2: base
+      .route({ method: "GET", path: "/analytics/v2/traders" })
+      .input(traderListQuerySchema.optional())
+      .output(z.array(participantAnalyticsSummaryV2Schema)),
+    traderDetailV2: base
+      .route({ method: "GET", path: "/analytics/v2/traders/{alias}" })
+      .input(traderDetailQuerySchema)
+      .output(participantAnalyticsDetailV2Schema.nullable()),
     traders: base
       .route({ method: "GET", path: "/analytics/traders" })
       .input(traderListQuerySchema.optional())

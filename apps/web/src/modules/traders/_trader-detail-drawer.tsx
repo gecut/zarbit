@@ -16,7 +16,7 @@ export function TraderDetailDrawer({
 }) {
   const api = useApi(useIdentity().telegramUserId);
   const detailQuery = useQuery(
-    api.analytics.traderDetail.queryOptions({
+    api.analytics.traderDetailV2.queryOptions({
       input: alias ? { alias } : skipToken,
       refetchInterval: 30000,
     }),
@@ -53,7 +53,10 @@ export function TraderDetailDrawer({
           <Card className="border-border bg-surface space-y-3 rounded-2xl border p-4">
             <div className="flex items-center justify-between">
               <span className="text-muted text-xs">وضعیت داده‌ها:</span>
-              <DataCoverageBadge confidence={summary.confidence} />
+              <DataCoverageBadge
+                confidence={summary.confidence}
+                coverage={summary.coverage}
+              />
             </div>
 
             <div className="border-border/60 flex items-baseline justify-between border-t pt-3">
@@ -67,9 +70,13 @@ export function TraderDetailDrawer({
                     !isProfitable && !isLoss && "text-muted",
                   )}
                 >
-                  {formatNumber(summary.realizedPnlTomans)}
+                  {summary.realizedPnlTomans === null
+                    ? "نامطمئن"
+                    : formatNumber(summary.realizedPnlTomans)}
                   {isProfitable ? "+" : ""}
-                  <TomanIcon className="text-muted mb-1" />
+                  {summary.realizedPnlTomans !== null && (
+                    <TomanIcon className="text-muted mb-1" />
+                  )}
                 </span>
               </div>
             </div>
@@ -131,6 +138,45 @@ export function TraderDetailDrawer({
             </Card>
           </div>
 
+          <Card className="border-border bg-surface rounded-2xl border p-3 text-xs">
+            <div className="text-foreground font-semibold">
+              تفکیک معاملات ۷ روزه
+            </div>
+            <div className="text-muted mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              <span>
+                عادی: {formatNumber(summary.contributions.normal.totalTrades)}{" "}
+                معامله، {formatNumber(summary.contributions.normal.totalVolume)}{" "}
+                واحد
+              </span>
+              <span>
+                تسویه:{" "}
+                {formatNumber(summary.contributions.settlement.totalTrades)}{" "}
+                معامله،{" "}
+                {formatNumber(summary.contributions.settlement.totalVolume)}{" "}
+                واحد
+              </span>
+            </div>
+            <div className="text-muted mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <span>
+                سود و زیان عادی:{" "}
+                {summary.contributions.normal.realizedPnlTomans === null
+                  ? "نامطمئن"
+                  : `${formatNumber(summary.contributions.normal.realizedPnlTomans)} تومان`}
+              </span>
+              <span>
+                سود و زیان تسویه:{" "}
+                {summary.contributions.settlement.realizedPnlTomans === null
+                  ? "نامطمئن"
+                  : `${formatNumber(summary.contributions.settlement.realizedPnlTomans)} تومان`}
+              </span>
+            </div>
+            {!summary.coverage.pnlReliable && (
+              <p className="text-warning mt-2">
+                سود و زیان این بازه هنوز تأیید نشده است.
+              </p>
+            )}
+          </Card>
+
           {/* Recent Trades Activity */}
           <div className="space-y-2 pt-2">
             <h4 className="text-foreground text-sm font-semibold">
@@ -147,7 +193,7 @@ export function TraderDetailDrawer({
               <div className="space-y-1.5">
                 {detail?.recentTrades.map((t) => (
                   <div
-                    key={t.id}
+                    key={`${t.id}-${t.side}`}
                     className="border-border bg-surface/60 flex items-center justify-between rounded-xl border p-2.5 text-xs"
                   >
                     <div className="flex items-center gap-2">
@@ -168,7 +214,9 @@ export function TraderDetailDrawer({
                         {formatNumber(t.compactPrice)}
                       </span>
                       <span className="text-muted">
-                        با {t.counterpartyAlias}
+                        {t.type === "SETTLEMENT"
+                          ? "تسویه"
+                          : `با ${t.counterpartyAlias}`}
                       </span>
                     </div>
 
@@ -185,9 +233,9 @@ export function TraderDetailDrawer({
 
           {/* Transparent Protocol Disclosure */}
           <p className="text-muted/80 border-border/40 border-t pt-2 text-justify text-[11px] leading-5">
-            * تمام محاسبات سود و زیان صرفاً بر اساس حواله‌های قطعی ربات و فرمول
-            میانگین موزون (WACB) محاسبه شده‌اند. معاملات پیش از بازه ۷ روزه تنها
-            برای استخراج موقعیت و مظنه باز ابتدای بازه منظور شده‌اند.
+            * محاسبات بر اساس حواله‌های قطعی و معاملات تسویه با روش میانگین
+            موزون (WACB) انجام می‌شود. داده‌های پیش از نخستین تسویهٔ معتبر مبنای
+            سود و زیان قابل اتکا نیستند.
           </p>
         </div>
       )}

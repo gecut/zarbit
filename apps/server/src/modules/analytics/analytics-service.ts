@@ -10,6 +10,23 @@ import type {
   TraderListQuery,
   TraderRecentTrade,
 } from "@zarbit/contracts";
+import { AppError } from "@zarbit/contracts";
+
+type TradeRow = Awaited<
+  ReturnType<Store["participantTradesChronological"]>
+>[number];
+function isNormalTrade(row: TradeRow): row is TradeRow & {
+  sourceMessageId: number;
+  buyerParticipantId: string;
+  sellerParticipantId: string;
+} {
+  return (
+    row.type === "NORMAL" &&
+    row.sourceMessageId !== null &&
+    row.buyerParticipantId !== null &&
+    row.sellerParticipantId !== null
+  );
+}
 
 export class AnalyticsService {
   constructor(
@@ -20,6 +37,13 @@ export class AnalyticsService {
   async getTradersList(
     query: TraderListQuery,
   ): Promise<ParticipantAnalyticsSummary[]> {
+    if (await this.store.hasAppliedSettlement()) {
+      throw new AppError(
+        "CLIENT_UPDATE_REQUIRED",
+        "نسخه برنامه قدیمی است؛ برنامه را به‌روز کنید.",
+        409,
+      );
+    }
     const windowEnd = this.now();
     const windowStart = new Date(windowEnd.getTime() - ROLLING_WINDOW_MS);
 
@@ -42,6 +66,7 @@ export class AnalyticsService {
     }
 
     for (const trade of allTrades) {
+      if (!isNormalTrade(trade)) continue;
       if (tradesByAlias.has(trade.buyerParticipantId)) {
         tradesByAlias.get(trade.buyerParticipantId)!.push({
           id: trade.id,
@@ -125,7 +150,16 @@ export class AnalyticsService {
   async getTraderDetail(
     alias: string,
   ): Promise<ParticipantAnalyticsDetail | null> {
-    const rawTrades = await this.store.participantTradesChronological(alias);
+    if (await this.store.hasAppliedSettlement()) {
+      throw new AppError(
+        "CLIENT_UPDATE_REQUIRED",
+        "نسخه برنامه قدیمی است؛ برنامه را به‌روز کنید.",
+        409,
+      );
+    }
+    const rawTrades = (
+      await this.store.participantTradesChronological(alias)
+    ).filter(isNormalTrade);
     if (rawTrades.length === 0) {
       // Check if participant exists at all
       const participant = await this.store.participant(alias);

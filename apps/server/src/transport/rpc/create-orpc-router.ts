@@ -14,6 +14,7 @@ import { createRequestsRouter } from "../../modules/requests/create-requests-rou
 import { createTelegramRouter } from "../../modules/telegram/create-telegram-router";
 import { createAnalyticsRouter } from "../../modules/analytics/create-analytics-router";
 import { AnalyticsService } from "../../modules/analytics/analytics-service";
+import { SettlementAnalyticsService } from "../../modules/analytics/settlement-analytics-service";
 import type {
   ParticipantAnalyticsDetail,
   ParticipantAnalyticsSummary,
@@ -73,6 +74,7 @@ export function createOrpcRouter(
     observe: observe("analytics.traderDetail"),
   });
   const analyticsService = new AnalyticsService(deps.store);
+  const settlementAnalyticsService = new SettlementAnalyticsService(deps.store);
 
   const realtimeRead = <T>(name: string, load: () => Promise<T>) =>
     runtime.read(name, () => metrics.measure(`db.${name}`, load));
@@ -177,6 +179,7 @@ export function createOrpcRouter(
     analytics: createAnalyticsRouter(os.analytics, {
       store: deps.store,
       service: analyticsService,
+      settlementService: settlementAnalyticsService,
       tradersCache: traders,
       traderDetailCache: traderDetail,
       read: analyticsRead,

@@ -56,3 +56,9 @@ Operational logging uses Pino JSON with structured correlation metadata:
 
 - Sensitive credentials, phone numbers, OTP codes, 2FA passwords, request bodies, and raw Telegram message texts are redacted or omitted.
 - Logs use opaque references (`sessionRef`, `challengeRef`) and standardized event names (e.g. `telegram.quote.recorded`, `telegram.trade.recorded`, `telegram.login.started`).
+
+## Settlement ingestion
+
+The shared financial coordinator is attached before session initialization. Its durable inbox is independent of per-session serialization and memory deduplication. With settlement enabled, startup/reconnect closes the request/financial gate, reads a fixed group history head and catches up from the durable cursor, initially just before `SETTLEMENT_BOOTSTRAP_MESSAGE_ID`. History scan success is not receipt coverage certification. Failed recovery persists `historyRecoveryRequired` and blocks financial application.
+
+Settlement uses numeric `SETTLEMENT_SENDER_ID`; quotes/receipts continue using `QUOTE_SENDER_ID`. Ambiguous receipt candidates are persisted for review even when the senders differ. The parser remains unavailable until exact raw Telegram evidence is provided, and enabling ingestion currently fails startup. No settlement processing sends Telegram orders or wakes trade requests. See [operations](OPERATIONS.md#settlement-release-and-manual-coverage-review) for coverage approval and correction-detection limits.

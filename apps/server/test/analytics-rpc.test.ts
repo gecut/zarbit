@@ -284,3 +284,39 @@ test("V2 zero baseline excludes unproven inventory and accounts for a synthetic 
   assert.equal(detail.summary.confidence, "ESTIMATED");
   await assert.rejects(client.analytics.traderDetail({ alias: "اسکان" }));
 });
+
+test("analytics V1 retains both sides of historical same-alias trades consistently", async (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-10T12:00:00Z"),
+  });
+  const { client } = fixture(false, true);
+  const detail = await client.analytics.traderDetail({ alias: "اسکان" });
+  const list = await client.analytics.traders({
+    sortBy: "VOLUME",
+    sortOrder: "DESC",
+    limit: 10,
+  });
+  assert.ok(detail);
+  assert.deepEqual(
+    detail.summary,
+    list.find((row) => row.alias === "اسکان"),
+  );
+  assert.equal(detail.summary.observedPosition, 1);
+  assert.equal(detail.summary.totalTrades, 4);
+  assert.equal(
+    detail.recentTrades.filter((row) => row.id === "self-1").length,
+    2,
+  );
+});
+
+test("analytics V1 marks confidence as ESTIMATED in absence of bootstrap baseline", async (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-10T12:00:00Z"),
+  });
+  const { client } = fixture();
+  const detail = await client.analytics.traderDetail({ alias: "اسکان" });
+  assert.ok(detail);
+  assert.equal(detail.summary.confidence, "ESTIMATED");
+});

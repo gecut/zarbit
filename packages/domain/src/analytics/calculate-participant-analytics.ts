@@ -160,8 +160,8 @@ export function calculateParticipantAnalytics7D(
   );
 
   // 4. Determine Data Coverage Confidence
-  // HIGH: Zero crossing occurred AND system/participant history covers at least 7 days
-  // ESTIMATED: History is shorter than 7 days OR position has never reset to flat
+  // HIGH: Valid baseline reset occurred AND zero crossing occurred AND system/participant history covers at least 7 days
+  // ESTIMATED: No valid baseline OR history is shorter than 7 days OR position has never reset to flat
   // UNVERIFIED_INVENTORY: Participant has unmatched units
   let confidence: DataCoverageConfidence;
 
@@ -179,6 +179,7 @@ export function calculateParticipantAnalytics7D(
       windowEndMs - historyStart >= ROLLING_WINDOW_MS;
 
     if (
+      baselineMessageId !== undefined &&
       currentState.hasZeroCrossing &&
       hasFullWindowCoverage &&
       coverageVerified !== false

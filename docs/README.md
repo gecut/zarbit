@@ -13,7 +13,7 @@ Authoritative documentation repository for Zarbit, an Iranian OTC gold trading i
 | :------------------------------------------------------- | :----------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md)                     | System boundaries, process topology, connection pooling, deployment networks   | Modifying service boundaries, adding inter-process endpoints, or altering connection topology |
 | [`GLOSSARY.md`](GLOSSARY.md)                             | Ubiquitous language for OTC gold trading, compact pricing, and avoided aliases | Introducing or refactoring domain terms, naming entities, or resolving terminology conflicts  |
-| [`BUSINESS-RULES.md`](BUSINESS-RULES.md)                 | Invariants, pricing conversions, 7-day FIFO accounting, identity thresholds    | Modifying P&L formulas, order trigger logic, or identity verification criteria                |
+| [`BUSINESS-RULES.md`](BUSINESS-RULES.md)                 | Invariants, pricing conversions, 7-day WACB accounting, identity thresholds    | Modifying P&L formulas, order trigger logic, or identity verification criteria                |
 | [`GROUP-TRADING-PROTOCOL.md`](GROUP-TRADING-PROTOCOL.md) | Telegram group message structures (quotes, receipts, active orders, actions)   | Changing message parsers, regexes, normalization routines, or protocol definitions            |
 | [`TELEGRAM.md`](TELEGRAM.md)                             | MTProto worker architecture, session SQLite storage, OTP lifecycle, execution  | Updating Telegram login flow, session locking, MTProto commands, or order transmission        |
 | [`RPC.md`](RPC.md)                                       | oRPC v1.15 contracts, data planes, cache ownership, rate limits, batching      | Adding/editing RPC endpoints, configuring client query hooks, or adjusting cache TTLs         |
@@ -48,8 +48,8 @@ zarbit/
 │   └── worker/       # MTProto gateway (up to 20 user sessions), SQLite lock, execution engine
 ├── packages/
 │   ├── contracts/    # Shared strict Zod schemas, oRPC v1.15 contracts, DTOs
-│   ├── domain/       # Compact pricing math, Persian normalization, parsers, FIFO P&L
-│   ├── db/           # Prisma 6 + PostgreSQL client, migration definitions
+│   ├── domain/       # Compact pricing math, Persian normalization, parsers, WACB P&L
+│   ├── db/           # Prisma 7.10.0 + PostgreSQL client, migration definitions
 │   ├── logger/       # Structured Pino JSON logger with redaction
 │   └── env/          # Type-safe environment validation contracts
 ├── docs/             # Authoritative product and technical documentation

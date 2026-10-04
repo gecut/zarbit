@@ -30,6 +30,7 @@ export function createRequestExecutor(
       links?: MessageLinks,
     ): Promise<number>;
   },
+  destinationChatId?: bigint | number,
   timeoutMs = 15_000,
 ) {
   const execute = async (
@@ -49,30 +50,33 @@ export function createRequestExecutor(
         );
       return;
     }
+    const owner = await store.owner(userId);
+    if (!owner) throw new AppError("NOT_FOUND", "صاحب درخواست پیدا نشد.");
+    const started = await store.markSending(id, token, destinationChatId);
+    if (!started.count || !started.row) {
+      if (!claimed)
+        throw new AppError(
+          started.reason === "FINANCIAL_REVIEW_REQUIRED"
+            ? "FINANCIAL_REVIEW_REQUIRED"
+            : "REQUEST_CONFLICT",
+          started.reason === "FINANCIAL_REVIEW_REQUIRED"
+            ? "عملیات گروه به دلیل بررسی مالی متوقف شده است."
+            : "درخواست لغو شده یا در حال اجراست.",
+        );
+      workerLog.info("request.returned_to_waiting_or_cancelled", {
+        requestId: id,
+        reason: started.reason,
+      });
+      return;
+    }
+    row = started.row;
     let status: "DONE" | "FAILED" | "UNKNOWN" = "FAILED";
     let outgoingMessageId: number | undefined;
     let failureReason: string | undefined;
     let failure: RequestFailure = "unknown";
     let sending = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const owner = await store.owner(userId);
     try {
-      await delivery.ready(userId);
-      if (!owner) throw new AppError("NOT_FOUND", "صاحب درخواست پیدا نشد.");
-      const started = await store.markSending(id, token);
-      if (!started.count || !started.row) {
-        if (!claimed)
-          throw new AppError(
-            "REQUEST_CONFLICT",
-            "درخواست لغو شده یا در حال اجراست.",
-          );
-        workerLog.info("request.returned_to_waiting_or_cancelled", {
-          requestId: id,
-          reason: started.reason,
-        });
-        return;
-      }
-      row = started.row;
       sending = true;
       const price = row.targetPrice;
       const send =

@@ -21,6 +21,7 @@ export type MarketDataStore = Pick<Store, "recordQuote"> &
       | "confirmParticipantIdentity"
       | "findTradingActionForIdentityCorrelation"
       | "findCandidateActionsForIdentityCorrelation"
+      | "quoteBeforeMessage"
     >
   > &
   Partial<Pick<Store, "latestQuote">>;
@@ -33,20 +34,6 @@ export function createMarketIngestion(
   const deduplicator = new BoundedMessageDeduplicator(2_000);
   const singleFlight = new KeyedSingleFlight();
   const activeOrders = new BoundedOrderCache(2_000);
-  let latestCompactQuote: number | null = null;
-
-  if (store.latestQuote) {
-    void store
-      .latestQuote()
-      .then((latest) => {
-        if (latest && latestCompactQuote === null) {
-          latestCompactQuote = latest.compactQuote;
-        }
-      })
-      .catch(() => {
-        // Startup quote lookup is non-blocking.
-      });
-  }
 
   const resolveIdentity = async (canonical: CanonicalOrderObservation) => {
     if (
@@ -135,9 +122,6 @@ export function createMarketIngestion(
     deduplicator,
     activeOrders,
     resolveIdentity,
-    onQuoteRecorded: (compactQuote) => {
-      latestCompactQuote = compactQuote;
-    },
     onTradeRecorded,
   });
 
@@ -146,7 +130,6 @@ export function createMarketIngestion(
     deduplicator,
     activeOrders,
     resolveIdentity,
-    getLatestCompactQuote: () => latestCompactQuote,
   });
 
   return async (userId: string, _revision: number, event: QuoteEvent) => {

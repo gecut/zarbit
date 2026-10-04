@@ -132,13 +132,17 @@ export async function startWorker() {
     workerLog.info("request.recovery.unknown", {
       count: recoveredRequests.length,
     });
-  const requests = createRequestExecutor(store, {
-    ready: async (userId) => {
-      await sessions.requireConnected(userId);
+  const requests = createRequestExecutor(
+    store,
+    {
+      ready: async (userId) => {
+        await sessions.requireConnected(userId);
+      },
+      group: (userId, text) => sessions.sendGroup(userId, text),
+      private: notify,
     },
-    group: (userId, text) => sessions.sendGroup(userId, text),
-    private: notify,
-  });
+    env.TELEGRAM_GROUP_ID!,
+  );
   const tradeRequests = createTradeRequestProcessor(
     store,
     requests,

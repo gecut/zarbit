@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { AppError } from "@zarbit/contracts";
 import { createRequestExecutor } from "../src/requests";
 
 type ExecutorStore = Parameters<typeof createRequestExecutor>[0];
@@ -48,6 +49,11 @@ function setup(
   options: {
     row?: RequestRow;
     claim?: boolean;
+    markSendingResult?: {
+      count: number;
+      row: RequestRow | null;
+      reason?: string;
+    };
     complete?: ExecutorStore["completeRequest"];
     sendError?: unknown;
     notifyError?: unknown;
@@ -61,12 +67,13 @@ function setup(
   const row = options.row ?? example;
   const store: ExecutorStore = {
     markSending: async () =>
-      options.claim === false
+      options.markSendingResult ??
+      (options.claim === false
         ? { count: 0, row: null }
         : {
             count: 1,
             row: { ...row, ...trigger, action: row.action, units: row.units },
-          },
+          }),
     owner: async () => ({
       id: "user-1",
       telegramUserId: "100",
@@ -194,4 +201,21 @@ test("private alert rejection cannot be recorded as successful delivery", async 
   await run.executor.execute("user-1", example.id, trigger);
   assert.equal(run.results[0]?.status, "FAILED");
   assert.match(run.results[0]!.failureReason!, /ارسال پیام خصوصی را نپذیرفت/);
+});
+
+test("manual execution fails closed when financial review is required", async () => {
+  const run = setup({
+    markSendingResult: {
+      count: 0,
+      row: null,
+      reason: "FINANCIAL_REVIEW_REQUIRED",
+    },
+  });
+  await assert.rejects(
+    run.executor.execute("user-1", example.id),
+    (err: unknown) =>
+      err instanceof AppError && err.code === "FINANCIAL_REVIEW_REQUIRED",
+  );
+  assert.equal(run.messages.length, 0);
+  assert.equal(run.groups.length, 0);
 });

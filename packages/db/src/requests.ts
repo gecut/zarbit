@@ -401,15 +401,24 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         }
         return updateResult;
       }),
-    markSending: (id: string, claimToken: string) =>
+    markSending: (
+      id: string,
+      claimToken: string,
+      destinationChatId?: bigint | number,
+    ) =>
       db.$transaction(async (tx) => {
         const initial = await tx.request.findUnique({ where: { id } });
         if (!initial) return { count: 0, row: null };
-        if (initial.triggeredChatId !== null)
-          await lockTradeStream(tx, initial.triggeredChatId);
-        if (initial.triggeredChatId !== null) {
+        const targetChatId =
+          initial.triggeredChatId !== null
+            ? initial.triggeredChatId
+            : destinationChatId !== undefined
+              ? BigInt(destinationChatId)
+              : null;
+        if (targetChatId !== null) {
+          await lockTradeStream(tx, targetChatId);
           const ingestion = await tx.groupIngestionState.findUnique({
-            where: { chatId: initial.triggeredChatId },
+            where: { chatId: targetChatId },
           });
           if (ingestion?.gateStatus === "REVIEW_REQUIRED") {
             await tx.request.updateMany({

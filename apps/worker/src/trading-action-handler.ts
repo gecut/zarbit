@@ -17,25 +17,30 @@ import type { BoundedOrderCache } from "./order-cache";
 import type { CanonicalOrderObservation } from "./participant-identity";
 
 export interface TradingActionHandlerDependencies {
-  readonly store: Partial<Pick<Store, "recordTradingAction">>;
+  readonly store: Partial<
+    Pick<Store, "recordTradingAction" | "quoteBeforeMessage">
+  >;
   readonly deduplicator: BoundedMessageDeduplicator;
   readonly activeOrders: BoundedOrderCache;
   readonly resolveIdentity: (
     canonical: CanonicalOrderObservation,
   ) => Promise<void>;
-  readonly getLatestCompactQuote: () => number | null;
+  readonly getQuoteBeforeMessage?: (
+    chatId: number,
+    sourceMessageId: number,
+  ) => Promise<number | null>;
+  readonly isPrefixContinuous?: (
+    chatId: number,
+    orderMessageId: number,
+    quoteMessageId: number,
+  ) => boolean;
+  readonly getLatestCompactQuote?: () => number | null;
 }
 
 export function createTradingActionHandler(
   deps: TradingActionHandlerDependencies,
 ) {
-  const {
-    store,
-    deduplicator,
-    activeOrders,
-    resolveIdentity,
-    getLatestCompactQuote,
-  } = deps;
+  const { store, deduplicator, activeOrders, resolveIdentity } = deps;
 
   return async (userId: string, event: QuoteEvent): Promise<void> => {
     if (!store.recordTradingAction) {
@@ -115,9 +120,39 @@ export function createTradingActionHandler(
       }
     };
 
+    // Resolve reference quote for human orders
+    let referenceQuote: number | undefined;
+    if (store.quoteBeforeMessage || deps.getQuoteBeforeMessage) {
+      if (deps.getQuoteBeforeMessage) {
+        const quotePrice = await deps.getQuoteBeforeMessage(
+          event.chatId,
+          event.messageId,
+        );
+        if (quotePrice !== null) referenceQuote = quotePrice;
+      } else if (store.quoteBeforeMessage) {
+        const quote = await store.quoteBeforeMessage(
+          event.chatId,
+          event.messageId,
+        );
+        if (
+          quote &&
+          (!deps.isPrefixContinuous ||
+            deps.isPrefixContinuous(
+              event.chatId,
+              event.messageId,
+              quote.sourceMessageId,
+            ))
+        ) {
+          referenceQuote = quote.compactQuote;
+        }
+      }
+    } else if (deps.getLatestCompactQuote) {
+      referenceQuote = deps.getLatestCompactQuote() ?? undefined;
+    }
+
     // 2.1 Explicit human order: ORDER_BUY or ORDER_SELL
     const humanOrderResult = parseHumanOrder(event.text, {
-      referenceQuote: getLatestCompactQuote() ?? undefined,
+      referenceQuote,
     });
 
     if (humanOrderResult.status === "parsed") {

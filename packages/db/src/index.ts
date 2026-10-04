@@ -269,6 +269,17 @@ export function createStore(
       prisma.quoteHistory.findFirst({
         orderBy: [{ announcedAt: "desc" }, { sourceMessageId: "desc" }],
       }),
+    quoteBeforeMessage: async (
+      chatId: bigint | number,
+      sourceMessageId: number,
+    ): Promise<QuoteRecord | null> =>
+      prisma.quoteHistory.findFirst({
+        where: {
+          chatId: BigInt(chatId),
+          sourceMessageId: { lt: sourceMessageId },
+        },
+        orderBy: [{ sourceMessageId: "desc" }, { id: "desc" }],
+      }),
     quotesSince: async (announcedAt: Date): Promise<QuoteRecord[]> =>
       prisma.quoteHistory.findMany({
         where: { announcedAt: { gte: announcedAt } },

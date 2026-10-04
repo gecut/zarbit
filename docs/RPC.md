@@ -1,6 +1,6 @@
 # Web/Server RPC
 
-The only Web transport is oRPC **1.15.0**, mounted via contract-first Hono handlers on `/rpc/*` and `/api/openapi.json`. Contracts are defined in `packages/contracts/src/rpc.ts`; market schemas live in `market.ts`, telegram schemas in `telegram.ts`, and analytics schemas in `analytics.ts`. PostgreSQL is the single source of truth.
+The only Web transport is oRPC **1.15.0**, mounted via contract-first Hono handlers on `/rpc/*` and `/api/openapi.json` (see [ADR 0003](adr/0003-contract-first-orpc-router.md)). Contracts are defined in `packages/contracts/src/rpc.ts`; market schemas live in `market.ts`, telegram schemas in `telegram.ts`, and analytics schemas in `analytics.ts`. PostgreSQL is the single source of truth.
 
 ## Data planes
 

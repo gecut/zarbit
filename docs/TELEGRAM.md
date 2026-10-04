@@ -37,6 +37,8 @@ The worker executes user trading requests (`Request`):
 
 ## Session lifecycle and failure handling
 
+Worker instances solely own session files with exclusive SQLite OS locks (see [ADR 0002](adr/0002-single-worker-ownership-of-mtproto-sessions.md)).
+
 - **Network Interruption**: Network outages retain session authorization files. Reconnection uses exponential backoff (from 10 seconds up to a 5-minute ceiling) and marks connection status `DEGRADED`.
 - **Revocation**: Disconnect requests immediately record `REVOKING` in PostgreSQL. The worker then logs out the MTProto client, closes the SQLite database, deletes the session files (`<hex>.sqlite`), and marks the state `REVOKED`.
 - **Offline Resilience**: Session cancellation and revocation are transactionally committed to PostgreSQL by the server before asynchronous worker dispatch. Unsent `WAITING_TRADE` or `CLAIMED` requests are cancelled under database row locks, guaranteeing user logout succeeds even if the worker is restarting.

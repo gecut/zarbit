@@ -16,7 +16,7 @@ MIGRATION_DATABASE_URL=postgresql://postgres:<password>@<db-host>:5432/<database
 
 ### Connection pooling and sizing
 
-Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@prisma/adapter-pg`:
+Runtime services instantiate a direct Node `pg.Pool` passed to Prisma via `@prisma/adapter-pg` (see [ADR 0001](adr/0001-direct-pg-pool-no-pgbouncer.md)):
 
 - Connection pool size: capped by `DATABASE_POOL_MAX` (default 5 connections per process).
 - Checkout timeout: 5,000 ms (`connectionTimeoutMillis`).
@@ -46,7 +46,7 @@ The database schema (`packages/db/prisma/schema/schema.prisma`) includes these p
 - **Permanent Retention**: Both `Trade` and `QuoteHistory` records are **permanently retained**. They are never automatically pruned or deleted.
 - **7-Day Rolling Analytics Window**: The 7-day period is strictly a query filter (`WHERE announcedAt >= NOW() - INTERVAL '7 days'`) used by `analytics.traders` to calculate participant volume, win rate, and realized P&L. It must never be applied as a data retention TTL.
 - **Latest Trade Derivation**: The dashboard derives the latest `NORMAL` completed trade directly from `Trade` using an indexed message-ID scan with `LIMIT 1`. Synthetic settlements never become a market head.
-- **Idempotency**: Receipt, quote, action, and Settlement messages retain their source-message uniqueness. Synthetic Trades have null `sourceMessageId` and a separate settlement/participant unique index. Concurrent MTProto sessions use durable database idempotency with `skipDuplicates: true`; transport is not exactly once.
+- **Idempotency**: Receipt, quote, action, and Settlement messages retain their source-message uniqueness. Synthetic Trades have null `sourceMessageId` and a separate settlement/participant unique index. Concurrent MTProto sessions use durable database idempotency with `skipDuplicates: true` (see [ADR 0004](adr/0004-idempotent-db-ingestion-with-skip-duplicates.md)); transport is not exactly once.
 
 ## Migrations
 

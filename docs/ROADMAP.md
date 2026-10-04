@@ -2,7 +2,7 @@
 
 > **Status:** Active Roadmap  
 > **Scope:** Multi-phase product evolution from private quote dashboard to autonomous whale-following.  
-> **Key Architecture Decisions:** Data collection first; ACTION COPY (not trade copy); permanent trade retention with rolling 7-day analytics windows; conservative deterministic identity resolution.
+> **Key Architecture Decisions:** Data collection first; [ACTION COPY (not trade copy)](adr/0005-action-copy-over-trade-copy.md); permanent trade retention with rolling 7-day analytics windows; conservative deterministic identity resolution. (See [README.md](README.md) and [GLOSSARY.md](GLOSSARY.md)).
 
 ---
 

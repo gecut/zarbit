@@ -88,4 +88,4 @@ Dokploy deployment uses `compose.yml` (no host port mappings for internal servic
 - The `migrate` container runs `node /app/deploy/migrate.mjs` before server and worker start, applying migrations and ensuring proper session volume ownership.
 - Managed PostgreSQL provides TLS, automated backups/PITR, and connection monitoring outside Compose.
 
-See [POSTGRES.md](POSTGRES.md) and [OPERATIONS.md](OPERATIONS.md) for database topology, cutover, and operational procedures.
+See [README.md](README.md) for documentation index, [GLOSSARY.md](GLOSSARY.md) for domain terms, [adr/](adr/) for architecture decisions, and [POSTGRES.md](POSTGRES.md) / [OPERATIONS.md](OPERATIONS.md) for database topology, cutover, and operational procedures.

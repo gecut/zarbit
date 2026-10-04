@@ -221,24 +221,40 @@ export function createSettlementStore(db: PrismaClient) {
       db.$transaction(async (tx) => {
         const chatId = BigInt(chat);
         await lockTradeStream(tx, chatId);
-        await tx.groupIngestionState.upsert({
+        const state = await tx.groupIngestionState.upsert({
           where: { chatId },
           create: {
             chatId,
             historyRecoveryRequired: true,
+            historyRecoveryGeneration: 1,
             gateStatus: "REVIEW_REQUIRED",
           },
           update: {
             historyRecoveryRequired: true,
+            historyRecoveryGeneration: { increment: 1 },
             gateStatus: "REVIEW_REQUIRED",
             analyticsRevision: { increment: 1 },
           },
         });
+        return state.historyRecoveryGeneration;
       }),
-    completeFinancialRecovery: (chat: bigint | number) =>
+    completeFinancialRecovery: (
+      chat: bigint | number,
+      expectedGeneration?: number,
+    ) =>
       db.$transaction(async (tx) => {
         const chatId = BigInt(chat);
         await lockTradeStream(tx, chatId);
+        const current = await tx.groupIngestionState.findUnique({
+          where: { chatId },
+        });
+        if (
+          expectedGeneration !== undefined &&
+          current &&
+          current.historyRecoveryGeneration !== expectedGeneration
+        ) {
+          return false;
+        }
         const [flagged, pending] = await Promise.all([
           tx.financialInbox.count({
             where: { chatId, errorCode: { not: null } },
@@ -261,6 +277,7 @@ export function createSettlementStore(db: PrismaClient) {
             analyticsRevision: { increment: 1 },
           },
         });
+        return true;
       }),
     markHistoryScanned: (chat: bigint | number, throughMessageId: number) =>
       db.$transaction(async (tx) => {

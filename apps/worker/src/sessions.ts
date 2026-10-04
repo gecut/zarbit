@@ -83,6 +83,10 @@ interface Runtime {
   revision: number;
   client: TelegramTransport;
   abort: AbortController;
+  epoch: number;
+  transportConnected: boolean;
+  historyReady: boolean;
+  canSend: boolean;
   online: boolean;
   operation?: string;
   stop?: () => void;
@@ -174,7 +178,7 @@ export class Sessions {
       !record ||
       record.state !== "ACTIVE" ||
       !record.runtimeReady ||
-      !rt?.online ||
+      !rt?.canSend ||
       rt.abort.signal.aborted ||
       rt.revision !== record.revision
     )
@@ -198,7 +202,9 @@ export class Sessions {
   async latestMessageId(): Promise<number> {
     const runtime = [...this.runtimes.values()].find(
       (rt) =>
-        rt.online && !rt.abort.signal.aborted && rt.client.latestMessageId,
+        rt.historyReady &&
+        !rt.abort.signal.aborted &&
+        rt.client.latestMessageId,
     );
     if (!runtime?.client.latestMessageId)
       throw new Error("No active Telegram history session");
@@ -209,7 +215,7 @@ export class Sessions {
     beforeMessageId: number,
   ): Promise<QuoteEvent[]> {
     const runtime = [...this.runtimes.values()].find(
-      (rt) => rt.online && !rt.abort.signal.aborted && rt.client.history,
+      (rt) => rt.historyReady && !rt.abort.signal.aborted && rt.client.history,
     );
     if (!runtime?.client.history)
       throw new Error("No active Telegram history session");
@@ -291,6 +297,10 @@ export class Sessions {
         observe,
       ),
       abort: new AbortController(),
+      epoch: 0,
+      transportConnected: false,
+      historyReady: false,
+      canSend: false,
       online: false,
     };
     this.runtimes.set(record.userId, rt);
@@ -312,23 +322,40 @@ export class Sessions {
         ...context,
         state: event.state,
       });
-      if (event.state === "connected" && rt && !rt.online) {
-        void this.serial(userId, async () => {
-          if (
-            this.runtimes.get(userId) !== rt ||
-            rt.abort.signal.aborted ||
-            rt.online
-          )
-            return;
-          const record = await this.store.session(userId);
-          if (record && record.state === "ACTIVE") {
-            await this.recoverRuntime(record);
-          }
-        }).catch((error: unknown) =>
-          workerLog.failure("telegram.session.reconnect_failed", error, {
-            sessionRef: sessionRef(userId),
-          }),
-        );
+      if (
+        event.state === "offline" ||
+        event.state === "connecting" ||
+        event.state === "updating"
+      ) {
+        if (rt) {
+          rt.epoch++;
+          rt.transportConnected = false;
+          rt.historyReady = false;
+          rt.canSend = false;
+          rt.online = false;
+        }
+      } else if (event.state === "connected") {
+        if (rt) {
+          rt.transportConnected = true;
+        }
+        if (rt && !rt.canSend) {
+          void this.serial(userId, async () => {
+            if (
+              this.runtimes.get(userId) !== rt ||
+              rt.abort.signal.aborted ||
+              rt.canSend
+            )
+              return;
+            const record = await this.store.session(userId);
+            if (record && record.state === "ACTIVE") {
+              await this.recoverRuntime(record);
+            }
+          }).catch((error: unknown) =>
+            workerLog.failure("telegram.session.reconnect_failed", error, {
+              sessionRef: sessionRef(userId),
+            }),
+          );
+        }
       }
     } else if (event.type === "connection_dc") {
       workerLog.debug("telegram.connection.dc_selected", {
@@ -340,7 +367,12 @@ export class Sessions {
         ...context,
         source: event.source,
       });
-      if (rt)
+      if (rt) {
+        rt.epoch++;
+        rt.transportConnected = false;
+        rt.historyReady = false;
+        rt.canSend = false;
+        rt.online = false;
         void this.serial(userId, async () => {
           if (this.runtimes.get(userId) !== rt || rt.abort.signal.aborted)
             return;
@@ -350,10 +382,15 @@ export class Sessions {
             sessionRef: sessionRef(userId),
           }),
         );
+      }
     }
   }
   private async close(rt: Runtime, reason = "normal") {
     const startedAt = this.now();
+    rt.epoch++;
+    rt.transportConnected = false;
+    rt.historyReady = false;
+    rt.canSend = false;
     rt.online = false;
     rt.stop?.();
     rt.abort.abort();
@@ -481,7 +518,7 @@ export class Sessions {
   runtimeHealth() {
     return {
       activeSessions: [...this.runtimes.values()].filter(
-        (runtime) => runtime.online,
+        (runtime) => runtime.canSend,
       ).length,
       reservedSessions: this.runtimes.size,
       remainingCapacity: Math.max(0, this.options.max - this.runtimes.size),
@@ -515,7 +552,7 @@ export class Sessions {
     const ready =
       record?.state === "ACTIVE" &&
       record.runtimeReady &&
-      rt?.online &&
+      rt?.canSend &&
       !rt.abort.signal.aborted &&
       rt.revision === record.revision;
     const retryAt =
@@ -529,7 +566,11 @@ export class Sessions {
         authorization,
         worker: "AVAILABLE",
         source: "LIVE",
-        connection: ready ? "CONNECTED" : rt ? "CONNECTING" : "OFFLINE",
+        connection: ready
+          ? "CONNECTED"
+          : rt?.transportConnected
+            ? "CONNECTING"
+            : "OFFLINE",
         membership:
           record?.state === "NOT_IN_GROUP"
             ? "NOT_MEMBER"
@@ -734,6 +775,33 @@ export class Sessions {
           },
         ),
       );
+    rt.transportConnected = true;
+    rt.historyReady = true;
+    const currentEpoch = rt.epoch;
+    if (this.onReady) {
+      try {
+        await this.onReady(rt.userId, rt.revision);
+      } catch (error) {
+        workerLog.failure("telegram.financial_recovery.failed", error, {
+          sessionRef: sessionRef(rt.userId),
+        });
+        return false;
+      }
+    }
+    if (
+      this.runtimes.get(rt.userId) !== rt ||
+      rt.abort.signal.aborted ||
+      rt.epoch !== currentEpoch ||
+      !rt.transportConnected
+    ) {
+      workerLog.warn("telegram.session.ready_aborted_due_to_state_change", {
+        sessionRef: sessionRef(rt.userId),
+        epoch: rt.epoch,
+        currentEpoch,
+        transportConnected: rt.transportConnected,
+      });
+      return false;
+    }
     const activated = await this.store.activateSession(rt.userId, rt.revision, {
       state: "ACTIVE",
       runtimeReady: true,
@@ -748,12 +816,8 @@ export class Sessions {
       rt.stop = undefined;
       return false;
     }
+    rt.canSend = true;
     rt.online = true;
-    void this.onReady?.(rt.userId, rt.revision).catch((error: unknown) =>
-      workerLog.failure("telegram.financial_recovery.failed", error, {
-        sessionRef: sessionRef(rt.userId),
-      }),
-    );
     if (this.outages.connected(rt.userId, rt.revision)) {
       workerLog.info("telegram.session.recovered", {
         reasonCode: "NONE",
@@ -796,6 +860,10 @@ export class Sessions {
     }
   }
   private async runtimeFailure(rt: Runtime, error: unknown) {
+    rt.epoch++;
+    rt.transportConnected = false;
+    rt.historyReady = false;
+    rt.canSend = false;
     rt.online = false;
     if (
       error instanceof AppError &&
@@ -1321,17 +1389,17 @@ export class Sessions {
             const membershipTtl = this.options.membershipTtlMs ?? 15 * 60_000;
             const needsRecovery =
               !rt ||
-              !rt.online ||
+              !rt.canSend ||
               !current.membershipCheckedAt ||
               this.now() - current.membershipCheckedAt.getTime() >
                 membershipTtl;
             if (needsRecovery) {
               recoveryAttempts++;
               await this.recoverRuntime(current);
-            } else if (current.runtimeReady !== rt.online) {
+            } else if (current.runtimeReady !== rt.canSend) {
               await this.store.updateSession(record.userId, current.revision, {
                 runtimeCheckedAt: new Date(this.now()),
-                runtimeReady: rt.online,
+                runtimeReady: rt.canSend,
               });
             }
           }),

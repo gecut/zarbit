@@ -179,9 +179,10 @@ export function createFinancialIngestionCoordinator(
     userId: string,
     revision: number,
   ): Promise<void> => {
+    let recoveryGeneration: number | undefined;
     if (config.settlementEnabled) {
       recovered = false;
-      await store.beginFinancialRecovery(config.groupId);
+      recoveryGeneration = await store.beginFinancialRecovery(config.groupId);
       const state = await store.ingestionState(config.groupId);
       const after =
         state?.scannedThroughMessageId ||
@@ -326,7 +327,17 @@ export function createFinancialIngestionCoordinator(
       }
       after = settlement.sourceMessageId;
     }
-    await store.completeFinancialRecovery(config.groupId);
+    const ok = await store.completeFinancialRecovery(
+      config.groupId,
+      recoveryGeneration,
+    );
+    if (ok === false) {
+      workerLog.warn("telegram.financial_recovery.generation_mismatch", {
+        chatId: config.groupId,
+        generation: recoveryGeneration,
+      });
+      throw new Error("Financial recovery generation mismatch");
+    }
     for (const settlement of settlements) {
       if (settlement.isBootstrap)
         await store.applySettlement(config.groupId, settlement.sourceMessageId);

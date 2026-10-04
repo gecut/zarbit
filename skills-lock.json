@@ -203,7 +203,7 @@
       "source": "gecut/nexload-sdk",
       "sourceType": "github",
       "skillPath": "skills/nexload/cto-review/SKILL.md",
-      "computedHash": "dd261c12f988d3cf7b25a71140a8261c9db45965d3ded536adc2c9be9f02777e"
+      "computedHash": "c7d1d17fe93c9f1cdaa7114730f4ce672c962604ee8b6e7e52acea1a654b6a3c"
     },
     "nexload-design": {
       "source": "gecut/nexload-sdk",

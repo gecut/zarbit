@@ -43,6 +43,7 @@ test(
         condition: "LTE",
         targetPrice: 100000,
         units: 2,
+        creationKey: crypto.randomUUID(),
       });
       // Request creation fences message IDs across the single configured group.
       now = new Date(now.getTime() + 1000);
@@ -82,6 +83,7 @@ test(
         condition: "GTE",
         targetPrice: 100000,
         units: 1,
+        creationKey: crypto.randomUUID(),
       });
       now = new Date(now.getTime() + 1000);
       // No wakeup: the periodic durable scan must recover a committed receipt.

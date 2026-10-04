@@ -186,16 +186,20 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       findRequestCreation(db, userId, input),
     createRequest: (userId: string, input: CreateRequestInput) =>
       connected(userId, async (tx) => {
-        const existing = await findRequestCreation(tx, userId, input);
+        const creationKey = input.creationKey || randomUUID();
+        const payloadHash = computeCreationPayloadHash(input);
+        const existing = input.creationKey
+          ? await findRequestCreation(tx, userId, input)
+          : null;
         if (existing) return existing;
 
-        const payloadHash = computeCreationPayloadHash(input);
         const armed = await arm(tx);
         try {
           const row = await tx.request.create({
             data: {
               userId,
               ...input,
+              creationKey,
               creationPayloadHash: payloadHash,
               ...armed,
             },
@@ -203,7 +207,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
           await tx.requestCreationIdentity.create({
             data: {
               userId,
-              creationKey: input.creationKey,
+              creationKey,
               creationPayloadHash: payloadHash,
               requestId: row.id,
               status: row.status,
@@ -217,7 +221,10 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             "code" in error &&
             (error as { code: string }).code === "P2002"
           ) {
-            const recheck = await findRequestCreation(tx, userId, input);
+            const recheck = await findRequestCreation(tx, userId, {
+              ...input,
+              creationKey,
+            });
             if (recheck) return recheck;
           }
           throw error;

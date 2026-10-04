@@ -26,6 +26,7 @@ export async function findRequestCreation(
   userId: string,
   input: CreateRequestInput,
 ): Promise<RequestRecord | null> {
+  if (!input.creationKey) return null;
   const expectedHash = computeCreationPayloadHash(input);
   const identity = await db.requestCreationIdentity.findUnique({
     where: {

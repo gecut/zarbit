@@ -211,6 +211,7 @@ test(
       condition: "GTE",
       targetPrice: 96000,
       units: null,
+      creationKey: crypto.randomUUID(),
     });
     await new Promise((resolve) => setTimeout(resolve, 1100));
     available = false;

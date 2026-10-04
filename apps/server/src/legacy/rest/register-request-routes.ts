@@ -62,6 +62,10 @@ export function registerRequestRoutes(
       await c.req.json().catch(() => null),
     );
     const userId = c.get("user").id;
+    const existing = await deps.store.findRequestCreation?.(userId, input);
+    if (existing) {
+      return c.json({ data: requestView(existing) }, 200);
+    }
     await requireSession(userId);
     return c.json(
       { data: requestView(await deps.store.createRequest(userId, input)) },

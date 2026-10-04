@@ -13,8 +13,17 @@ import {
   type UpdateRequestInput,
   type RequestDetail,
 } from "@zarbit/contracts";
-import type { PrismaClient, Prisma } from "../prisma/generated/client";
-import type { Request as RequestRecord } from "../prisma/generated/client";
+import type {
+  PrismaClient,
+  Prisma,
+  Request as RequestRecord,
+} from "../prisma/generated/client";
+import {
+  computeCreationPayloadHash,
+  findRequestCreation,
+} from "./request-creation";
+
+export * from "./request-creation";
 
 type RequestViewRow = Omit<
   RequestRecord,
@@ -173,10 +182,47 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             : null,
       };
     },
+    findRequestCreation: (userId: string, input: CreateRequestInput) =>
+      findRequestCreation(db, userId, input),
     createRequest: (userId: string, input: CreateRequestInput) =>
-      connected(userId, async (tx) =>
-        tx.request.create({ data: { userId, ...input, ...(await arm(tx)) } }),
-      ),
+      connected(userId, async (tx) => {
+        const existing = await findRequestCreation(tx, userId, input);
+        if (existing) return existing;
+
+        const payloadHash = computeCreationPayloadHash(input);
+        const armed = await arm(tx);
+        try {
+          const row = await tx.request.create({
+            data: {
+              userId,
+              ...input,
+              creationPayloadHash: payloadHash,
+              ...armed,
+            },
+          });
+          await tx.requestCreationIdentity.create({
+            data: {
+              userId,
+              creationKey: input.creationKey,
+              creationPayloadHash: payloadHash,
+              requestId: row.id,
+              status: row.status,
+            },
+          });
+          return row;
+        } catch (error) {
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            (error as { code: string }).code === "P2002"
+          ) {
+            const recheck = await findRequestCreation(tx, userId, input);
+            if (recheck) return recheck;
+          }
+          throw error;
+        }
+      }),
     editRequest: (userId: string, id: string, input: UpdateRequestInput) =>
       connected(userId, async (tx) => {
         const result = await tx.request.updateMany({
@@ -189,6 +235,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
     cancelRequest: (userId: string, id: string) =>
       db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
+        const completedAt = now();
         const result = await tx.request.updateMany({
           where: {
             id,
@@ -200,11 +247,18 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
           data: {
             status: "CANCELLED",
             executionPhase: "CANCELLED",
-            completedAt: now(),
+            completedAt,
             cancellationReason: "لغو توسط کاربر",
           },
         });
         if (!result.count) throw conflict();
+        await tx.requestCreationIdentity.updateMany({
+          where: { requestId: id },
+          data: {
+            status: "CANCELLED",
+            completedAt,
+          },
+        });
         return tx.request.findUniqueOrThrow({ where: { id } });
       }),
     initializeTradeRequests: (groupId: number | bigint) =>
@@ -322,17 +376,30 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         failureReason?: string;
       },
     ) =>
-      db.request.updateMany({
-        where: { id, claimToken, status: "ACTIVE" },
-        data: {
-          ...result,
-          executionPhase: result.status,
-          resolutionState:
-            result.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
-          unknownReason:
-            result.status === "UNKNOWN" ? result.failureReason : null,
-          completedAt: now(),
-        },
+      db.$transaction(async (tx) => {
+        const completedAt = now();
+        const updateResult = await tx.request.updateMany({
+          where: { id, claimToken, status: "ACTIVE" },
+          data: {
+            ...result,
+            executionPhase: result.status,
+            resolutionState:
+              result.status === "UNKNOWN" ? "UNRESOLVED" : "NOT_APPLICABLE",
+            unknownReason:
+              result.status === "UNKNOWN" ? result.failureReason : null,
+            completedAt,
+          },
+        });
+        if (updateResult.count > 0) {
+          await tx.requestCreationIdentity.updateMany({
+            where: { requestId: id },
+            data: {
+              status: result.status,
+              completedAt,
+            },
+          });
+        }
+        return updateResult;
       }),
     markSending: (id: string, claimToken: string) =>
       db.$transaction(async (tx) => {
@@ -428,7 +495,8 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             ...emptyTrigger,
           },
         });
-        return tx.request.updateManyAndReturn({
+        const completedAt = now();
+        const recovered = await tx.request.updateManyAndReturn({
           where: {
             status: "ACTIVE",
             OR: [
@@ -440,11 +508,23 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             status: "UNKNOWN",
             executionPhase: "UNKNOWN",
             resolutionState: "UNRESOLVED",
-            completedAt: now(),
+            completedAt,
             unknownReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
             failureReason: "سرویس هنگام ارسال متوقف شد؛ نتیجه ارسال مشخص نیست.",
           },
         });
+        if (recovered.length > 0) {
+          await tx.requestCreationIdentity.updateMany({
+            where: {
+              requestId: { in: recovered.map((r) => r.id) },
+            },
+            data: {
+              status: "UNKNOWN",
+              completedAt,
+            },
+          });
+        }
+        return recovered;
       }),
     pruneRequests: () =>
       db.request.deleteMany({

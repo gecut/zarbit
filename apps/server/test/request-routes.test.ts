@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   createRequestInputSchema,
+  updateRequestInputSchema,
   requestDetailSchema,
   requestHistoryPageSchema,
   type CreateRequestInput,
@@ -37,6 +38,8 @@ const baseRow = {
   completedAt: null,
   failureReason: null,
   cancellationReason: null,
+  creationKey: null,
+  creationPayloadHash: null,
   createdAt: new Date("2026-09-07T08:00:00.000Z"),
   updatedAt: new Date("2026-09-07T08:00:00.000Z"),
 };
@@ -48,6 +51,7 @@ test("request input accepts both execution conditions", () => {
       condition,
       targetPrice: 96_000,
       units: null,
+      creationKey: crypto.randomUUID(),
     });
     assert.equal(result.success, true);
   }
@@ -114,9 +118,16 @@ async function responseData<T>(response: Response, schema: z.ZodType<T>) {
 
 test("request routes preserve condition across read and mutation responses", async () => {
   const { app, commands, inputs } = requestApp();
-  const input = {
+  const createInput = {
     action: "ALERT",
     condition: "GTE",
+    targetPrice: 96_000,
+    units: null,
+    creationKey: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+  } as const;
+  const updateInput = {
+    action: "ALERT",
+    condition: "LTE",
     targetPrice: 96_000,
     units: null,
   } as const;
@@ -148,7 +159,7 @@ test("request routes preserve condition across read and mutation responses", asy
 
   const created = await app.request("http://server/api/requests", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify(createInput),
   });
   assert.equal(created.status, 201);
   assert.equal(
@@ -158,7 +169,7 @@ test("request routes preserve condition across read and mutation responses", asy
 
   const updated = await app.request("http://server/api/requests/request-GTE", {
     method: "PATCH",
-    body: JSON.stringify({ ...input, condition: "LTE" }),
+    body: JSON.stringify(updateInput),
   });
   assert.equal(updated.status, 200);
   assert.equal(
@@ -190,4 +201,40 @@ test("request routes preserve condition across read and mutation responses", asy
     ["GTE", "LTE"],
   );
   assert.deepEqual(commands.at(-1), { type: "force-send", id: "request-GTE" });
+});
+
+test("create and update request schemas enforce creationKey separation", () => {
+  const validUUID = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d";
+  const baseInput = {
+    action: "ALERT",
+    condition: "GTE",
+    targetPrice: 96_000,
+    units: null,
+  } as const;
+
+  // create requires creationKey UUID
+  const createValid = createRequestInputSchema.safeParse({
+    ...baseInput,
+    creationKey: validUUID,
+  });
+  assert.equal(createValid.success, true);
+
+  const createMissingKey = createRequestInputSchema.safeParse(baseInput);
+  assert.equal(createMissingKey.success, false);
+
+  const createInvalidUUID = createRequestInputSchema.safeParse({
+    ...baseInput,
+    creationKey: "not-a-uuid",
+  });
+  assert.equal(createInvalidUUID.success, false);
+
+  // update rejects creationKey
+  const updateValid = updateRequestInputSchema.safeParse(baseInput);
+  assert.equal(updateValid.success, true);
+
+  const updateWithKey = updateRequestInputSchema.safeParse({
+    ...baseInput,
+    creationKey: validUUID,
+  });
+  assert.equal(updateWithKey.success, false);
 });

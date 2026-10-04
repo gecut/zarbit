@@ -164,12 +164,29 @@ model Request {
   completedAt         DateTime?
   failureReason       String?
   cancellationReason  String?
+  creationKey         String?                @db.Uuid
+  creationPayloadHash String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
   user                TelegramUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, creationKey])
   @@index([userId, status, createdAt])
   @@index([status, condition, targetPrice])
+}
+
+model RequestCreationIdentity {
+  id                  String        @id @default(cuid())
+  userId              String
+  creationKey         String        @db.Uuid
+  creationPayloadHash String
+  requestId           String        @unique
+  status              RequestStatus
+  completedAt         DateTime?
+  createdAt           DateTime      @default(now())
+
+  @@unique([userId, creationKey])
+  @@index([userId, createdAt])
 }
 
 model QuoteHistory {
@@ -183,6 +200,7 @@ model QuoteHistory {
 
   @@index([announcedAt])
   @@index([announcedAt, sourceMessageId])
+  @@index([chatId, sourceMessageId])
 }
 
 enum ParticipantResolutionStatus {
@@ -336,6 +354,7 @@ model FinancialInbox {
 model GroupIngestionState {
   chatId                           BigInt   @id
   historyRecoveryRequired          Boolean  @default(false)
+  historyRecoveryGeneration        Int      @default(0)
   scannedThroughMessageId          Int      @default(0)
   appliedThroughMessageId          Int      @default(0)
   coverageVerifiedThroughMessageId Int      @default(0)

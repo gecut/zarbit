@@ -45,7 +45,7 @@ export const requestResolutionStateSchema = z.enum([
   "NOT_APPLICABLE",
   "UNRESOLVED",
 ]);
-const requestFields = z
+const baseRequestFields = z
   .object({
     condition: requestConditionSchema,
     action: requestActionSchema,
@@ -53,7 +53,8 @@ const requestFields = z
     units: requestInteger.nullable(),
   })
   .strict();
-export const createRequestInputSchema = requestFields.refine(
+
+export const updateRequestInputSchema = baseRequestFields.refine(
   (value) =>
     value.action === "ALERT" ? value.units === null : value.units !== null,
   {
@@ -61,11 +62,24 @@ export const createRequestInputSchema = requestFields.refine(
     path: ["units"],
   },
 );
-// Editing replaces the complete editable payload, preserving cross-field validation.
-export const updateRequestInputSchema = createRequestInputSchema;
+
+export const createRequestInputSchema = baseRequestFields
+  .extend({
+    creationKey: z.string().uuid({ message: "شناسه یکتای ثبت نامعتبر است." }),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.action === "ALERT" ? value.units === null : value.units !== null,
+    {
+      message: "برای خرید و فروش تعداد را وارد کنید؛ هشدار تعداد ندارد.",
+      path: ["units"],
+    },
+  );
+
 export type CreateRequestInput = z.infer<typeof createRequestInputSchema>;
 export type UpdateRequestInput = z.infer<typeof updateRequestInputSchema>;
-export const requestSchema = requestFields.extend({
+export const requestSchema = baseRequestFields.extend({
   id: z.string(),
   status: requestStatusSchema,
   executing: z.boolean(),

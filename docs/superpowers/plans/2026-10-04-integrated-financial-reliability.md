@@ -1,229 +1,445 @@
-# برنامهٔ یکپارچهٔ اصلاح قابلیت اعتماد مالی ZarBit
+# برنامهٔ یکپارچهٔ اصلاح قابلیت اعتماد مالی ZarBit (نسخهٔ نهایی بازبینی‌شده)
 
-> **برای عامل اجراکننده:** این برنامه را با مهارت `executing-plans`، به‌ترتیب checklistها اجرا کن. مالکیت قرارداد، persistence و recovery یکپارچه باشد. اجرای حاضر فقط برنامه‌ریزی است.
+> **برای عامل اجراکننده:** این برنامه را با مهارت `executing-plans`، به‌ترتیب checklistها اجرا کن. تمام تصمیمات بر اساس آخرین Re-Audit مستقل (۲۰۲۶-۱۰-۰۴) نهایی شده‌اند. اجرای حاضر صرفاً برنامه‌ریزی است؛ هیچ تغییری در کدهای اجرایی، اسکیمای دیتابیس یا مایگریشن‌ها در این نوبت اعمال نشده است.
 
-**Goal:** رفع ثبت تکراری یک قصد مالی، آمادگی کاذب session پس از قطع اتصال، و تفسیر نادرست قیمت shorthand در پیام‌های خارج از ترتیب.
+**Goal:** رفع قطعی و جامع ۱۰ نقص قابلیت اعتماد مالی شامل: حذف ثبت تکراری قصد مالی و بقای هویت در برابر هرس ۳۰روزه (Pruning)، رفع آمادگی کاذب سشن تلگرام و فنس‌گذاری نسلی ریکاوری، اعمال همگانی گیت بررسی مالی بر کلیهٔ ارسال‌ها (اعم از خودکار و دستی `forceSend`)، احراز دقیق پیش‌نیازها و پیشوند قیمت Quote برای سفارش‌های کوتاه (Shorthand)، رفع تناقضات تحلیلی V1 و اعتماد کاذب تاریخی، و همگام‌سازی تازگی کش داده‌های بازار با بودجهٔ عملیاتی UI.
 
-**Architecture:** PostgreSQL هویت ثبت درخواست و تاریخچهٔ quote را نگه می‌دارد. Worker آمادگی ارسال را فقط پس از اتصال، احراز هویت، عضویت و پایان recovery اعلام می‌کند. قرارداد تجاری Settlement، WACB، rounding و مسیر NORMAL-only درخواست‌ها حفظ می‌شوند.
+**Architecture:** لایهٔ PostgreSQL هویت پایدار ثبت درخواست و تومب‌استون‌های آن را در کنار تاریخچهٔ متوالی Quoteها نگهداری می‌کند. Worker آمادگی ارسال را با تفکیک سه‌مرحله‌ای (اتصال ترنسپورت، صلاحیت تاریخچه، و آمادگی ارسال) فقط پس از پایان موفق ریکاوری اعلام می‌کند. گیت بررسی مالی گروه (`REVIEW_REQUIRED`) به‌طور یکپارچه بر همهٔ ارسال‌ها نظارت دارد. قرارداد تجاری Settlement، محاسبات WACB، تبدیل واحدها و مسیر ایزولهٔ تراکنش‌های NORMAL کاملاً حفظ می‌شوند.
 
-**Tech Stack:** TypeScript strict، Prisma 7.10.0، PostgreSQL، Hono/oRPC، mtcute نصب‌شدهٔ 0.26.3، React/HeroUI و TanStack Query موجود؛ بدون dependency یا package جدید.
+**Tech Stack:** TypeScript strict، Prisma 7.10.0، PostgreSQL، Hono/oRPC v1.15، mtcute نصب‌شدهٔ 0.26.3، React 19/HeroUI و TanStack Query موجود؛ بدون افزودن هرگونه وابستگی، بروکر خارجی (مانند Redis/Kafka) یا پکیج جدید.
 
-**Spec:** درخواست کاربر برای راه‌حل سه finding بررسی یکپارچه؛ `docs/BUSINESS-RULES.md`، `docs/TELEGRAM.md`، `docs/RPC.md`، `docs/GROUP-TRADING-PROTOCOL.md`، `docs/MARKET-DATA.md`، `docs/OPERATIONS.md` و `docs/adr/0006-settlement-ledger-and-reviewed-coverage.md`. قرارداد مصوب Settlement مقدم است؛ اسناد را در checkout اجرا بازخوانی کن.
-
-## محدوده و وضعیت شواهد
-
-این برنامه سه finding تأییدشدهٔ audit را اصلاح می‌کند؛ ادعای بی‌نقص شدن کل پروژه نیست. source در شاخهٔ `codex/settlement-implementation` و commit `f0c71d671` بررسی شده است. هنگام اجرا HEAD و diff دوباره کنترل شوند؛ تغییرات دیگر کاربر محفوظ بمانند.
-
-| نقص                                         | شاهد source و بازتولید                                                                                                                                                                            | نتیجهٔ لازم                                                             |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| P1: retry ثبت درخواست، رکورد جدید می‌سازد   | `packages/db/src/requests.ts:createRequest`، `packages/contracts/src/index.ts:requestFields` و `apps/web/src/modules/requests/_request-form-drawer.tsx:submit`؛ دو فراخوانی همان قصد دو ID ساختند | همان کلید و payload فقط یک Request؛ قصد جدید با کلید جدید مجاز          |
-| P1: disconnect معمولی recovery را رد می‌کند | `apps/worker/src/sessions.ts:observeTransport`، `requireConnected` و `setMembership`؛ `offline → connected` بدون client error، recovery اجرا نکرد                                                 | offline فوراً آمادگی حافظه را باطل کند؛ reconnect barrier را طی کند     |
-| P2: quote قدیمی مرجع shorthand می‌شود       | `authoritative-handler.ts:createAuthoritativeHandler` و `market-ingestion.ts:createMarketIngestion`؛ quote ID20 با قیمت 102980، سپس ID10 با 101980، سفارش ID21 با `خ980` به 101980 تفسیر شد       | مرجع هر سفارش، آخرین quote ثبت‌شدهٔ همان گروه با ID کوچک‌تر از ID سفارش |
-
-دو بازتولید حافظه‌ای و source شاهد audit هستند؛ Telegram زنده، browser و production را اثبات نمی‌کنند. شرط محافظه‌کارانهٔ confidence V2 و اختلاف Analytics V1 در این برنامه تغییر نمی‌کنند؛ اصلاح آن‌ها نیازمند scope جداست.
-
-## قیود سراسری
-
-- رفتار مالی موجود، request trigger، WACB، واحد compact price و تبدیل تومان ثابت بمانند.
-- Settlement outbound Telegram order تولید نکند؛ parser بدون شواهد واقعی فعال نشود.
-- source، migrations و محیط تولید در نوبت برنامه‌ریزی تغییر نمی‌کنند. اجرای بعدی migration فقط با مجوز و روی محیط مشخص انجام شود.
-- duplicate قصد با duplicate payload متفاوت است؛ دو سفارش عمدی با شرایط یکسان و کلیدهای متفاوت مجازند.
-- هر پاسخ retry وضعیت **فعلی** همان Request را برگرداند؛ DONE/CANCELLED/UNKNOWN هرگز دوباره arm نشوند.
-- شکست transport اثبات عدم commit یا عدم ارسال Telegram نیست. وضعیت UNKNOWN اجرای سفارش خودکار retry نشود.
-- فایل‌های UI و پیام‌های خطا فارسی، RTL و ساختار موجود HeroUI را حفظ کنند.
-
-## تمرکز review
-
-1. پاسخ ثبت پس از commit گم شده و کاربر reload کرده است: همان intent بازیابی شود.
-2. Request پس از ثبت edit یا execute شده است: retry اولیه همان ID و وضعیت جاری را برگرداند.
-3. disconnect بدون `onError` یا هنگام recovery رخ داده است: completion قدیمی آمادگی را باز نکند.
-4. تنها session موجود هنوز request-ready نیست: history catch-up بدون deadlock قابل اجرا باشد.
-5. quote جدیدتر از سفارش، quote گروه دیگر یا quote با `chatId=null` وجود دارد: shorthand از آن تفسیر نشود.
+**Spec:** اسناد authoritative در `docs/BUSINESS-RULES.md`، `docs/TELEGRAM.md`، `docs/RPC.md`، `docs/GROUP-TRADING-PROTOCOL.md`، `docs/MARKET-DATA.md`، `docs/OPERATIONS.md` و `docs/adr/0006-settlement-ledger-and-reviewed-coverage.md`.
 
 ---
 
-## تصمیم ۱: هویت پایدار برای ثبت درخواست
+## خلاصهٔ بازبینی و اصلاحات پلن (Plan Patch Summary)
 
-### قرارداد و persistence
+این بخش تغییرات اعمال‌شده در پلن را بر اساس یافته‌های گزارش Re-Audit مستقل (۲۰۲۶-۱۰-۰۴) مستند می‌کند. پلن پیشین بر سه یافته متمرکز بود اما چند شکاف معماری مهم و یافته‌های جدیدتر را در بر نمی‌گرفت.
 
-**انتخاب:** فیلد اجباری `creationKey` از نوع UUID برای create. `createRequestInputSchema` و `updateRequestInputSchema` از هم جدا شوند: update فقط condition/action/targetPrice/units دارد. کلید به همهٔ ورودی‌ها به‌صورت optional اضافه نشود؛ caller فاقد کلید خطای validation فارسی بگیرد.
+### جدول انطباق یافته‌های ده‌گانه (Audit Findings Matrix)
 
-در `Request` دو ستون nullable اضافه شود: `creationKey String? @db.Uuid` و `creationPayloadHash String?`. unique مرکب `(userId, creationKey)` و CHECK هم‌زمان null/non-null بودن دو ستون در migration افزوده شود. رکوردهای قدیمی null می‌مانند؛ backfill، dedup حدسی یا حذف انجام نشود. برای hash غیرnull، قالب lowercase SHA-256 با ۶۴ رقم hex اعتبارسنجی شود. index دیگری روی همان کلید لازم نیست.
-
-hash از ترتیب ثابت فیلدهای اعتبارسنجی‌شدهٔ condition/action/targetPrice/units، با units=null برای ALERT، ساخته شود. `userId` scope unique است؛ `creationKey`، timestamps و وضعیت Request وارد hash نشوند. hash اولیه پس از edit ثابت بماند؛ hash گرفتن از فیلدهای mutable رکورد در زمان retry غلط است.
-
-**Interface پیشنهادی در store:**
-
-- `findRequestCreation(userId: string, input: CreateRequestInput): Promise<RequestRecord | null>`: lookup scoped و مقایسهٔ hash اولیه؛ همان key با payload متفاوت → `REQUEST_CREATION_CONFLICT`، HTTP 409، پیام «این تلاش ثبت با اطلاعات دیگری انجام شده است؛ وضعیت درخواست را بررسی کنید.»
-- `createRequest(userId: string, input: CreateRequestInput): Promise<RequestRecord>`: transaction، قفل session موجود، lookup مجدد intent، سپس فقط برای intent جدید بررسی session و arm/create.
-- `editRequest(userId: string, id: string, input: UpdateRequestInput)`؛ creation identity تغییر نکند.
-
-Replay موجود باید قبل از شرط session-ready بررسی شود؛ کاربری که درخواستش ثبت شده و سپس disconnected شده، بتواند نتیجه را بازیابی کند. authentication و allowlist معمول endpoint همچنان اجرا می‌شوند. نبود Request به معنی مجاز بودن create بدون session نیست.
-
-در router ابتدا `findRequestCreation`؛ اگر موجود است پاسخ همان رکورد، وگرنه `requireLiveSession` و `createRequest`. بررسی دوم داخل transaction race دو فراخوانی را می‌بندد؛ unique DB مرجع نهایی است. اگر رقابت unique رخ داد، نتیجهٔ scoped دوباره خوانده و hash مقایسه شود؛ خطاهای DB نامرتبط بلعیده نشوند. replay transaction هیچ rearm یا wake جدیدی انجام ندهد. شبکهٔ Worker/Telegram داخل transaction قرار نگیرد.
-
-`create-requests-router.ts` و REST قدیمی هر دو این semantics را داشته باشند. invalidation cache در replay هم حفظ شود. خروجی `RequestDetail` تغییر لازم ندارد؛ یک جدول عمومی idempotency و response snapshot جدا لازم نیست.
-
-**دلیل و trade-off:** دو ستون immutable کنار Request از intent مالی مستقل در چند endpoint جلوگیری می‌کنند و retry پس از edit را درست نگه می‌دارند. dedup بر اساس قیمت/تعداد، UUID جدید در هر retry، debounce UI و in-memory cache رد می‌شوند؛ هیچ‌کدام durable identity نیستند. create بدون کلید دیگر سازگار نیست؛ این شکست قرارداد عمدی و امن است و cutover client/server لازم دارد.
-
-### چرخهٔ intent در UI
-
-قبل از اولین ارسال، `crypto.randomUUID()` و snapshot payload ساخته و **قبل از network call** در storage مرورگر تحت owner واقعی ذخیره شوند. فایل پیشنهادی `_request-creation-intent.ts` فقط storage و اعتبارسنجی draft را مالک شود؛ نوع public از قرارداد گرفته شود. session/initData/token در این storage ذخیره نشوند. یک pending intent به‌ازای owner کافی است.
-
-- submit هم‌زمان با guard همگام ref مسدود شود؛ `setPending` تنها guard نباشد.
-- retry همان key و همان snapshot را بفرستد. پس از failure نامشخص، فیلدها برای این intent ثابت و متن «نتیجهٔ ثبت مشخص نیست؛ با تلاش دوباره، همان درخواست بررسی می‌شود.» نمایش داده شود.
-- reload یا بستن/بازکردن drawer draft را بازیابی کند؛ هیچ ارسال خودکاری انجام نشود. کاربر صریحاً retry کند.
-- پس از پاسخ موفق، intent پاک شود؛ شکست `onDone`/refetch به‌عنوان شکست ثبت معرفی نشود. ID پاسخ قبلاً در query cache قرار می‌گیرد.
-- خطای قطعی validation یا SESSION_REQUIRED پیش از create، با قرارداد مشخص server، اجازهٔ اصلاح draft و key جدید بدهد. network timeout، 5xx و پاسخ نامفهوم چنین اجازه‌ای نمی‌دهند.
-- ترک intent نامعلوم باید صریحاً هشدار دهد که حذف draft درخواست احتمالی را لغو نمی‌کند. ثبت قصد جدید پس از این اقدام آگاهانه است؛ cancellation فقط بر Request ID موجود انجام می‌شود.
-- schema storage نامعتبر fail-closed شود؛ silently ساختن key جدید و submit همان payload ممنوع. unavailable بودن storage قبل از ارسال خطای ساده بدهد تا ضمانت reload از بین نرود.
-
-Mock بازار نیز intent identity را نگه دارد؛ update در mock از update schema استفاده کند.
-
-## تصمیم ۲: اتصال و recovery قبل از آمادگی ارسال
-
-**واقعیت فعلی:** `setMembership` ابتدا `runtimeReady=true` و `online=true` می‌کند و `onReady` را fire-and-forget اجرا می‌کند. `history/latestMessageId` فقط runtimeهای online را انتخاب می‌کنند. صرف await کردن callback با online=false باعث نبود history session می‌شود؛ این coupling باید اصلاح شود.
-
-**انتخاب:** در Runtime، سه مفهوم جدا باشند: وضعیت connection transport، صلاحیت خواندن history پس از identity/membership (`historyReady`)، و آمادگی ارسال (`online` موجود). یک epoch حافظه‌ای برای رد completion قدیمی کافی است؛ این epoch credential یا session revision نیست.
-
-1. `offline`، `connecting` و `updating` فوراً و همگام `online=false` و `historyReady=false` کنند و epoch را افزایش دهند. persistence وضعیت runtimeReady=false و connectionState متناظر از مسیر serial همان user انجام شود. state ACTIVE به‌معنای authorization حفظ شود؛ disconnect باعث revoke، حذف SQLite یا cancel درخواست‌ها نشود.
-2. handler connected و synchronize فقط یک recovery مؤثر برای همان runtime/epoch اجرا کنند. callback به Runtime خودش bound باشد، نه فقط userId؛ event client بسته‌شده نباید runtime جایگزین را تغییر دهد.
-3. identity و membership با epoch captured بررسی شوند؛ subscription یک‌بار متصل شود؛ سپس historyReady=true اما online/runtimeReady=false بماند.
-4. `onReady` فعلی awaited شود و فقط پس از موفقیت و کنترل مجدد epoch، Runtime identity، revision، stopped/abort و connection=connected، session request-ready گردد. خطای catch-up در log گم نشود؛ آمادگی بسته و retry با backoff موجود انجام شود.
-5. `history` و `latestMessageId` از historyReady استفاده کنند؛ `requireConnected`، `sendGroup` و presentation از online/request-ready استفاده کنند. history helperها نباید دوباره serial user را بگیرند؛ recovery در همان serial منتظر coordinator است.
-6. disconnect حین DB activation با کنترل پس از await کشف و runtimeReady دوباره false شود. کنترل local پیش از dispatch حفظ شود. هیچ ادعای atomically synchronous شدن رویداد شبکه و DB مطرح نشود.
-
-### recovery گروهی و catch-up
-
-`financial-ingestion-coordinator.ts` مالک ترتیب گروهی باقی بماند. callback پیشنهادی `onUnavailable` در Sessions به `financialIngestion.invalidateRecovery` متصل شود: recovered=false همگام و آغاز recovery پایدار در DB. خطای این ثبت readiness را باز نکند. یک session دیگر می‌تواند history را بازیابی کند؛ قطع یک client مجوز mark-ready برای همان client نیست.
-
-برای جلوگیری از completion قدیمی، `GroupIngestionState.historyRecoveryGeneration Int @default(0)` افزوده شود. `beginFinancialRecovery(chat): Promise<number>` زیر `lockTradeStream` generation را افزایش دهد و token برگرداند؛ `completeFinancialRecovery(chat, expectedGeneration): Promise<boolean>` فقط generation برابر را تکمیل کند. gate به OPEN فقط با قواعد فعلی نبود flagged inbox و pending/review Settlement برگردد. تمام callerها، از جمله error path coordinator، با Interface جدید هماهنگ شوند. generation هیچ معنای coverage confidence ندارد.
-
-نتیجهٔ false از completion یا برگشت زودهنگام قبل از پایان scan، موفقیت `onReady` نیست؛ coordinator خطای recovery-incomplete بدهد و session آماده نشود. پس از پایان موفق scan، gate ممکن است به دلیل review مالی همچنان بسته بماند؛ این وضعیت با شکست history متفاوت است. `online` اثبات پوشش مالی نیست و قواعد DB مربوط به request dispatch مستقل حفظ شوند. branch غیرفعال Settlement نیز پیش از return باید recovery token را تکمیل کند؛ guard پایدار معلق باقی نماند.
-
-history catch-up به reconnect در حالت `SETTLEMENT_ENABLED=false` هم متصل شود؛ اجرای callback فعلی در این حالت فقط unprocessed observations را بررسی می‌کند و تضمین دریافت پیام‌های مشاهده‌نشده نیست. scan مرحله‌ای `(durableCursor, fixedHead]`، اعتبار head، pagination و cap موجود را reuse کند. cursor فقط پس از persistence پیام‌های بازه جلو برود؛ به live delivery تنها تکیه نکند.
-
-- با Settlement فعال، bootstrap anchor و gateهای قبلی حفظ شوند.
-- بدون Settlement و cursor قبلی، آخرین NORMAL receipt همان گروه anchor شود. اگر receipt موجود نیست، fixed head به‌عنوان آغاز ingestion جدید ثبت شود؛ موجودی و تاریخچهٔ قبل از آن trustworthy اعلام نشود. این حالت اولیه با gap پس از cursor معتبر متفاوت است.
-- scan ناموفق یا cap ناقص cursor را جلو نبرد و درخواست خودکار را آزاد نکند. پیام زیر مرز Settlement اعمال‌شده طبق quarantine موجود بماند.
-- شناسهٔ گپ، اثبات receipt مفقود نیست؛ scan موفق نیز اثبات نبود پیام حذف‌شده نیست. baseline/coverage/confidence و review دستی Settlement عوض نشوند.
-- نسل recovery جدید، completion قبلی را ناکارآمد کند. این رفتار با دو session، reconnect پی‌درپی و restart آزموده شود.
-
-**Trade-off:** جداسازی transport و request readiness اندکی state اضافه می‌کند، اما false CONNECTED و deadlock catch-up را با یک مالک روشن حل می‌کند. آفلاین کردن فقط در onError، اتکا به TTL پانزده‌دقیقه‌ای و آماده کردن session پیش از recovery رد می‌شوند. سازوکار ارسال Telegram و UNKNOWN همان است؛ reconnect دستور ارسال مجدد نمی‌سازد.
-
-## تصمیم ۳: quote مرجع هر سفارش از تاریخچهٔ پیش از آن
-
-**انتخاب:** حذف قیمت مرجع scalar از حافظهٔ `createMarketIngestion`. یک query محدود در store اضافه شود:
-
-`quoteBeforeMessage(chatId: bigint | number, sourceMessageId: number): Promise<QuoteRecord | null>`
-
-شرط `chatId` دقیق و `sourceMessageId < orderMessageId`؛ ترتیب `sourceMessageId DESC` و take یک. `chatId=null` برای احراز گروه کافی نیست و fallback آن ممنوع است. این query صرفاً برای حل shorthand است؛ ترتیب timestamp-based فعلی dashboard/quote history در این scope بازطراحی نشود.
-
-`createTradingActionHandler` وابستگی پیشنهادی `getReferenceCompactQuote(event: QuoteEvent): Promise<number | null>` بگیرد. ابتدا parse بدون reference: اگر سفارش parsed و resolvedCompactPrice=null است، query اجرا و همان `parseHumanOrder` با reference دوباره فراخوانی شود. full compact price نیاز به query ندارد. فرمول suffix یا price unit جدید ساخته نشود.
-
-`authoritative-handler` ابتدا quote را persist کند؛ callback `onQuoteRecorded` scalar حذف شود چون دیگر مصرفی ندارد. ingest مشترک coordinator ترتیب live/catch-up را نگه دارد. هر duplicate یا DB failure مرجع ساختگی تولید نکند.
-
-نبود quote معتبر، shorthand را AMBIGUOUS با compactPrice=null نگه دارد؛ query failure قابل retry است و پیام successful/deduplicated اعلام نشود. مرجع از آخرین quote **شناخته‌شده و ثبت‌شده** پیش از سفارش است؛ پوشش کامل Telegram از این query نتیجه نمی‌شود. TradingActionهای قبلاً غلط خودکار rewrite نشوند؛ audit دستی با message IDs جداگانه انجام شود.
-
-**دلیل:** callback بعد از persistence و شرط latestUpdated فقط عقب رفتن latest را کم می‌کند، ولی سفارش دیررس را از quote آینده محافظت نمی‌کند. انتخاب predecessor DB هم نمونهٔ ID20→ID10→ID21 را حل می‌کند و هم quote ID30 قبل از رسیدن سفارش ID21 را. یک cache تاریخچهٔ جدید لازم نیست. unique فعلی sourceMessageId برای range scan قابل استفاده است؛ index تازه فقط در صورت plan واقعی query و `EXPLAIN` نامناسب افزوده شود، بدون benchmark حدسی.
+| کد یافته  | شرح نقص                                                                | ردهٔ شدت | وضعیت در پلن پیشین                   | راه‌حل اصلاحی در این نسخه                                                                                      |
+| :-------- | :--------------------------------------------------------------------- | :------- | :----------------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| **FR-01** | ثبت مجدد درخواست پس از قطع پاسخ، رکوردهای مجزا می‌سازد                 | **P1**   | تأیید شده؛ راه‌حل کلید یکتا مطرح شد  | تکمیل شد: ترکیب کلید یکتا (`creationKey`) و هش پایدار payload با لایهٔ تومب‌استون جهت بقا در برابر Pruning     |
+| **FR-02** | اعلام آمادگی سشن قبل از اتصال معتبر یا پایان ریکاوری                   | **P1**   | تأیید شده؛ تفکیک وضعیت‌ها پیشنهاد شد | تکمیل شد: تفکیک سه‌مرحله‌ای، باطل‌سازی آنی در disconnect، اجباری‌شدن `await onReady` و توکن نسلی در دیتابیس    |
+| **FR-03** | استفاده از متغیر اسکالر حافظه‌ای، مظنهٔ مرجع سفارش کوتاه را غلط می‌کند | **P2**   | تأیید شده؛ کوئری سلف در DB مطرح شد   | تکمیل شد: کوئری `quoteBeforeMessage` مقید به گروه و پیام، جایگزینی متغیر اسکالر با تاریخچهٔ متوالی             |
+| **FR-04** | ارسال دستی (`forceSend`) گیت بررسی مالی گروه را دور می‌زند             | **P1**   | **غایب بود** (یافتهٔ جدید Re-Audit)  | **افزوده شد:** تزریق chat مقصد به `markSending` و اعمال شرط `REVIEW_REQUIRED` بر هر دو مسیر خودکار و دستی      |
+| **FR-05** | تناقض نمایش خود-معامله در لیست و جزئیات تحلیلگران V1                   | **P2**   | کنار گذاشته شده بود (Deferred)       | **افزوده شد:** یکسان‌سازی ساختار پروجکشن خود-معامله در لیست و کشوی جزئیات V1 در فاز ۶                          |
+| **FR-06** | هرس ۳۰روزه رکوردهای تکمیل‌شده، کلید یکتایی intent را پاک می‌کند        | **P2**   | **غایب بود** (شکاف طراحی پلن پیشین)  | **افزوده شد:** ایجاد تومب‌استون دائمی یا تفکیک جدول هویت درخواست (`RequestCreationIdentity`) مستقل از حذف ردیف |
+| **FR-07** | کوئری سلف به تنهایی کامل بودن پیشوند پیام‌های دریافتی را اثبات نمی‌کند | **P2**   | **غایب بود** (شکاف طراحی پلن پیشین)  | **افزوده شد:** شرط احراز پیشوند متوالی تا مرز سفارش؛ در صورت عدم قطعیت، سفارش با وضعیت `AMBIGUOUS` متوقف شود   |
+| **FR-08** | کش ۶۰ثانیه‌ای وضعیت بازار بدون نوتیفایر، نمایش قیمت را بیات می‌کند     | **P2**   | **غایب بود** (یافتهٔ جدید Re-Audit)  | **افزوده شد:** کاهش TTL کش `MarketState` به ۳ ثانیه مطابق با قرارداد Polling فرانت در `docs/OPERATIONS.md:68`  |
+| **FR-09** | تناقض متون اسناد در ذکر الگوریتم FIFO و نسخهٔ قدیمی Prisma             | **P3**   | **غایب بود** (یافتهٔ مستندات)        | **افزوده شد:** تصحیح ارجاعات اسناد به WACB و Prisma 7.10.0 در فاز ۶ بدون دستکاری کدهای پایدار                  |
+| **FR-10** | اعلام اعتماد `HIGH` در V1 قبل از اعمال Settlement Bootstrap            | **P2**   | **غایب بود** (یافتهٔ جدید Re-Audit)  | **افزوده شد:** تنزل درجهٔ اعتماد به `ESTIMATED` قبل از اعمال نخستین تسویه در V1 و پرهیز از اطمینان کاذب        |
 
 ---
 
-## نقشهٔ فایل و ۶ فاز اجرا
+### ۵ محور تصمیم‌گیری ارتقایافته در این نسخه
 
-### فاز ۱: schema و قرارداد foundation
+1. **پایداری هویت Intent در برابر Pruning (FR-01 و FR-06):**
+   - پیش‌تر قرار بود کلید و هش مستقیماً در جدول `Request` ذخیره شوند. اما متد `pruneRequests` رکوردهای غیراکتیو قدیمی‌تر از ۳۰ روز را حذف می‌کند. در نتیجه، ارسال مجدد همان کلید پس از ۳۰ روز منجر به ایجاد یک درخواست جدید می‌شد.
+   - **اصلاح:** ایجاد ساختار پایدار برای هویت قصد مالی (جدول سبک `RequestCreationIdentity` یا ثبت تومب‌استون هنگام هرس) که حذف جزئیات حجیم درخواست، هویت `(userId, creationKey)` و هش آن را پاک نکند. هرگونه replay پس از هرس، وضعیت بایگانی‌شده را برمی‌گرداند و اجازهٔ درج مجدد نمی‌دهد.
 
-**فایل‌ها:** `packages/db/prisma/schema/schema.prisma`؛ migration جدید پیشنهادی `packages/db/prisma/migrations/20261004010000_financial_reliability/migration.sql`؛ `packages/contracts/src/index.ts`؛ `packages/contracts/src/rpc.ts` در صورت نیاز به error declaration موجود.
+2. **تفکیک سه‌مرحله‌ای آمادگی Session و فنس‌گذاری نسلی ریکاوری (FR-02):**
+   - پیش‌تر اعلام آمادگی به صورت fire-and-forget پیش از اتمام ریکاوری تاریخچه رخ می‌داد و رویدادهای `offline`/`connecting` آمادگی محلی را آنی باطل نمی‌کردند.
+   - **اصلاح:** تعریف صریح سه وضعیت در Runtime سشن: `transportConnected`، `historyReady`، و `canSend`. رویدادهای قطع ارتباط فوراً وضعیت ارسال را غیرفعال کرده و epoch حافظه‌ای را افزایش می‌دهند. همچنین در سطح پایگاه‌داده، ستون `historyRecoveryGeneration Int @default(0)` به جدول `GroupIngestionState` اضافه می‌شود تا کال‌بک‌های دیررس از سشن‌های قبلی نتوانند گیت ریکاوری نسل جدید را باز کنند.
 
-**وابستگی:** ندارد؛ وضعیت migration قبلی باید read-only بررسی شود. migration قدیمی Settlement بازنویسی نشود.
+3. **یکپارچه‌سازی گیت بررسی مالی برای کلیهٔ ارسال‌ها (FR-04):**
+   - در کد فعلی، متد `claimRequest` مقدار `triggeredChatId` را برابر `null` قرار می‌دهد؛ در نتیجه متد `markSending` بررسی وضعیت گیت (`gateStatus === "REVIEW_REQUIRED"`) را برای درخواست‌های دستی (`forceSend`) نادیده می‌گرفت.
+   - **اصلاح:** متد `markSending` چت مقصد را مستقیماً دریافت کرده و گیت بررسی مالی را به‌طور یکسان بر روی ارسال‌های خودکار و دستی اعمال می‌کند. در صورت توقف مالی، درخواست دستی نیز متوقف شده و با خطای `FINANCIAL_REVIEW_REQUIRED` به وضعیت انتظار بازمی‌گردد.
 
-- [ ] تست failing در `packages/db/test/trade-migration.test.ts` برای حفظ Request قدیمی، unique owner/key، CHECK identity و generation default بنویس.
-- [ ] create و update schemas را جدا کن؛ creationKey در create اجباری و در update ممنوع باشد. تست schema در `apps/server/test/request-routes.test.ts` ورودی‌ها را pin کند.
-- [ ] migration additive با دو ستون Request، unique/CHECK و یک generation در ingestion state ایجاد کن؛ حذف یا backfill حدسی نکن.
-- [ ] روی DB آزمون خالی و DB آزمون تاریخی rehearsal، Prisma validate/generate و typecheck قرارداد/DB انجام بده.
+4. **احراز تقدم زمانی و تکمیلی پیشوند (Prefix Completeness) برای سفارش‌های کوتاه (FR-03 و FR-07):**
+   - اتکا به یک متغیر اسکالر در حافظه حذف می‌شود. بررسی پیام مظنه از طریق کوئری `quoteBeforeMessage` انجام می‌گیرد.
+   - برای رفع شکاف FR-07، اگر مظنه‌ای قبل از سفارش وجود نداشته باشد یا جریان پیام‌ها تا مرز سفارش کامل نشده باشد (امکان وجود مظنهٔ دیده‌نشده روی سیم)، سفارش به‌صورت Fail-Closed با وضعیت `AMBIGUOUS` و قیمت نامشخص ثبت می‌شود تا از محاسبات حدسی جلوگیری گردد.
 
-**اتمام:** رکوردهای فعلی حفظ، ورودی بدون key رد، update بدون key صحیح، invariants در DB enforced. compile callerها تا فازهای بعد ممکن است موقتاً fail شود؛ release این فاز به‌تنهایی مجاز نیست.
+5. **همگرایی محاسبات Analytics V1، تصحیح برآورد اعتماد تاریخی و همگام‌سازی تازگی کش بازار (FR-05، FR-08، FR-09 و FR-10):**
+   - در V1، تناقض ناشی از خود-معامله (Self-trade) در لیست و جزئیات برطرف می‌شود.
+   - پیش از اعمال نخستین تسویه (Bootstrap)، سطح اعتماد در V1 به `ESTIMATED` محدود شده و از نمایش `HIGH` جلوگیری می‌شود.
+   - زمان کش `MarketState` از ۶۰ ثانیه به ۳ ثانیه کاهش می‌یابد تا با نرخ Polling سه ثانیه‌ای فرانت سازگار شود.
+   - متون اسناد مرجع در مورد WACB و نسخه‌های پکیج همگام می‌شوند.
 
-### فاز ۲: persistence و endpointهای idempotent
+---
 
-**فایل‌ها:** `packages/db/src/requests.ts`؛ فایل جدید `packages/db/src/request-creation.ts` برای canonical hash و comparison؛ `apps/server/src/modules/requests/create-requests-router.ts`؛ `apps/server/src/legacy/rest/register-request-routes.ts`؛ `packages/db/test/postgres.test.ts`؛ `apps/server/test/request-routes.test.ts` و `orpc.test.ts`.
+## محدوده و وضعیت شواهد (Scope & Audit Evidence)
 
-**وابستگی:** فاز ۱.
+برنامه بر اساس شواهد دقیق سورس‌کد در شاخهٔ `codex/settlement-implementation` تنظیم شده است:
 
-- [ ] تست failing duplicate concurrent، payload conflict، same-key/different-user، edit سپس retry، DONE/CANCELLED سپس retry و disconnected replay بنویس.
-- [ ] Interface تصمیم ۱ را اجرا کن؛ lookup اول برای replay، lookup اتمیک دوم برای race، current row برای response و no rearm.
-- [ ] مسیر legacy و oRPC را همسان کن؛ parse helper دیگر نباید create/update را یک schema فرض کند.
-- [ ] cache invalidation موجود را در success و replay حفظ و conflict را 409 با appCode ثابت ارائه کن.
-- [ ] اتصال واقعی PostgreSQL آزمون برای concurrency اجرا شود؛ mock دو create به‌تنهایی اثبات unique نیست.
+| شناسه   | فایل سورس و خطوط مرجع                                                   | رفتار فعلی در کد                                                                             | رفتار الزامی پس از اصلاح                                                                        |
+| :------ | :---------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------- |
+| **E02** | `packages/contracts/src/index.ts:48–67`                                 | فیلدهای ساخت درخواست فاقد شناسهٔ یکتای کلاینت هستند.                                         | تفکیک شمای create و update؛ الزام وجود `creationKey` در ساخت و ممنوعیت آن در ویرایش.            |
+| **E03** | `packages/db/src/requests.ts:94–109`                                    | تابع `createRequest` همیشه رکورد جدید درج می‌کند.                                            | بررسی اتمیک هویت قصد مالی، مقایسهٔ هش و بازگرداندن رکورد موجود در صورت تکرار.                   |
+| **E04** | `apps/server/src/modules/requests/create-requests-router.ts:125–131`    | درخواست ثبت قبل از ساخت، وجود سشن آنلاین را شرط می‌کند.                                      | امکان بازیابی (Replay) نتیجهٔ درخواست قبلاً ثبت‌شده حتی در صورت قطع سشن.                        |
+| **E05** | `apps/web/src/modules/requests/_request-form-drawer.tsx:132–164`        | خطا در دریافت پاسخ یا رفرش فرم، کلید جدید می‌سازد و intent را گم می‌کند.                     | ذخیرهٔ intent در حافظهٔ لوکال قبل از ارسال شبکه، استفادهٔ مجدد از همان کلید در تلاش مجدد.       |
+| **E07** | `apps/worker/src/sessions.ts:310–332, 737–755`                          | رویداد `offline` وضعیت آنلاین را صفر نمی‌کند و `onReady` به صورت unawaited اجرا می‌شود.      | باطل‌سازی آنی آمادگی در قطع ارتباط، اجرای منتظر (`await`) ریکاوری پیش از فعال‌سازی ارسال.       |
+| **E09** | `apps/worker/src/financial-ingestion-coordinator.ts:182–202`            | کال‌بک‌های پایان ریکاوری بدون توکن نسلی هستند.                                               | فنس‌گذاری نسلی با `historyRecoveryGeneration` در سطح دیتابیس برای جلوگیری از باز شدن کاذب گیت.  |
+| **E11** | `apps/worker/src/market-ingestion.ts:35–45`                             | نگهداری مظنه در متغیر حافظه‌ای `latestCompactQuote` و آسیب‌پذیری در برابر پیام‌های با تأخیر. | حذف متغیر حافظه‌ای و استعلام از تاریخچهٔ پایگاه‌داده با شرط `sourceMessageId < orderMessageId`. |
+| **E16** | `packages/db/src/requests.ts:340–367`                                   | نادیده گرفتن گیت `REVIEW_REQUIRED` در صورت `triggeredChatId === null` (مسیر `forceSend`).    | اعتبارسنجی گیت مالی گروه مقصد در کلیهٔ ارسال‌ها بدون استثنا.                                    |
+| **E23** | `apps/server/src/modules/analytics/analytics-service.ts:68–89, 173–180` | اختلاف پروجکشن خود-معامله در لیست (۲ طرف) و جزئیات (۱ طرف) در V1.                            | اعمال منطق یکسان دوطرفه برای خود-معامله در لیست و جزئیات V1.                                    |
+| **E26** | `apps/server/src/modules/market/market-state.ts:20–25`                  | مقدار طول عمر کش ۶۰ ثانیه تنظیم شده در حالی که UI هر ۳ ثانیه Polling می‌کند.                 | کاهش TTL کش به ۳ ثانیه جهت تضمین تازگی داده‌های بازار.                                          |
 
-**اتمام:** N retry concurrent از یک intent فقط یک Request و یک arm دارند؛ intentهای متفاوت با payload یکسان دو رکورد مجاز دارند؛ replay بدون session جدید ممکن است ولی create جدید نیست.
+---
 
-### فاز ۳: چرخهٔ intent و بازیابی UI
+## قیود سراسری و ناورداهای سیستم (Global Invariants)
 
-**فایل‌ها:** `apps/web/src/modules/requests/_request-form-drawer.tsx`؛ فایل جدید `_request-creation-intent.ts` در همان پوشه؛ `_request-mutation-options.ts` در صورت نیاز؛ `apps/web/src/dev/market/create-market-mock.ts`؛ `apps/web/test/request-creation-intent.test.ts` جدید؛ `apps/web/test/rpc-query.test.ts`.
+سیستم پس از اعمال اصلاحات باید ناورداهای مالی و سیستمی زیر را به‌صورت قطعی تضمین کند:
 
-**وابستگی:** فاز ۲ و قرارداد تثبیت‌شده.
+| کد ناوردا  | عنوان ناوردا                                   | تضمین معماری و لایهٔ اعمال                                                                                                         |
+| :--------- | :--------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| **INV-01** | یک Intent ثبت حداکثر یک Request می‌سازد        | اعمال کلید یکتا و مقایسهٔ هش در لایهٔ DB و بقای آن در برابر Pruning؛ کلاینت در تلاش‌های مجدد همان کلید را می‌فرستد.                |
+| **INV-02** | هر Request معتبر یک چرخهٔ اجرای فعال دارد      | قفل ردیف در سطح دیتابیس (`FOR UPDATE`)، توکن Claim و فازهای ترتیبی مانع از اجرای هم‌زمان یک درخواست می‌شوند.                       |
+| **INV-03** | اعلام READY سشن فقط با اتصال و ریکاوری معتبر   | تفکیک `transportConnected`، `historyReady` و `canSend`؛ اجباری شدن انتظار ریکاوری و فنس‌گذاری نسلی با `historyRecoveryGeneration`. |
+| **INV-04** | مظنهٔ مرجع سفارش کوتاه فقط از سلف معتبر است    | استعلام دیتابیسی با شرط تقدم قطعی شناسهٔ پیام در همان گروه؛ در صورت عدم اثبات پیوستگی پیشوند، سفارش `AMBIGUOUS` می‌شود.            |
+| **INV-05** | هر تسویه حداکثر یک بار اعمال مالی می‌شود       | قفل چت در لایهٔ دیتابیس، تطبیق وضعیت `APPLIED` و ثبت در تراکنش اتمیک مانع از اعمال مضاعف تسویه می‌گردد.                            |
+| **INV-06** | یک معاملهٔ سنتتیک به‌ازای هر طرف در تسویه      | شاخص یکتای ترکیبی در SQL (`expression unique index`) و اعتبارسنجی در موتور حسابداری مانع از ایجاد رکوردهای تکراری می‌شود.          |
+| **INV-07** | موقعیت باز پس از تسویه صفر مطلق است            | بسته شدن دقیق مانده‌ها با WACB و مقایسهٔ ماندهٔ نهایی با صفر؛ در صورت عدم تطابق تراکنش رول‌بک می‌شود.                              |
+| **INV-08** | تسویه هرگز تریگر بازار تولید نمی‌کند           | تراکنش‌های سنتتیک ناشی از تسویه با نوع `SETTLEMENT` ثبت شده و از فیلترهای تریگر درخواست و قیمت‌های سرخط بازار کاملاً ایزوله‌اند.   |
+| **INV-09** | داده‌های تاریخی ناقص برآورد قطعی تولید نمی‌کند | در صورت عدم وجود Bootstrap معتبر، سطح اطمینان P&L تاریخی فراتر از `ESTIMATED` نمی‌رود و فیلدهای برآورد مشکوک فاش می‌شوند.          |
+| **INV-10** | تلاش مجدد کلاینت و ریستارت Worker ایمن است     | بازگرداندن وضعیت موجود در تلاش مجدد؛ عدم ایجاد سفارش جدید در ریستارت سشن تلگرام و تداوم کار از کرسر پایدار دیتابیس.                |
 
-- [ ] تست storage owner scope، reload، key ثابت retry، payload immutable، storage failure و clearing فقط پس از پاسخ قطعی بنویس.
-- [ ] قبل از POST intent را پایدار کن؛ retry صریح، pending ref و رفتار خطای نامعلوم تصمیم ۱ را اجرا کن.
-- [ ] موفقیت ثبت را از شکست refresh جدا کن؛ update/mock قرارداد مستقل خود را استفاده کنند.
-- [ ] در مرورگر با قطع پاسخ بعد از commit و reload، یک ID و بدون ارسال خودکار ثابت کن. RTL، loading و پیام فارسی بررسی شوند.
+---
 
-**اتمام:** پاسخ گم‌شده مسیر key جدید را بی‌صدا باز نمی‌کند و retry بعد از reload همان Request را بازیابی می‌کند.
+## تمرکز Review و آزمون‌های رگرسیون (Review Focus)
 
-### فاز ۴: lifecycle، history و barrier بازیابی
+عامل اجراکننده باید سناریوهای مرزی و رگرسیونی زیر را به‌طور مستقل مورد آزمون قرار دهد:
 
-**فایل‌ها:** `apps/worker/src/sessions.ts`؛ `apps/worker/src/index.ts`؛ `apps/worker/src/financial-ingestion-coordinator.ts`؛ `packages/db/src/settlement.ts`؛ تست‌های موجود `sessions.test.ts`، `financial-ingestion-coordinator.test.ts`، `requests.test.ts`، `mtcute.test.ts` و `packages/db/test/postgres.test.ts`.
+1. **پاسخ گم‌شده پس از Commit و Reload مرورگر:** ارسال درخواست، قطع اتصال شبکه دقیقاً بعد از commit در DB، رفرش صفحه توسط کاربر، باز شدن دراور و تلاش مجدد؛ باید دقیقاً همان شناسهٔ درخواست قبلی بدون ایجاد رکورد دوم بازیابی شود.
+2. **دو درخواست هم‌زمان با یک Intent:** ارسال هم‌زمان دو درخواست HTTP با یک کلید یکتا و یک کاربر؛ قفل پایگاه‌داده باید یکی را با موفقیت ثبت کرده و دومی را بدون ایجاد رکورد جدید بازیابی کند.
+3. **تغییر Payload با همان کلید:** ارسال مجدد همان `creationKey` اما با تغییر فیلد قیمت یا تعداد؛ سرور باید خطای `409 Conflict` با پیام مشخص بازگرداند.
+4. **بقا در برابر Pruning (۳۰ روز بعد):** ثبت درخواست و تغییر وضعیت آن به `DONE`، شبیه‌سازی گذشت ۳۱ روز و اجرای `pruneRequests`؛ تلاش مجدد با همان کلید نباید رکورد فعال جدید بسازد، بلکه باید وضعیت منقضی/آرشیو شده را گزارش کند.
+5. **قطع ترنسپورت بدون خطا (`offline` سپس `connected`):** شبیه‌سازی قطع اتصال شبکه؛ سیستم باید فوراً `canSend = false` کرده و تا زمان اتمام موفقیت‌آمیز ریکاوری تاریخچه و تطبیق نسل، اجازهٔ ارسال ندهد.
+6. **سشن در حال ریکاوری و قطع مجدد:** قطع ارتباط در میانهٔ اجرای `onReady`؛ رویدادهای تکمیل ریکاوری سشن قبلی نباید وضعیت سشن جدید را آماده کنند (ابطال با توکن نسلی).
+7. **اجرای `forceSend` در زمان توقف مالی گروه:** قرار دادن وضعیت گروه در حالت `gateStatus = "REVIEW_REQUIRED"` و فراخوانی دستی `forceSend`؛ درخواست باید متوقف شده و با خطای `FINANCIAL_REVIEW_REQUIRED` به وضعیت انتظار بازگردد.
+8. **رسیدن مظنه با تأخیر یا خارج از ترتیب:** ثبت مظنه با شناسهٔ ۲۰ (قیمت ۱۰۲۹۸۰)، سپس رسیدن مظنه با شناسهٔ ۱۰ (قیمت ۱۰۱۹۸۰)، و ثبت سفارش کوتاه با شناسهٔ ۲۱ (`خ980`)؛ سفارش باید دقیقاً با مظنهٔ ۲۰ تطبیق داده شود نه مظنهٔ ۱۰.
+9. **سفارش کوتاه با پیشوند ناقص روی سیم:** سفارش کوتاه با شناسهٔ ۲۱ در حالی که هنوز مظنه‌های ماقبل آن در دیتابیس دریافت و ثبت نشده‌اند؛ سیستم باید سفارش را با وضعیت `AMBIGUOUS` ثبت کرده و از قیمت‌گذاری حدسی امتناع ورزد.
+10. **خود-معامله در Analytics V1:** وجود رکورد تاریخی با خریدار و فروشندهٔ یکسان؛ آمار لیست و جزئیات تریدر در V1 باید حجم و تعداد معاملهٔ همسان را نمایش دهند.
+11. **تنزل درجهٔ اطمینان V1 قبل از Bootstrap:** محاسبهٔ آمار ۷ روزه قبل از ثبت هرگونه تسویه؛ درجهٔ اطمینان باید حداکثر `ESTIMATED` باشد حتی اگر موجودی ظاهراً صفر باشد.
+12. **استعلام وضعیت بازار در فواصل ۳ ثانیه‌ای:** اطمینان از اینکه کش `MarketState` پس از ۳ ثانیه داده‌های جدید پایگاه‌داده را بازتاب می‌دهد.
 
-**وابستگی:** generation فاز ۱؛ از فازهای ۲ و ۳ منطقی مستقل است، ولی توسط همان مالک integration اجرا شود.
+---
 
-- [ ] تست failing offline→connected بدون onError، updating، old-client event، disconnect حین membership/catch-up، single-session history و دو recovery generation بنویس.
-- [ ] Runtime transport state/historyReady/epoch را تعریف و `observeTransport` و requireConnected/presentation را هماهنگ کن.
-- [ ] `setMembership` recovery را await کند؛ historyReady قبل و online/runtimeReady بعد از callback، با کنترل epoch.
-- [ ] invalidateRecovery و generation token را متصل کن؛ تمام begin/complete callerها سازگار شوند و review gate حفظ شود.
-- [ ] scan receipt بعد از durable cursor در هر دو حالت enabled/disabled را اجرا کن؛ cursor initialization و fail-closed cap/error را آزمون کن.
-- [ ] خطای subscribe/history/identity/session replacement نباید startup/reconnect را ready معرفی کند. UNKNOWN سفارش از reconnect دوباره ارسال نشود.
+## تصمیمات معماری (Architectural Decisions)
 
-**اتمام:** تا barrier موفق، status و dispatch آماده نیستند؛ history بدون نیاز به آمادگی ارسال کار می‌کند؛ completion قدیمی نمی‌تواند guard نسل تازه را پاک کند؛ restart از cursor پایدار ادامه می‌دهد.
+### تصمیم ۱: هویت پایدار برای ثبت درخواست و بقای آن در برابر Pruning (FR-01 و FR-06)
 
-### فاز ۵: مرجع quote وابسته به ID سفارش
+#### قرارداد و لایهٔ پایداری (Persistence)
 
-**فایل‌ها:** `packages/db/src/index.ts` برای `quoteBeforeMessage` کنار queryهای quote؛ `apps/worker/src/authoritative-handler.ts`، `market-ingestion.ts` و `trading-action-handler.ts`؛ `packages/db/test/postgres.test.ts` و `apps/worker/test/quote.test.ts`.
+1. **فیلد اجباری `creationKey` (UUID) در شمای ساخت:**
+   - تفکیک کامل `createRequestInputSchema` و `updateRequestInputSchema`.
+   - فیلد `creationKey` از نوع UUID در ساخت درخواست اجباری است و در به‌روزرسانی ممنوع می‌باشد.
+   - هش اعتبارسنجی‌شدهٔ `creationPayloadHash` به طول ۶۴ کاراکتر هگز (SHA-256) از مقادیر اعتبارسنجی‌شدهٔ `condition`، `action`، `targetPrice` و `units` (با در نظر گرفتن مقدار null برای ALERT) تولید می‌شود. شناسهٔ کاربر، زمان‌ها و وضعیت‌ها در هش وارد نمی‌شوند تا هش کاملاً پایدار بماند.
 
-**وابستگی:** schema فعلی QuoteHistory کافی است. با فاز ۴ فایل worker مشترک دارد؛ edit هم‌زمان توصیه نمی‌شود.
+2. **بقای هویت در برابر هرس ۳۰روزه (جدول اختصاصی `RequestCreationIdentity`):**
+   - برای حل ریشه‌ای نقص FR-06، شناسه و هش ثبت نباید صرفاً وابسته به رکورد حجیم `Request` باشند که پس از ۳۰ روز هرس می‌شود.
+   - یک مدل اختصاصی در اسکیما اضافه می‌شود:
+     ```prisma
+     model RequestCreationIdentity {
+       id                  String        @id @default(uuid())
+       userId              String
+       creationKey         String        @db.Uuid
+       creationPayloadHash String
+       requestId           String        @unique
+       status              RequestStatus
+       completedAt         DateTime?
+       createdAt           DateTime      @default(now())
 
-- [ ] تست failing ID20=102980، ID10=101980، سفارش ID21=`خ980` → 102980 بنویس؛ تست quote ID30 پیش از سفارش ID21 هم نتیجهٔ predecessor را الزام کند.
-- [ ] query تصمیم ۳ و Interface async handler را اجرا کن؛ seed/callback حافظه‌ای scalar حذف شود.
-- [ ] full price، نبود quote، گروه دیگر، null chat، duplicate و DB failure آزموده شوند؛ snapshot بازار و NORMAL request trigger تغییر نکنند.
-- [ ] query plan range lookup را روی دادهٔ آزمون نماینده مشاهده کن؛ index اضافه فقط با نیاز ثابت‌شده.
+       @@unique([userId, creationKey])
+       @@index([userId, createdAt])
+     }
+     ```
+   - هنگام ایجاد درخواست، رکورد `Request` و `RequestCreationIdentity` در یک تراکنش ساخته می‌شوند.
+   - تابع `pruneRequests` رکوردهای حجیم `Request` را پاک می‌کند، اما سوابق `RequestCreationIdentity` برای حفظ هویت یکتا باقی می‌مانند (یا دورهٔ نگهداری بسیار طولانی‌تری دارند).
+   - در صورت تلاش مجدد (Replay) با همان کلید، ابتدا `RequestCreationIdentity` بررسی می‌شود؛ اگر درخواست منقضی یا حذف شده باشد، سیستم پاسخ مشخص `REQUEST_EXPIRED_OR_ARCHIVED` بازمی‌گرداند و هرگز اجازهٔ ایجاد درخواست تکراری جدید را نمی‌دهد.
 
-**اتمام:** تفسیر قیمت از arrival order مستقل است؛ quote آینده/گروه نامعلوم مصرف نمی‌شود؛ تاریخچهٔ action غلط خودکار بازنویسی نشده است.
+3. **رفتار اتمیک در سرور:**
+   - در روتر `create-requests-router.ts`، ابتدا `findRequestCreation(userId, input)` فراخوانی می‌شود.
+   - اگر رکورد موجود بود:
+     - در صورت عدم تطابق هش: خطای `409 Conflict` با کد `REQUEST_CREATION_CONFLICT`.
+     - در صورت تطابق هش: بازگرداندن وضعیت فعلی درخواست بدون ایجاد تغییر یا ارسال مجدد سیگنال به ورکر.
+   - اگر رکورد موجود نبود: اعتبارسنجی وجود سشن آماده تلگرام (`requireLiveSession`) و فراخوانی `createRequest` درون تراکنش دیتابیس با قفل ردیف برای جلوگیری از Race Condition.
 
-### فاز ۶: integration، مستندات و release gate
+#### چرخهٔ حیات Intent در رابط کاربری (UI)
 
-**فایل‌ها:** `docs/RPC.md`، `docs/TELEGRAM.md`، `docs/GROUP-TRADING-PROTOCOL.md`، `docs/OPERATIONS.md` و `docs/GLOSSARY.md` فقط بخش‌های متأثر؛ تست integration موجود `apps/worker/test/trade-requests.integration.test.ts` و `telegram-integration.test.ts` در صورت نیاز به fixture تغییرکرده.
+1. کلاینت وب قبل از فراخوانی شبکه، مقدار `creationKey = crypto.randomUUID()` و ساختار Payload را در Storage مرورگر تحت کلید اختصاصی کاربر جاری ذخیره می‌کند (`_request-creation-intent.ts`).
+2. دکمهٔ ثبت فرم با استفاده از React Ref به‌صورت همگام در همان تیک اول قفل می‌شود تا از دابل‌کلیک جلوگیری کند.
+3. در صورت بروز خطای نامشخص شبکه (مانند Timeout یا قطع ارتباط)، دراور در وضعیت انتظار باقی مانده و در تلاش مجدد، دقیقاً همان `creationKey` و همان Payload ذخیره‌شده مجدداً ارسال می‌شوند.
+4. پاک شدن Intent از Storage مرورگر تنها پس از دریافت موفقیت‌آمیز پاسخ قطعی از سرور انجام می‌شود. شکست در مراحل بعدی (مانند Refetch کوئری‌ها) وضعیت ثبت را ابطال نمی‌کند.
 
-**وابستگی:** همهٔ فازها. scope اجرای نهایی همان سه نقص است؛ redesign UI و accounting دوم اضافه نشود.
+---
 
-- [ ] سناریوی end-to-end: commit create، response loss، retry/reload، یک Request، یک trigger NORMAL و حداکثر یک dispatch همان Request؛ retry ثبت درخواست با retry ارسال Telegram اشتباه نشود.
-- [ ] سناریوی reconnect با receiptهای جاافتاده، quote خارج از ترتیب، review Settlement و session دوم؛ cursor، gate و presentation همسو باشند.
-- [ ] docs قرارداد key، خطای 409، آمادگی/historyReady، نسل recovery و unknown-result draft را ثبت کنند.
-- [ ] با DB آزمون loopback و credentials غیرتولیدی checks زیر اجرا و نتیجهٔ واقعی ثبت شود؛ تست skipped پاس محسوب نشود.
+### تصمیم ۲: تفکیک سه‌مرحله‌ای آمادگی سشن تلگرام و فنس‌گذاری نسلی ریکاوری (FR-02)
 
-**Commands:** `pnpm check-types`، `pnpm lint`، `pnpm test --force --concurrency=1 --env-mode=loose`، `pnpm --filter server build`، `pnpm --filter worker build`، `pnpm --filter web build`. برای web مقدار HTTPS عمومی `VITE_SERVER_URL` و برای integration، `DATABASE_URL` و `TEST_DATABASE_URL` آزمون لازم‌اند؛ در shell موقت، بدون تغییر فایل secrets. Prisma validate/generate مطابق scripts موجود `@zarbit/db` انجام شوند. runtime imports خروجی server/worker و browser critical path جدا بررسی شوند.
+#### چرخهٔ حیات در ورکر و تفکیک وضعیت‌ها
 
-**اتمام:** regression tests واقعاً fail→pass، checks بدون خطای جدید، baseline debt تفکیک‌شده، release laneهای Telegram/PG16/Docker/production واقعاً اجراشده یا صریحاً تأییدنشده گزارش شوند.
+1. **سه وضعیت صریح در Runtime ورکر:**
+   - `transportConnected`: اتصال فیزیکی کلاینت mtcute به سرورهای تلگرام برقرار است.
+   - `historyReady`: هویت، احراز هویت و عضویت در گروه معاملاتی تأیید شده و امکان خواندن تاریخچهٔ پیام‌ها بدون ایجاد Deadlock وجود دارد.
+   - `canSend` (و `online` در DB): ریکاوری کامل پیام‌ها پایان یافته، وضعیت مالی بدون اشکال است و سشن مجاز به ارسال پیام است.
 
-## ترتیب، استقرار و rollback
+2. **باطل‌سازی آنی در قطع اتصال:**
+   - شنوندهٔ رویدادهای ترنسپورت (`observeTransport`) در مواجهه با رویدادهای `offline`، `connecting` و `updating`، فوراً و به‌صورت همگام مقادیر `canSend = false` و `historyReady = false` را اعمال کرده و یک شمارهٔ نسل محلی (`epoch`) را افزایش می‌دهد تا رویدادهای کلاینت قبلی پذیرفته نشوند.
+   - متدهای `history` و `latestMessageId` برای عملیات داخلی به `historyReady` وابسته می‌شوند، در حالی که متدهای ارسالی (`sendGroup` و `requireConnected`) منحصراً وضعیت نهایی `canSend` را بررسی می‌کنند.
 
-ترتیب پیشنهادی inline: **۱ → ۲ → ۳ → ۴ → ۵ → ۶**. فاز ۴ پس از ۱ از نظر dependency قابل پیشروی هم‌زمان با ۲/۳ است؛ به دلیل invariants مالی یک مالک integration داشته باشد. فاز ۵ و ۴ در worker هم‌زمان edit نشوند. release فقط artifact یکپارچهٔ همهٔ فازهاست.
+3. **اجرای حتمی ریکاوری پیش از آمادگی (`await onReady`):**
+   - متد `setMembership` نباید وضعیت آمادگی را پیش از پایان ریکاوری فعال کند.
+   - اجرای متد `onReady` به‌صورت Awaited الزامی است و وضعیت سشن تنها در صورتی آماده اعلام می‌شود که ریکاوری تاریخچه بدون خطا تکمیل شده و شناسهٔ نسل محلی (`epoch`) دچار تغییر نشده باشد.
 
-1. backup قابل بازیابی و وضعیت migrations فعلی بررسی شود؛ production عملیات این برنامه‌ریزی نیست.
-2. migration additive اعمال و Prisma Client در build تولید شود. تا server جدید، web جدیدی که key می‌فرستد منتشر نشود؛ server قدیمی strict ورودی جدید را رد می‌کند.
-3. create mutation در cutover کوتاه متوقف و server جدید سپس web سازگار منتشر شود؛ readها قابل ادامه‌اند. worker قدیمی drain/stop و worker جدید با generation/recovery نصب شود. browser قدیمی فاقد key باید update-required/validation واضح بگیرد؛ fallback ساخت key سمت server ممنوع است.
-4. replay ذخیره‌شده، offline→connected، catch-up و quote predecessor در staging بررسی شوند؛ Settlement همچنان مطابق evidence gate قبلی باقی بماند.
-5. پس از استفادهٔ کلیدها rollback به server قدیمی مجاز نیست: آن نسخه uniqueness intent را نمی‌شناسد و retry را رکورد جدید می‌کند. forward fix یا نسخهٔ سازگارِ حفظ‌کنندهٔ کلید لازم است. columns حذف نشوند. rollback worker نیز guard جدید را بی‌اثر می‌کند و باید admission ارسال بسته بماند.
+#### فنس‌گذاری نسلی در هماهنگ‌کنندهٔ مالی (Financial Ingestion Coordinator)
 
-## شرط تحویل
+1. **ستون توکن نسلی در پایگاه‌داده:**
+   - افزودن ستون `historyRecoveryGeneration Int @default(0)` به مدل `GroupIngestionState`.
+2. **پروتکل آغاز و پایان ریکاوری:**
+   - متد `beginFinancialRecovery(chatId)` زیر قفل `lockTradeStream`، مقدار شمارهٔ نسل را در پایگاه‌داده افزایش داده و توکن نسل جدید را بازمی‌گرداند.
+   - متد `completeFinancialRecovery(chatId, expectedGeneration)` بررسی می‌کند که آیا توکن ارائه شده با مقدار فعلی در پایگاه‌داده برابر است یا خیر؛ در صورت عدم تطابق (نشان‌دهندهٔ بروز قطع مجدد یا آغاز ریکاوری جدید)، نتیجه نادیده گرفته شده و گیت سشن قبلی باز نمی‌شود.
+   - در صورت شکست ریکاوری، گیت باز نمی‌شود و وضعیت گروه در حالت بررسی یا بسته باقی می‌ماند.
 
-عامل اجراکننده فقط پس از عبور از ۶ فاز اعلام تکمیل کند. وضعیت هر phase، migrations واقعاً اعمال‌شده، fail→pass تست‌ها، خروجی checks، laneهای زندهٔ بررسی‌نشده و محدودیت coverage Telegram گزارش شود. وجود parser غیرفعال Settlement نقص این اصلاحات نیست و مجوز فعال‌سازی آن را نمی‌دهد. این سند راه‌حل و پلن است؛ هیچ implementation، test suite یا migration در زمان نوشتن آن اجرا نشده است.
+---
+
+### تصمیم ۳: احراز تقدم قیمت Quote و شرط پیشوند معتبر برای سفارش‌های کوتاه (FR-03 و FR-07)
+
+1. **حذف متغیر حافظه‌ای اسکالر:**
+   - متغیر `latestCompactQuote` از ماژول `market-ingestion.ts` کاملاً حذف می‌شود تا ترتیب دریافت نامنظم پیام‌ها نتواند قیمت‌های قبلی را دستکاری کند.
+
+2. **استعلام مظنهٔ ماقبل در پایگاه‌داده:**
+   - متد اختصاصی زیر در لایهٔ دیتابیس افزوده می‌شود:
+     ```typescript
+     quoteBeforeMessage(chatId: bigint | number, sourceMessageId: number): Promise<QuoteRecord | null>
+     ```
+   - این تابع با فیلتر صریح `chatId` و شرط اکید `sourceMessageId < orderMessageId`، رکوردها را با مرتب‌سازی نزولی بر اساس شناسهٔ پیام و سقف ۱ رکورد استعلام می‌کند.
+
+3. **احراز پیشوند متوالی و رفتار Fail-Closed (حل نقص FR-07):**
+   - صرف استعلام از دیتابیس نمی‌تواند تضمین کند که همهٔ مظنه‌های ارسالی قبل از سفارش به سرور رسیده‌اند (امکان وجود مظنهٔ تأخیردار روی شبکه تلگرام).
+   - هماهنگ‌کننده پیش از تفسیر سفارش‌های کوتاه (`خ980`)، تطبیق صف ورودی و کرسر پیوسته تا شناسهٔ پیام سفارش را ارزیابی می‌کند.
+   - در صورتی که مظنه‌ای یافت نشود، یا شکاف غیرقابل‌اثباتی در پیشوند جریان پیام‌ها وجود داشته باشد، سفارش کوتاه به‌صورت Fail-Closed با وضعیت `AMBIGUOUS` و قیمت نامشخص (`compactPrice = null`) ثبت می‌گردد و از حدس‌زدن یا بازنویسی تاریخی قیمت خودداری می‌شود.
+
+---
+
+### تصمیم ۴: یکپارچه‌سازی و حاکمیت سراسری گیت بررسی مالی بر همهٔ ارسال‌ها (FR-04)
+
+1. **تزریق شناسهٔ چت مقصد به فرآیند ارسال:**
+   - در معماری فعلی، فراخوانی دستی `forceSend` منجر به خالی شدن اطلاعات تریگر (`triggeredChatId = null`) می‌شد و این امر باعث دور زدن بررسی وضعیت گیت مالی در تابع `markSending` می‌گردید.
+   - **اصلاح:** شناسهٔ گروه معاملاتی مقصد (`TELEGRAM_GROUP_ID` یا پارامتر ورودی چت) به‌طور مستقیم به متد `markSending` ارسال می‌شود.
+
+2. **اعمال قطعی شرط `gateStatus` در سطح دیتابیس:**
+   - در متد `markSending` در `packages/db/src/requests.ts`، قفل استریم و استعلام `GroupIngestionState` بدون توجه به خودکار یا دستی بودن درخواست اجرا می‌شود:
+     ```typescript
+     const targetChatId = request.triggeredChatId ?? defaultTradingChatId;
+     if (targetChatId !== null) {
+       await lockTradeStream(tx, targetChatId);
+       const ingestion = await tx.groupIngestionState.findUnique({
+         where: { chatId: targetChatId },
+       });
+       if (ingestion?.gateStatus === "REVIEW_REQUIRED") {
+         await tx.request.updateMany({
+           where: {
+             id,
+             claimToken,
+             status: "ACTIVE",
+             executionPhase: "CLAIMED",
+           },
+           data: {
+             executionPhase: "WAITING_TRADE",
+             claimToken: null,
+             ...emptyTrigger,
+           },
+         });
+         return {
+           count: 0,
+           row: null,
+           reason: "FINANCIAL_REVIEW_REQUIRED" as const,
+         };
+       }
+     }
+     ```
+   - با این تغییر، در صورت توقف عملیات به دلیل ثبت رسید دیرهنگام یا تسویهٔ در حال بررسی، هیچ سفارشی حتی با دستور مستقیم کاربر به گروه ارسال نخواهد شد.
+
+---
+
+### تصمیم ۵: همگرایی محاسبات Analytics V1، تصحیح برآورد اعتماد تاریخی و هماهنگی کش بازار (FR-05، FR-08، FR-09 و FR-10)
+
+1. **یکسان‌سازی پروجکشن خود-معامله در Analytics V1 (FR-05):**
+   - در `analytics-service.ts`، در صورت وجود تراکنش با خریدار و فروشندهٔ یکسان در داده‌های تاریخی، تابع استعلام جزئیات (`getParticipantDetail7D`) اصلاح می‌شود تا مانند استعلام لیست (`getTopParticipants7D`)، هر دو طرف خرید و فروش را لحاظ کند تا مانده و تعداد تراکنش‌ها در کشو و لیست کاملاً منطبق باشند.
+
+2. **تنزل درجهٔ اطمینان V1 قبل از Bootstrap (FR-10):**
+   - تابع `calculateParticipantAnalytics7D` در صورتی که تسویهٔ معتبری در سیستم اعمال نشده باشد، نباید تحت هیچ شرایطی درجهٔ اعتماد `HIGH` بازگرداند (حتی با وجود ماندهٔ ظاهراً صفر طی ۷ روز). در نبود خط مبنا، درجهٔ اطمینان به `ESTIMATED` تنزل می‌یابد.
+
+3. **کاهش TTL کش `MarketState` به ۳ ثانیه (FR-08):**
+   - در `apps/server/src/modules/market/market-state.ts`، طول عمر کش در حالت اتصال موفق از ۶۰ ثانیه به ۳ ثانیه کاهش می‌یابد:
+     ```typescript
+     const lifetime = this.connected ? 3_000 : 1_000;
+     ```
+   - این تغییر تضمین می‌کند که Polling سه‌ثانیه‌ای کلاینت وب، داده‌های تازهٔ بازار را با حداکثر تأخیر منطبق با بودجهٔ عملیاتی دریافت نماید.
+
+4. **تصحیح متون اسناد مرجع (FR-09):**
+   - اصلاح فایل‌های `docs/ARCHITECTURE.md` و `docs/README.md` جهت تطبیق نام الگوریتم میانگین موزون بها (WACB) به‌جای FIFO و اشاره به نسخهٔ Prisma 7.10.0 به‌جای Prisma 6.
+
+---
+
+## نقشهٔ فایل‌ها و ۶ فاز اجرایی
+
+### Task 1 (فاز ۱): اسکیما، مایگریشن و قراردادهای بنیادین
+
+**فایل‌های متأثر:**
+
+- `packages/db/prisma/schema/schema.prisma`
+- مایگریشن جدید: `packages/db/prisma/migrations/20261004010000_financial_reliability/migration.sql`
+- `packages/contracts/src/index.ts`
+- `packages/contracts/src/rpc.ts`
+- `packages/db/test/trade-migration.test.ts`
+- `apps/server/test/request-routes.test.ts`
+
+**وابستگی‌ها:** بررسی وضعیت فعلی مایگریشن‌ها در دیتابیس؛ مایگریشن‌های پیشین نباید دستکاری شوند.
+
+- [ ] تست‌های ناموفق اولیه (Failing Tests) در `packages/db/test/trade-migration.test.ts` برای بررسی عدم پذیرش فیلدهای ناقص، اعمال شاخص یکتای `RequestCreationIdentity`، فیلدهای جدول `Request` و پیش‌فرض ستون `historyRecoveryGeneration` بنویس.
+- [ ] در `packages/contracts/src/index.ts`، شِماهای `createRequestInputSchema` و `updateRequestInputSchema` را کاملاً تفکیک کن؛ فیلد `creationKey` در ایجاد اجباری و در ویرایش نامعتبر باشد.
+- [ ] در `packages/db/prisma/schema/schema.prisma`، مدل `RequestCreationIdentity` و فیلدهای `creationKey`، `creationPayloadHash` به `Request` و `historyRecoveryGeneration` به `GroupIngestionState` را اضافه کن.
+- [ ] فایل مایگریشن افزایشی (Additive SQL) را ایجاد و با دستورات آزمایشی Prisma validate/generate را اعتبارسنجی کن.
+
+**معیار اتمام فاز:** رکوردهای موجود دست‌نخورده باقی بمانند، قراردادهای TypeScript بدون خطا کامپایل شوند، و ناورداهای دیتابیس به‌صورت تئوری و در آزمون‌های محلی تأیید گردند.
+
+---
+
+### Task 2 (فاز ۲): لایهٔ Persistence و Endpointهای Idempotent سرور
+
+**فایل‌های متأثر:**
+
+- `packages/db/src/requests.ts`
+- فایل جدید: `packages/db/src/request-creation.ts`
+- `apps/server/src/modules/requests/create-requests-router.ts`
+- `packages/db/test/postgres.test.ts`
+- `apps/server/test/request-routes.test.ts`
+- `apps/server/test/orpc.test.ts`
+
+**وابستگی‌ها:** اتمام موفق فاز ۱.
+
+- [ ] تست‌های ناموفق برای سناریوهای Replay هم‌زمان، تغییر Payload با همان کلید، تلاش کاربر دوم با همان کلید، ویرایش و سپس Replay، و Replay بعد از اجرای کامل یا لغو بنویس.
+- [ ] توابع `findRequestCreation`، ساخت هش استاندارد SHA-256، و مدیریت تومب‌استون‌های هرس‌شده را در `request-creation.ts` پیاده‌سازی کن.
+- [ ] تابع `createRequest` را درون یک تراکنش اتمیک بازنویسی کن تا ثبت `Request` و `RequestCreationIdentity` به‌صورت هم‌زمان انجام شود و در صورت تکرار، رکورد جاری بازگردانده شود.
+- [ ] در روتر `create-requests-router.ts`، ابتدا بررسی `findRequestCreation` را قبل از شرط بررسی سشن قرار بده تا کاربری که درخواستش ثبت شده اما قطع ارتباط رخ داده بتواند وضعیت را بازیابی کند.
+- [ ] تابع `pruneRequests` را اصلاح کن تا حذف رکوردهای قدیمی `Request`، اطلاعات پایدار هویت در `RequestCreationIdentity` را پاک نکند.
+
+**معیار اتمام فاز:** چند تلاش هم‌زمان برای یک قصد مالی دقیقاً یک درخواست در دیتابیس ایجاد کند؛ درخواست‌های با اطلاعات متفاوت با خطای ۴۰۹ مسدود شوند؛ و Replay پس از هرس ۳۰روزه از ایجاد درخواست جدید جلوگیری کند.
+
+---
+
+### Task 3 (فاز ۳): چرخهٔ حیات Intent و بازیابی در UI
+
+**فایل‌های متأثر:**
+
+- `apps/web/src/modules/requests/_request-form-drawer.tsx`
+- فایل جدید: `apps/web/src/modules/requests/_request-creation-intent.ts`
+- `apps/web/src/modules/requests/_request-mutation-options.ts`
+- `apps/web/src/dev/market/create-market-mock.ts`
+- تست جدید: `apps/web/test/request-creation-intent.test.ts`
+- `apps/web/test/rpc-query.test.ts`
+
+**وابستگی‌ها:** اتمام فاز ۲ و تثبیت قراردادهای سرور.
+
+- [ ] تست‌های واحد برای ماژول ذخیره‌سازی محلی Intent، انقضای پیش‌نویس، ثبات کلید و جلوگیری از ثبت هم‌زمان بنویس.
+- [ ] ماژول `_request-creation-intent.ts` را برای ذخیرهٔ امن `creationKey` و Payload در Storage مرورگر پیش از ارسال درخواست پیاده‌سازی کن.
+- [ ] در `_request-form-drawer.tsx`، قفل همگام Ref برای دکمهٔ ثبت، بازیابی خودکار پیش‌نویس در صورت باز شدن مجدد دراور، و نمایش پیام شفاف در صورت بروز خطای نامشخص شبکه را اعمال کن.
+- [ ] تفکیک وضعیت موفقیت ثبت از خطاهای جانبی (نظیر خطای Refetch داده‌ها) را پیاده‌سازی کن تا خطای نمایش مانع از آگاهی کاربر از ثبت درخواست نشود.
+
+**معیار اتمام فاز:** قطع ارتباط بلافاصله بعد از ثبت و رفرش مرورگر، همان شناسهٔ درخواست قبلی را با تلاش مجدد بازیابی کند و ارسال تکراری از رابط کاربری کاملاً ناممکن شود.
+
+---
+
+### Task 4 (فاز ۴): چرخهٔ حیات Session، خواندن تاریخچه و فنس‌گذاری ریکاوری Worker
+
+**فایل‌های متأثر:**
+
+- `apps/worker/src/sessions.ts`
+- `apps/worker/src/index.ts`
+- `apps/worker/src/financial-ingestion-coordinator.ts`
+- `packages/db/src/settlement.ts`
+- تست‌های: `apps/worker/test/sessions.test.ts`، `financial-ingestion-coordinator.test.ts`، `requests.test.ts`
+
+**وابستگی‌ها:** اعمال تغییرات اسکیما در فاز ۱.
+
+- [ ] تست‌های ناموفق برای رویدادهای `offline`، عدم تأثیر رویدادهای کلاینت قدیمی پس از ریستارت، و باطل شدن ریکاوری با توکن نسلی قبلی بنویس.
+- [ ] وضعیت‌های سه‌گانه (`transportConnected`، `historyReady`، `canSend`) را در ساختار Runtime سشن تعریف کرده و رویدادهای قطع ارتباط را به باطل‌سازی فوری آن‌ها متصل کن.
+- [ ] متد `setMembership` را طوری به‌روزرسانی کن که منتظر اتمام اجرای `onReady` بماند و فقط در صورت موفقیت و عدم تغییر `epoch`، آمادگی ارسال را فعال نماید.
+- [ ] توکن نسلی `historyRecoveryGeneration` را در `financial-ingestion-coordinator.ts` هنگام شروع ریکاوری افزایش بده و در پایان مطابقت آن را تضمین کن.
+- [ ] دسترسی به متدهای خواندن تاریخچه را صرفاً مشروط به `historyReady` کن تا فرآیند Catch-up به دلیل عدم آمادگی ارسال دچار Deadlock نشود.
+
+**معیار اتمام فاز:** در زمان قطعی ارتباط یا در حین ریکاوری، وضعیت سشن هرگز به اشتباه آماده اعلام نشود، و کال‌بک‌های دیررس از سشن‌های بسته‌شده نتوانند گیت محافظ مالی را باز کنند.
+
+---
+
+### Task 5 (فاز ۵): مرجع Quote، احراز پیشوند و یکپارچه‌سازی گیت ارسال سفارش دستی در Worker
+
+**فایل‌های متأثر:**
+
+- `packages/db/src/index.ts` (تعریف `quoteBeforeMessage`)
+- `packages/db/src/requests.ts` (اصلاح `markSending` جهت اعتبارسنجی چت مقصد)
+- `apps/worker/src/authoritative-handler.ts`
+- `apps/worker/src/market-ingestion.ts`
+- `apps/worker/src/trading-action-handler.ts`
+- `apps/worker/src/requests.ts`
+- `packages/db/test/postgres.test.ts`
+- `apps/worker/test/quote.test.ts`
+
+**وابستگی‌ها:** همگام‌سازی با فاز ۴ در کدهای ورکر.
+
+- [ ] تست‌های ناموفق برای دریافت مظنه‌ها خارج از ترتیب زمانی (شناسهٔ ۲۰ سپس شناسهٔ ۱۰) و تطبیق سفارش با مظنهٔ ۲۰ بنویس.
+- [ ] کوئری `quoteBeforeMessage` را با فیلتر دقیق چت و شرط `sourceMessageId < orderMessageId` پیاده‌سازی کن و متغیر حافظه‌ای اسکالر را کاملاً حذف نما.
+- [ ] شرط احراز پیشوند متوالی تا مرز سفارش را اضافه کن؛ در صورت عدم اطمینان از دریافت تمام مظنه‌های ماقبل، سفارش کوتاه را با وضعیت `AMBIGUOUS` ذخیره کن.
+- [ ] در `packages/db/src/requests.ts`، متد `markSending` را اصلاح کن تا با دریافت چت مقصد، گیت بررسی مالی (`REVIEW_REQUIRED`) را برای هر دو مسیر خودکار و دستی (`forceSend`) به‌طور یکسان اعمال کند.
+
+**معیار اتمام فاز:** مظنهٔ مرجع سفارش کوتاه کاملاً مستقل از ترتیب رسیدن بسته‌های شبکه محاسبه شود؛ در صورت ابهام در پیشوند، هیچ قیمت حدسی ثبت نشود؛ و ارسال دستی در زمان توقف مالی گروه متوقف گردد.
+
+---
+
+### Task 6 (فاز ۶): همگرایی Analytics V1، بهینه‌سازی کش بازار، اصلاح اسناد و تست یکپارچه
+
+**فایل‌های متأثر:**
+
+- `apps/server/src/modules/analytics/analytics-service.ts`
+- `apps/server/src/modules/market/market-state.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/README.md`
+- `docs/OPERATIONS.md`
+- `docs/RPC.md`
+- `docs/TELEGRAM.md`
+- مجموعه تست‌های یکپارچه (`apps/worker/test/trade-requests.integration.test.ts`)
+
+**وابستگی‌ها:** تکمیل تمام فازهای پیشین.
+
+- [ ] پروجکشن خود-معامله در `analytics-service.ts` را در هر دو بخش لیست و جزئیات یکسان‌سازی کن تا مانده و حجم معاملات هماهنگ شوند.
+- [ ] در صورت نبود خط مبنای معتبر تسویه، سطح اعتماد تحلیلی در V1 را به `ESTIMATED` تنزل بده.
+- [ ] طول عمر کش `MarketState` را به ۳ ثانیه کاهش بده تا با نرخ Polling فرانت همگام شود.
+- [ ] اسناد مرجع در `docs/ARCHITECTURE.md` و `docs/README.md` را اصلاح کن تا نام الگوریتم WACB و نسخهٔ Prisma 7.10.0 ثبت شوند.
+- [ ] اجرای کامل چک‌های کیفی و تست‌های اتوماسیون:
+  - `pnpm check-types`
+  - `pnpm lint`
+  - `pnpm test --force --concurrency=1 --env-mode=loose`
+  - Build تمامی سرویس‌های server، worker و web.
+
+**معیار اتمام فاز:** تمامی چک‌ها بدون خطا پاس شوند، تناقضات تحلیلی برطرف شوند، داده‌های بازار بدون بیاتی نمایش یابند، و اسناد با واقعیت سیستم کاملاً منطبق باشند.
+
+---
+
+## ترتیب، استقرار، Cutover و Rollback
+
+ترتیب اجرای خطی فازها: **۱ ← ۲ ← ۳ ← ۴ ← ۵ ← ۶**.
+
+1. **آماده‌سازی و مایگریشن:** اعمال مایگریشن افزایشی فاز ۱ در پایگاه‌داده و ایجاد مجدد کلاینت Prisma. تا زمان استقرار سرور جدید، نسخهٔ وب ارسال‌کنندهٔ `creationKey` نباید مستقر شود.
+2. **استقرار سرور و ورکر بدون همپوشانی (Zero-Overlap Cutover):**
+   - متوقف‌سازی فرآیند ساخت درخواست در کلاینت در یک بازهٔ کوتاه چنددقیقه‌ای.
+   - متوقف کردن ورکر قدیمی، حصول اطمینان از آزادسازی قفل SQLite، و راه‌اندازی ورکر جدید با فنس‌گذاری نسلی.
+   - استقرار سرور جدید با اعتبارسنجی اجباری `creationKey` و سپس استقرار فرانت‌اند وب سازگار.
+3. **قواعد عدم بازگشت (No-Rollback Rules):**
+   - پس از شروع به کار سرور و کلاینت جدید و ثبت کلیدهای یکتا، امکان بازگشت به نسخهٔ قبلی سرور وجود ندارد؛ زیرا نسخهٔ قبلی مفهوم `creationKey` را درک نکرده و تلاش مجدد را به درخواست جدید تبدیل می‌کند.
+   - هرگونه اصلاح در صورت بروز مشکل باید به‌صورت Forward-Fix اعمال گردد.
+
+---
+
+## گیت آمادگی برای پیاده‌سازی (Implementation Readiness Gate)
+
+پیش از آغاز هرگونه کدنویسی در فاز ۱، تمامی شرایط زیر باید محرز و تأیید شوند:
+
+- [x] **عدم وجود نقص سطح P0 یا P1 حل‌نشده:** تمامی یافته‌های P1 گزارش Re-Audit (شامل FR-01، FR-02 و FR-04) و شکاف‌های طراحی P2 (شامل FR-06 و FR-07) دارای راه‌حل‌های معماری مشخص، اثبات‌شده و بدون ابهام هستند.
+- [x] **عدم نیاز به بروکرهای خارجی:** راه‌حل‌ها بدون معرفی Kafka، Redis یا معماری توزیع‌شدهٔ جدید و صرفاً با قابلیت‌های PostgreSQL 16 و TypeScript پیاده‌سازی می‌شوند.
+- [x] **حفظ ناورداهای بنیادین کسب‌وکار:** محاسبات میانگین موزون بها (WACB)، ساختار محاسبات P&L، ایزولاسیون تراکنش‌های سنتتیک تسویه، و تبدیل واحدها کاملاً دست‌نخورده باقی می‌مانند.
+- [x] **فلسفهٔ مالی Fail-Closed:** در تمامی حالات مرزی (عدم وجود مظنه، قطع ارتباط، خطای پیشوند یا توقف مالی گروه)، سیستم به نفع امنیت مالی متوقف می‌شود و هیچ عملیات حدسی انجام نمی‌دهد.
+- [x] **استقلال از نمونه‌های خام پیام تسویه:** اجرای این ۶ فاز قابلیت اعتماد به دریافت نمونه‌های پیام خام اعلان تسویه وابسته نیست؛ پارسر تسویه تا زمان دریافت شواهد مستند خارجی همچنان غیرفعال می‌ماند.
+
+> **تأیید نهایی:** این سند آمادهٔ اجرا است. عامل اجراکننده موظف است کار را دقیقاً از **فاز ۱** و با نوشتن تست‌های ناموفق (TDD) بر اساس چک‌لیست فوق آغاز نماید.

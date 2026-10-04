@@ -190,6 +190,7 @@ test("invalid input, cross-user detail and force-send cannot bypass ownership", 
       condition: "GTE",
       targetPrice: -1,
       units: null,
+      creationKey: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     }),
     (error: unknown) => error instanceof ORPCError && error.status === 400,
   );
@@ -214,6 +215,7 @@ test("mutations bypass cached readiness; revoke persists before worker command",
       condition: "GTE",
       targetPrice: 100,
       units: null,
+      creationKey: "b1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
     }),
     (error: unknown) => error instanceof ORPCError && error.code === "CONFLICT",
   );
@@ -352,6 +354,7 @@ test("request writes preserve compact values, conditions, dates and invalidate a
     condition: "LTE",
     targetPrice: 95900,
     units: null,
+    creationKey: "c1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
   });
   assert.equal(created.targetPrice, 95900);
   assert.equal(created.condition, "LTE");

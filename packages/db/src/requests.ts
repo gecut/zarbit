@@ -10,6 +10,7 @@ import {
 import {
   AppError,
   type CreateRequestInput,
+  type UpdateRequestInput,
   type RequestDetail,
 } from "@zarbit/contracts";
 import type { PrismaClient, Prisma } from "../prisma/generated/client";
@@ -176,7 +177,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       connected(userId, async (tx) =>
         tx.request.create({ data: { userId, ...input, ...(await arm(tx)) } }),
       ),
-    editRequest: (userId: string, id: string, input: CreateRequestInput) =>
+    editRequest: (userId: string, id: string, input: UpdateRequestInput) =>
       connected(userId, async (tx) => {
         const result = await tx.request.updateMany({
           where: { id, userId, status: "ACTIVE", claimToken: null },

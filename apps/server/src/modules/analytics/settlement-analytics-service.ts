@@ -170,7 +170,7 @@ export class SettlementAnalyticsService {
       coverageVerified,
       replayByMessageId: true,
     });
-    const hidePnl = !baselineValid || crossesBootstrap;
+    const hidePnl = !baselineValid;
     const mask = (value: typeof analytics.contributions.normal) => ({
       ...value,
       realizedPnlPoints: hidePnl ? null : value.realizedPnlPoints,

@@ -320,3 +320,21 @@ test("analytics V1 marks confidence as ESTIMATED in absence of bootstrap baselin
   assert.ok(detail);
   assert.equal(detail.summary.confidence, "ESTIMATED");
 });
+
+test("analytics V2 retains numeric realized PnL with ESTIMATED confidence when window crosses bootstrap settlement", async (t) => {
+  // When now is 2026-09-05, windowStart is 2026-08-29, which precedes bootstrap (2026-09-01).
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-05T12:00:00Z"),
+  });
+  const { client } = fixture(false, false, true);
+  const detail = await client.analytics.traderDetailV2({ alias: "اسکان" });
+  assert.ok(detail);
+  assert.equal(detail.summary.coverage.positionBaselineValid, true);
+  assert.equal(detail.summary.coverage.pnlReliable, false);
+  assert.equal(detail.summary.coverage.reason, "WINDOW_CROSSES_BOOTSTRAP");
+  assert.equal(detail.summary.confidence, "ESTIMATED");
+  // Realized PnL is NOT masked to null anymore; calculated values are exposed.
+  assert.notEqual(detail.summary.realizedPnlTomans, null);
+  assert.notEqual(detail.summary.realizedPnlPoints, null);
+});

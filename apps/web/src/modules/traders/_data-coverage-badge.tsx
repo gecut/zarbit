@@ -28,6 +28,13 @@ export function DataCoverageBadge({
     );
   }
   if (coverage && !coverage.pnlReliable) {
+    if (coverage.reason === "WINDOW_CROSSES_BOOTSTRAP") {
+      return (
+        <Chip size="sm" variant="soft" color="warning" className={className}>
+          دادهٔ برآوردی (از تسویه)
+        </Chip>
+      );
+    }
     return (
       <Chip size="sm" variant="soft" color="warning" className={className}>
         پوشش داده تأیید نشده

@@ -5,6 +5,8 @@ import {
   calculatePositionTransition,
   calculateSettlementTrades,
   createInitialPositionState,
+  parseSettlementAnnouncement,
+  SETTLEMENT_PARSER_READY,
 } from "../src/index";
 
 const at = (day: number) =>
@@ -123,4 +125,110 @@ test("bootstrap excludes old inventory but retains observed seven-day volume", (
       result.contributions.settlement.realizedPnlTomans,
   );
   assert.equal(result.confidence, "ESTIMATED");
+});
+
+test("parseSettlementAnnouncement parses authoritative settlement announcement from Telegram group", () => {
+  assert.equal(SETTLEMENT_PARSER_READY, true);
+
+  const rawText = `✅ تسویه با موفقیت انجام شد.
+💰 مبلغ تسویه: 113670000
+📅 تاریخ: 1405/07/11 - 13:31:40`;
+
+  const announcedAt = new Date("2026-10-03T10:01:40.000Z");
+  const parsed = parseSettlementAnnouncement({
+    chatId: -1003959331239,
+    sourceMessageId: 1187766,
+    senderId: "8287779777",
+    rawText,
+    announcedAt,
+  });
+
+  assert.ok(parsed !== null);
+  assert.equal(parsed.chatId, -1003959331239n);
+  assert.equal(parsed.sourceMessageId, 1187766);
+  assert.equal(parsed.senderId, "8287779777");
+  assert.equal(parsed.compactPrice, 113670);
+  assert.equal(parsed.announcedAt, announcedAt);
+});
+
+test("parseSettlementAnnouncement handles formatting variations: Persian digits, commas and emojis", () => {
+  const persianText = `تسویه با موفقیت انجام شد. ✅
+مبلغ تسویه: ۱۱۳٬۶۷۰٬۰۰۰ 💰
+تاریخ: ۱۴۰۵/۰۷/۱۱ - ۱۳:۳۱:۴۰ 📅`;
+
+  const parsed = parseSettlementAnnouncement({
+    chatId: -1001,
+    sourceMessageId: 200,
+    senderId: "8287779777",
+    rawText: persianText,
+    announcedAt: new Date(),
+  });
+
+  assert.ok(parsed !== null);
+  assert.equal(parsed.compactPrice, 113670);
+
+  const commaText = `✅ تسویه با موفقیت انجام شد.
+💰 مبلغ تسویه: 113,670,000
+📅 تاریخ: 1405/07/11 - 13:31:40`;
+
+  const parsedComma = parseSettlementAnnouncement({
+    chatId: -1001,
+    sourceMessageId: 201,
+    senderId: "8287779777",
+    rawText: commaText,
+    announcedAt: new Date(),
+  });
+
+  assert.ok(parsedComma !== null);
+  assert.equal(parsedComma.compactPrice, 113670);
+});
+
+test("parseSettlementAnnouncement rejects non-settlement or malformed messages", () => {
+  // Price not a multiple of 1000
+  assert.equal(
+    parseSettlementAnnouncement({
+      chatId: -1001,
+      sourceMessageId: 1,
+      senderId: "8287779777",
+      rawText: `✅ تسویه با موفقیت انجام شد.\n💰 مبلغ تسویه: 113670500`,
+      announcedAt: new Date(),
+    }),
+    null,
+  );
+
+  // Quote message
+  assert.equal(
+    parseSettlementAnnouncement({
+      chatId: -1001,
+      sourceMessageId: 2,
+      senderId: "8287779777",
+      rawText: `🟡 مظنه: 104900 🟡`,
+      announcedAt: new Date(),
+    }),
+    null,
+  );
+
+  // Trade receipt
+  assert.equal(
+    parseSettlementAnnouncement({
+      chatId: -1001,
+      sourceMessageId: 3,
+      senderId: "8287779777",
+      rawText: `🔵 خریدار : الف\n🔴 فروشنده : ب\n✅ تعداد: 1 قیمت: 100000 ✅`,
+      announcedAt: new Date(),
+    }),
+    null,
+  );
+
+  // Missing price line
+  assert.equal(
+    parseSettlementAnnouncement({
+      chatId: -1001,
+      sourceMessageId: 4,
+      senderId: "8287779777",
+      rawText: `✅ تسویه با موفقیت انجام شد.`,
+      announcedAt: new Date(),
+    }),
+    null,
+  );
 });

@@ -2,7 +2,7 @@ import { normalizeProtocolText } from "./normalize";
 import type { CanonicalBotOrder, ParseResult, TradingSide } from "./types";
 
 const CANONICAL_ORDER_REGEX =
-  /^(?:[.\s]*)(🔵|🔴)\s+(.+?)\s+(\d+)\s+([خف])\s+(\d+)\s+\(مانده:\s*(\d+)\)\s*$/u;
+  /^(?:[.\s]*)(🔵|🔴)\s*(?:⚠️\s*کال\s*مارجین\s*\(?)?\s*(.+?)\s+(\d+)\s+([خف])\s+(\d+)\s+\(مانده:\s*(\d+)\)(?:\s*\)?(?:\s*🤖\s*آگهی\s*خودکار)?)?\s*$/u;
 
 /**
  * Parses authoritative canonical bot order messages from the group.

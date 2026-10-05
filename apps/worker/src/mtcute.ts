@@ -235,6 +235,9 @@ export function mtcuteFactory(config: {
       async history(chatId, afterMessageId, beforeMessageId) {
         const messages = [];
         for await (const message of client.iterHistory(chatId, {
+          offset: beforeMessageId
+            ? { id: beforeMessageId, date: 0 }
+            : undefined,
           minId: afterMessageId,
           maxId: beforeMessageId,
           limit: 10_001,

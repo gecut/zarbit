@@ -105,3 +105,27 @@ _Avoid_: market order, instant execution, خرید فوری
 **Telegram Session (سشن تلگرام)**:
 An isolated MTProto client instance authenticated under a verified user's Telegram credentials, stored in SQLite on the worker volume, and governed by an OS file lock.
 _Avoid_: bot token, web session, نشست وب
+
+---
+
+## Trader Following & Rules
+
+**Trader Rule (قانون معامله‌گر)**:
+A unified event-driven instruction (`TraderRule`) defined by a user targeting a specific market participant alias. Evaluates filters against triggers and dispatches Alert and/or Follow actions.
+_Avoid_: copy-trade rule, bot rule, قانون کپی‌ترید
+
+**Trader Trigger (رویداد محرک قانون)**:
+The canonical market event that activates evaluation of a Trader Rule: `ORDER_PLACED` (canonical bot order broadcast `🔴/🟢 <alias> <quantity> <side> <price>`) or `TRADE_CONFIRMED` (bot trade receipt `Trade`).
+_Avoid_: signal, webhook, سیگنال
+
+**Follow Direction (جهت دنبال‌کردن)**:
+The directional alignment of the copied order relative to the observed action: `DIRECT` (هم‌جهت: BUY follows BUY, SELL follows SELL) or `INVERSE` (معکوس: BUY follows SELL, SELL follows BUY).
+_Avoid_: mirror trade, copy mode, حالت آینه‌ای
+
+**Follow Sizing (تعیین حجم پیرو)**:
+The volume allocation policy for a follow action: `FIXED` (حجم ثابت: always executes a configured fixed lot size) or `SAME` (عین حجم: executes the exact quantity of the observed trigger, capped by `maxQuantity`).
+_Avoid_: dynamic sizing, multiplier, حجم شناور
+
+**Trader Rule Execution (گزارش اجرای قانون)**:
+An immutable audit log (`TraderRuleExecution`) recording the evaluation outcome, trigger details, alert delivery status, and follow order submission status for an observed group event.
+_Avoid_: trade log, rule event, گزارش لاگ

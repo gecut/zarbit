@@ -70,4 +70,23 @@ tabs: older web bundles still multiply monetary P&L by 100.
 
 Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses targetPrice, not triggeredPrice. SENDING with an uncertain outcome must never be automatically retried.
 
+## Trader rules (Follow & Alert)
+
+Trader rules allow users to follow a specific market participant alias (`traderAlias`) based on canonical market events:
+
+- **Triggers**: Exactly one trigger per rule: `ORDER_PLACED` (canonical bot order broadcast) or `TRADE_CONFIRMED` (bot trade receipt).
+- **Filters**:
+  - `side`: `BUY`, `SELL`, or `BOTH`.
+  - `minQuantity`: Minimum order/trade volume required to trigger the rule (optional).
+- **Actions**:
+  - `ALERT`: Sends a private Telegram alert notification to the user via MTProto private message.
+  - `FOLLOW`: Automatically generates and submits a group order command (`<quantity><side><price>`) via the follower's authenticated Telegram MTProto session.
+  - Direction: `DIRECT` (same side) or `INVERSE` (opposite side).
+  - Sizing: `FIXED` (constant integer quantity) or `SAME` (trigger's volume, strictly capped by `maxQuantity`).
+- **Idempotency & Deduplication**:
+  - Every evaluation attempts atomic upsert of `TraderRuleExecution` with unique constraint `(ruleId, chatId, sourceMessageId)`. Duplicate Telegram observations across multiple worker sessions are ignored.
+- **Safety boundaries**:
+  - Only active rules (`status === 'ACTIVE'`) are evaluated.
+  - Follow order dispatch requires an active authenticated Telegram session on the worker; if offline or unauthenticated, follow status is marked `FAILED` with explicit error logging, while alert notification proceeds independently.
+
 See [GLOSSARY.md](GLOSSARY.md) for canonical domain terms, [README.md](README.md) for document directory, and [adr/](adr/) for underlying architectural decisions.

@@ -16,6 +16,10 @@ import {
   traderDetailQuerySchema,
   participantAnalyticsSummaryV2Schema,
   participantAnalyticsDetailV2Schema,
+  createTraderRuleInputSchema,
+  updateTraderRuleInputSchema,
+  traderRuleSchema,
+  traderRuleExecutionSchema,
 } from "./index";
 
 export const rpcErrorDataSchema = z
@@ -121,6 +125,47 @@ export const rpcContract = {
       .route({ method: "GET", path: "/analytics/traders/{alias}" })
       .input(traderDetailQuerySchema)
       .output(participantAnalyticsDetailSchema.nullable()),
+  },
+  traderRules: {
+    list: base
+      .route({ method: "GET", path: "/trader-rules" })
+      .output(z.array(traderRuleSchema)),
+    get: base
+      .route({ method: "GET", path: "/trader-rules/{id}" })
+      .input(idInput)
+      .output(traderRuleSchema.nullable()),
+    create: base
+      .route({ method: "POST", path: "/trader-rules" })
+      .input(createTraderRuleInputSchema)
+      .output(traderRuleSchema),
+    update: base
+      .route({ method: "PATCH", path: "/trader-rules/{id}" })
+      .input(
+        z
+          .object({ id: idInput.shape.id, data: updateTraderRuleInputSchema })
+          .strict(),
+      )
+      .output(traderRuleSchema.nullable()),
+    toggle: base
+      .route({ method: "POST", path: "/trader-rules/{id}/toggle" })
+      .input(idInput)
+      .output(traderRuleSchema.nullable()),
+    delete: base
+      .route({ method: "DELETE", path: "/trader-rules/{id}" })
+      .input(idInput)
+      .output(z.object({ success: z.boolean() }).strict()),
+    history: base
+      .route({ method: "GET", path: "/trader-rules/history" })
+      .input(
+        z
+          .object({
+            ruleId: z.string().optional(),
+            limit: z.number().int().min(1).max(100).optional(),
+          })
+          .strict()
+          .optional(),
+      )
+      .output(z.array(traderRuleExecutionSchema)),
   },
 };
 export type RpcClient = ContractRouterClient<typeof rpcContract>;

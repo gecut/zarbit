@@ -10,6 +10,7 @@ import { sessionRef, workerLog } from "./logger";
 import type { BoundedMessageDeduplicator } from "./message-deduplicator";
 import type { BoundedOrderCache } from "./order-cache";
 import type { CanonicalOrderObservation } from "./participant-identity";
+import type { createTraderRuleProcessor } from "./trader-rule-processor";
 
 export interface AuthoritativeHandlerDependencies {
   readonly store: Pick<Store, "recordQuote"> &
@@ -21,6 +22,7 @@ export interface AuthoritativeHandlerDependencies {
   ) => Promise<void>;
   readonly onQuoteRecorded?: (compactQuote: number) => void;
   readonly onTradeRecorded?: () => void;
+  readonly traderRuleProcessor?: ReturnType<typeof createTraderRuleProcessor>;
 }
 
 export function createAuthoritativeHandler(
@@ -33,6 +35,7 @@ export function createAuthoritativeHandler(
     resolveIdentity,
     onQuoteRecorded,
     onTradeRecorded,
+    traderRuleProcessor,
   } = deps;
 
   return async (userId: string, event: QuoteEvent): Promise<void> => {
@@ -103,6 +106,21 @@ export function createAuthoritativeHandler(
 
       if (recorded.tradeRecorded) {
         onTradeRecorded?.();
+        if (traderRuleProcessor) {
+          void traderRuleProcessor
+            .evaluateTradeConfirmed({
+              buyerAlias: receipt.buyerAlias,
+              sellerAlias: receipt.sellerAlias,
+              quantity: receipt.quantity,
+              compactPrice: receipt.compactPrice,
+              messageId: event.messageId,
+              chatId: event.chatId,
+              announcedAt: event.date,
+            })
+            .catch((err) =>
+              workerLog.failure("trader_rule.trade_evaluation.failed", err),
+            );
+        }
         workerLog.info("telegram.trade.recorded", {
           buyerAlias: receipt.buyerAlias,
           chatId: event.chatId,
@@ -150,6 +168,21 @@ export function createAuthoritativeHandler(
         replyToMessageId: event.replyToMessageId ?? null,
       });
       deduplicator.add(event.messageId, "order", event.chatId);
+      if (traderRuleProcessor) {
+        void traderRuleProcessor
+          .evaluateOrderPlaced({
+            traderAlias: orderResult.data.participantAlias,
+            side: orderResult.data.side,
+            quantity: orderResult.data.quantity,
+            compactPrice: orderResult.data.compactPrice,
+            messageId: event.messageId,
+            chatId: event.chatId,
+            announcedAt: event.date,
+          })
+          .catch((err) =>
+            workerLog.failure("trader_rule.order_evaluation.failed", err),
+          );
+      }
       workerLog.debug("telegram.order.observed", {
         chatId: event.chatId,
         compactPrice: orderResult.data.compactPrice,

@@ -157,6 +157,18 @@
       "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
       "computedHash": "35e62aa423aaeab6a414bcac273f56dfb17802ef2334b41b6a3b00f28196c8cf"
     },
+    "healthcheck-core": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/healthcheck/core/SKILL.md",
+      "computedHash": "42416bf1fb7f2c95c159abd1dddd46c43d4f280bd3705bd3b8f75f38001efeee"
+    },
+    "healthcheck-custom-checks": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/healthcheck/custom-checks/SKILL.md",
+      "computedHash": "057da5ff0c77257496c5e879e639a62e3ea2d1f7e485857525977eaa92c29d51"
+    },
     "heroui-react": {
       "source": "heroui-inc/heroui",
       "sourceType": "github",
@@ -193,6 +205,12 @@
       "skillPath": "skills/minimalist-skill/SKILL.md",
       "computedHash": "08873a3131d3be27bef9bf3304b310b16b44ca6e3561aebe532797be3443f6bd"
     },
+    "multi-stage-dockerfile": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/multi-stage-dockerfile/SKILL.md",
+      "computedHash": "698bf93a84dae18fd7bd0b1d35c21427307fde78fbdf4624be9726f5f98189ca"
+    },
     "nexload-code": {
       "source": "gecut/nexload-sdk",
       "sourceType": "github",
@@ -211,11 +229,65 @@
       "skillPath": "skills/nexload/design/SKILL.md",
       "computedHash": "54f314ea4eea530e734764fdc2f2d8c912839a3e3eac3fc310c2b0cda70fead9"
     },
+    "nexload-package": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload/package/SKILL.md",
+      "computedHash": "9af18d54d191fad0602fd5d3f9f7469564513db7b88d14463e84dc519275ae82"
+    },
     "nexload-react": {
       "source": "gecut/nexload-sdk",
       "sourceType": "github",
       "skillPath": "skills/nexload/react/SKILL.md",
       "computedHash": "9737e2ae1564bc0bf68f8a974d523a7efbeef0ed51356188079d2d1183f8697c"
+    },
+    "nexload-reasoning": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning/SKILL.md",
+      "computedHash": "04b3eb3a1e9f75d1bf599f856d2594f3a64fec468d1a916877f4cb9d31344429"
+    },
+    "nexload-reasoning-design": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-design/SKILL.md",
+      "computedHash": "bad7d2b7b48a59488044e466a939ad4ed4874430318e86135bbe76c8f282e02e"
+    },
+    "nexload-reasoning-discovery": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-discovery/SKILL.md",
+      "computedHash": "e5055de5c598a87cec1a266d56681b92f3a22c283e68be354487e935a80b8dfe"
+    },
+    "nexload-reasoning-evaluation": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-evaluation/SKILL.md",
+      "computedHash": "839e512c3eb800df3a5332b0b893666b49ae256e02d934d37f61d55aff1c3a16"
+    },
+    "nexload-reasoning-execution": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-execution/SKILL.md",
+      "computedHash": "e0d2be5d9c2b05fcf2e06e946466b529f7dba8690ea228741b77c76aa15737cf"
+    },
+    "nexload-reasoning-ideation": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-ideation/SKILL.md",
+      "computedHash": "2148ec4b322360344e330b1105522683df62f50991c1926d9cd3c29e6ab32670"
+    },
+    "nexload-reasoning-investigation": {
+      "source": "gecut/nexload-sdk",
+      "sourceType": "github",
+      "skillPath": "skills/nexload-reasoning/nexload-reasoning-investigation/SKILL.md",
+      "computedHash": "753159b70c1814ffd250b6f74143a9fdbf9437e8240e85f8b2dba0095b5f4682"
+    },
+    "orpc": {
+      "source": "middleapi/orpc",
+      "sourceType": "github",
+      "skillPath": "skills/orpc/SKILL.md",
+      "computedHash": "24aeb625eeb54572e2dc862648085a4f2270c9a0a6167162b7fc53290bb3acb2"
     },
     "prisma-cli": {
       "source": "prisma/skills",
@@ -258,6 +330,12 @@
       "sourceType": "github",
       "skillPath": "skills/systematic-debugging/SKILL.md",
       "computedHash": "3589907ee34dc8b1b7223a33fac98ab841a9e42f9960ab4433a832f0c6f00be0"
+    },
+    "tailwind-4-docs": {
+      "source": "lombiq/tailwind-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/tailwind-4-docs/SKILL.md",
+      "computedHash": "de756f5f03cc20a029983875b00b9dfef9d0ba8567d242c5cbb0262037d0a134"
     },
     "triage": {
       "source": "mattpocock/skills",
@@ -336,6 +414,12 @@
       "sourceType": "github",
       "skillPath": "skills/writing-skills/SKILL.md",
       "computedHash": "f06bbb471439736c838e89a57a2a371bcc687931ba878901d97373194e212ea9"
+    },
+    "zod-4": {
+      "source": "prowler-cloud/prowler",
+      "sourceType": "github",
+      "skillPath": "skills/zod-4/SKILL.md",
+      "computedHash": "74c140363ea586fcb92644559862ce181af16f4644a41db14722323421bbfc00"
     }
   }
 }

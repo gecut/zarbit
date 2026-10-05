@@ -102,6 +102,11 @@ export function createRpcUtils(
           queryOptions: slowQuery,
         },
       },
+      traderRules: {
+        list: { queryOptions: fastQuery },
+        get: { queryOptions: fastQuery },
+        history: { queryOptions: slowQuery },
+      },
     },
   });
   const market = createTanstackQueryUtils(client.market, {
@@ -120,6 +125,7 @@ export function createRpcUtils(
     telegram: utils.telegram,
     requests: utils.requests,
     analytics: utils.analytics,
+    traderRules: utils.traderRules,
     market,
   };
 }

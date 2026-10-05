@@ -50,6 +50,7 @@ model TelegramUser {
   telegramSession TelegramSession?
   requests        Request[]
   telegramOperations TelegramOperation[]
+  traderRules     TraderRule[]
 }
 
 model TelegramSession {
@@ -223,6 +224,7 @@ model Participant {
   actions           TradingAction[]
   buyerTrades       Trade[]                     @relation("BuyerTrades")
   sellerTrades      Trade[]                     @relation("SellerTrades")
+  traderRules       TraderRule[]
 }
 
 enum TradingSide {
@@ -373,3 +375,95 @@ model TradeRequestCursor {
   chatId          BigInt @id
   sourceMessageId Int    @default(0)
 }
+
+enum TraderRuleTrigger {
+  ORDER_PLACED
+  TRADE_CONFIRMED
+}
+
+enum TraderRuleSide {
+  BUY
+  SELL
+  BOTH
+}
+
+enum TraderRuleStatus {
+  ENABLED
+  DISABLED
+}
+
+enum TraderFollowDirection {
+  DIRECT
+  INVERSE
+}
+
+enum TraderFollowSizing {
+  FIXED
+  SAME
+}
+
+enum TraderRuleAlertStatus {
+  SKIPPED
+  SENT
+  FAILED
+}
+
+enum TraderRuleFollowStatus {
+  SKIPPED
+  SUBMITTED
+  FAILED
+}
+
+model TraderRule {
+  id              String                 @id @default(cuid())
+  userId          String
+  traderAlias     String
+  trigger         TraderRuleTrigger
+  side            TraderRuleSide
+  minQuantity     Int                    @default(1)
+  alertEnabled    Boolean                @default(true)
+  followEnabled   Boolean                @default(false)
+  followDirection TraderFollowDirection?
+  followSizing    TraderFollowSizing?
+  fixedQuantity   Int?
+  maxQuantity     Int?
+  status          TraderRuleStatus       @default(ENABLED)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  user            TelegramUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participant     Participant            @relation(fields: [traderAlias], references: [id], onDelete: Restrict)
+  executions      TraderRuleExecution[]
+
+  @@index([userId, status])
+  @@index([traderAlias, trigger, status])
+}
+
+model TraderRuleExecution {
+  id                String                 @id @default(cuid())
+  ruleId            String
+  userId            String
+  traderAlias       String
+  trigger           TraderRuleTrigger
+  eventSide         TradingSide
+  eventQuantity     Int
+  eventPrice        Int
+  sourceMessageId   Int?
+  chatId            BigInt?
+  alertStatus       TraderRuleAlertStatus  @default(SKIPPED)
+  followStatus      TraderRuleFollowStatus @default(SKIPPED)
+  followSide        TradingSide?
+  followQuantity    Int?
+  followPrice       Int?
+  outgoingMessageId Int?
+  errorMessage      String?
+  executedAt        DateTime               @default(now())
+
+  rule              TraderRule             @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, executedAt])
+  @@index([userId, executedAt])
+  @@index([traderAlias, executedAt])
+  @@unique([ruleId, chatId, sourceMessageId])
+}
+

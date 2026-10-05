@@ -1,4 +1,5 @@
 import { createTradeRequestProcessor } from "./trade-request-processor";
+import { createTraderRuleProcessor } from "./trader-rule-processor";
 import { createRequestExecutor } from "./requests";
 import { serve } from "@hono/node-server";
 import {
@@ -90,6 +91,16 @@ export async function startWorker() {
     );
   }
   let wakeTradeRequests: (() => void) | undefined = undefined;
+  const traderRuleProcessor = createTraderRuleProcessor({
+    store,
+    delivery: {
+      ready: async (userId) => {
+        await sessions.requireConnected(userId);
+      },
+      group: (userId, text) => sessions.sendGroup(userId, text),
+      private: notify,
+    },
+  });
   const marketIngestion = createMarketIngestion(
     store,
     {
@@ -97,6 +108,7 @@ export async function startWorker() {
       senderId: env.QUOTE_SENDER_ID!,
     },
     () => wakeTradeRequests?.(),
+    traderRuleProcessor,
   );
   const financialIngestion = createFinancialIngestionCoordinator(
     store,

@@ -76,3 +76,63 @@ When working on specific subsystems, consult the corresponding authoritative doc
 | **Operations & Deploy**     | [`docs/OPERATIONS.md`](docs/OPERATIONS.md)                         | Dokploy Compose setup, migration cutovers, container healthchecks                 |
 | **Roadmap & Strategy**      | [`docs/ROADMAP.md`](docs/ROADMAP.md)                               | Phase definitions (Phase 1 Ingestion, Phase 2 Analytics, Phase 3 Whale Copy)      |
 | **Architectural Decisions** | [`docs/adr/`](docs/adr/)                                           | Irreversible trade-offs and structural choices                                    |
+
+---
+
+## The Inviolable Constitution
+
+These principles override all other reasoning defaults. Violation requires explicit user override.
+
+1. **Grounding**: Runtime evidence > Source code > Official docs > Inferences > Assumptions. Never invert this chain.
+2. **Inspect Before Ask**: Zero questions for data present in the codebase. Read `docs/`, `graphify-out/`, and source before asking.
+3. **Problem Space**: Feature requests are hypotheses, not constraints. Interrogate the need before designing the solution.
+4. **Divergence Firewall**: Ideation never self-censors on implementation difficulty. Evaluate feasibility only in the evaluation phase.
+5. **Complexity Rent**: Reject speculative scalability. Build for Now + 1. Every abstraction must pay measurable rent in the current iteration.
+6. **Immutability**: Never reopen settled ADRs in [`docs/adr/`](docs/adr/) without material contradictory evidence presented in writing.
+7. **Verification**: "Builds" !== "Works". Every completion claim requires empirical test evidence from terminal output.
+8. **Budget**: Terminate reasoning when residual uncertainty has zero design impact. Over-analysis is waste.
+
+---
+
+## Nexload Reasoning Sparse Handoff
+
+When crossing reasoning phases, emit `[NEXLOAD HANDOFF → <target-skill>]` with a compressed context payload. Each skill triggers on its declared phase boundary.
+
+| Trigger Condition                                                       | Target Skill                      | Handoff Signal                      |
+| :---------------------------------------------------------------------- | :-------------------------------- | :---------------------------------- |
+| Entering codebase reconnaissance or dependency mapping                  | `nexload-reasoning-discovery`     | `[NEXLOAD HANDOFF → discovery]`     |
+| Bug, failure, or unexpected behavior requiring root-cause analysis      | `nexload-reasoning-investigation` | `[NEXLOAD HANDOFF → investigation]` |
+| Generating solution alternatives or architectural options               | `nexload-reasoning-ideation`      | `[NEXLOAD HANDOFF → ideation]`      |
+| Designing interfaces, modules, or system boundaries                     | `nexload-reasoning-design`        | `[NEXLOAD HANDOFF → design]`        |
+| Comparing trade-offs, scoring options, or deciding between alternatives | `nexload-reasoning-evaluation`    | `[NEXLOAD HANDOFF → evaluation]`    |
+| Implementing approved plan steps                                        | `nexload-reasoning-execution`     | `[NEXLOAD HANDOFF → execution]`     |
+| Package boundary, export surface, or monorepo topology work             | `nexload-package`                 | `[NEXLOAD HANDOFF → package]`       |
+| Health endpoint design, Docker probe, or readiness/liveness logic       | `healthcheck-core`                | `[NEXLOAD HANDOFF → healthcheck]`   |
+| Custom health checks beyond HTTP 200 (DB pools, Telegram sessions)      | `healthcheck-custom-checks`       | `[NEXLOAD HANDOFF → custom-checks]` |
+
+---
+
+## Verification Commands
+
+Consolidated commands for the verification gate. All must pass before claiming completion.
+
+```bash
+# Type safety
+pnpm check-types
+
+# Linting
+pnpm lint
+
+# Formatting
+pnpm format:check
+
+# Tests
+pnpm test
+
+# Build (full monorepo)
+pnpm build
+
+# Database schema
+pnpm db:generate
+pnpm db:migrate
+```

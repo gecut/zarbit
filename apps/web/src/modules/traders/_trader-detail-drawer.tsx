@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery, skipToken } from "@tanstack/react-query";
-import { Card, Chip, cn, ScrollShadow } from "@heroui/react";
+import { Button, Card, Chip, cn, ScrollShadow } from "@heroui/react";
 import { formatDateTime, formatNumber } from "@zarbit/format";
 import { useIdentity } from "../../shared/auth/auth";
 import { useApi } from "../../shared/api/api-context";
 import { DrawerSheet } from "../../shared/ui/drawer";
 import { DataCoverageBadge } from "./_data-coverage-badge";
+import { TraderRuleFormDrawer } from "./_trader-rule-form-drawer";
 import TomanIcon from "@/shared/ui/_toman-icon";
 
 export function TraderDetailDrawer({
@@ -21,6 +23,7 @@ export function TraderDetailDrawer({
       refetchInterval: 30000,
     }),
   );
+  const [isRuleFormOpen, setIsRuleFormOpen] = useState(false);
 
   const detail = detailQuery.data;
   const summary = detail?.summary;
@@ -81,6 +84,16 @@ export function TraderDetailDrawer({
               </div>
             </div>
           </Card>
+
+          {/* Follow / Create Rule Button */}
+          <Button
+            size="sm"
+            variant="primary"
+            onPress={() => setIsRuleFormOpen(true)}
+            className="w-full rounded-2xl py-3 text-xs font-bold"
+          >
+            ⚡ دنبال‌کردن / تنظیم قانون برای {alias}
+          </Button>
 
           {/* Metrics Grid */}
           <div className="grid grid-cols-2 gap-2.5">
@@ -239,6 +252,12 @@ export function TraderDetailDrawer({
           </p>
         </div>
       )}
+
+      <TraderRuleFormDrawer
+        open={isRuleFormOpen}
+        onOpenChange={setIsRuleFormOpen}
+        initialTraderAlias={alias}
+      />
     </DrawerSheet>
   );
 }

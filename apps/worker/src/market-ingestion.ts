@@ -11,6 +11,7 @@ import {
 } from "./participant-identity";
 import { createAuthoritativeHandler } from "./authoritative-handler";
 import { createTradingActionHandler } from "./trading-action-handler";
+import type { createTraderRuleProcessor } from "./trader-rule-processor";
 
 export type MarketDataStore = Pick<Store, "recordQuote"> &
   Partial<Pick<Store, "recordTrade">> &
@@ -30,6 +31,7 @@ export function createMarketIngestion(
   store: MarketDataStore,
   config: { groupId: number; senderId: string },
   onTradeRecorded?: () => void,
+  traderRuleProcessor?: ReturnType<typeof createTraderRuleProcessor>,
 ) {
   const deduplicator = new BoundedMessageDeduplicator(2_000);
   const singleFlight = new KeyedSingleFlight();
@@ -123,6 +125,7 @@ export function createMarketIngestion(
     activeOrders,
     resolveIdentity,
     onTradeRecorded,
+    traderRuleProcessor,
   });
 
   const tradingActionHandler = createTradingActionHandler({

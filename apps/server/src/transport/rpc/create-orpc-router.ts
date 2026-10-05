@@ -11,6 +11,7 @@ import type { AppDependencies } from "../../app-dependencies";
 import { createAuthRouter } from "../../modules/auth/create-auth-router";
 import { createMarketRouter } from "../../modules/market/create-market-router";
 import { createRequestsRouter } from "../../modules/requests/create-requests-router";
+import { createTraderRulesRouter } from "../../modules/trader-rules/create-trader-rules-router";
 import { createTelegramRouter } from "../../modules/telegram/create-telegram-router";
 import { createAnalyticsRouter } from "../../modules/analytics/create-analytics-router";
 import { AnalyticsService } from "../../modules/analytics/analytics-service";
@@ -183,6 +184,9 @@ export function createOrpcRouter(
       tradersCache: traders,
       traderDetailCache: traderDetail,
       read: analyticsRead,
+    }),
+    traderRules: createTraderRulesRouter(os.traderRules, {
+      store: deps.store,
     }),
   });
 }

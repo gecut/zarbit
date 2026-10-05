@@ -4,6 +4,7 @@ import { createMarketHeadsStore } from "./market-heads";
 import { createMarketDataStore } from "./market-data";
 import { createAnalyticsDataStore } from "./analytics";
 import { createRequestStore } from "./requests";
+import { createTraderRuleStore } from "./trader-rules";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { databasePoolMax, databaseUrl } from "@zarbit/env/db";
 import { Pool } from "pg";
@@ -12,6 +13,18 @@ import { PrismaClient, Prisma } from "../prisma/generated/client";
 
 export * from "./market-data";
 export * from "./analytics";
+export * from "./trader-rules";
+export type {
+  TraderRule,
+  TraderRuleExecution,
+  TraderRuleTrigger,
+  TraderRuleSide,
+  TraderRuleStatus,
+  TraderFollowDirection,
+  TraderFollowSizing,
+  TraderRuleAlertStatus,
+  TraderRuleFollowStatus,
+} from "../prisma/generated/client";
 
 export const databasePoolOptions = {
   max: databasePoolMax,
@@ -45,6 +58,7 @@ export function createStore(
     ...createSettlementStore(prisma),
     ...createMarketHeadsStore(prisma),
     ...createAnalyticsDataStore(prisma),
+    ...createTraderRuleStore(prisma),
     user: (identity: Identity) =>
       prisma.telegramUser.upsert({
         where: { telegramUserId: identity.telegramUserId },

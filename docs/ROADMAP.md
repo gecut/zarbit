@@ -30,11 +30,14 @@ ZarBit transforms a high-velocity, semi-structured Persian Telegram gold trading
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Phase 3: ACTION-BASED WHALE FOLLOWING (Future)                          │
-│ - ACTION COPY on raw TradingAction from VERIFIED Telegram identities    │
-│ - Sub-second order execution via MTProto worker                         │
-│ - Post-trade validation & reconciliation via bot receipts               │
-│ - Risk controls: Slippage limits, position sizing, auto-cancellation    │
+│ Phase 3: ACTION-BASED WHALE FOLLOWING & TRADER RULES                    │
+│ - Trader Rules MVP (Completed): Event -> Rule -> Filters -> Actions     │
+│   • Triggers: ORDER_PLACED (canonical bot order) & TRADE_CONFIRMED      │
+│   • Actions: Alert (private MTProto) & Follow (group order execution)   │
+│   • Direction: DIRECT / INVERSE; Sizing: FIXED / SAME (max capped)      │
+│   • Dedicated UI tab (/traders) with Rule Drawer & Execution History    │
+│ - Advanced Follow (Future): Sub-second raw TradingAction copy, slippage │
+│   protection, cancellation syncing, consensus following                 │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,6 +127,7 @@ Phase 3 introduces autonomous order copying and execution.
 | Rolling 7-Day Performance Analytics & WACB Inventory            |   ❌    |   ✅    |   ✅    |
 | Leaderboard & Participant Profiling API (`analytics.*`)         |   ❌    |   ✅    |   ✅    |
 | Leaderboard Web UI (`/traders`) & Trader Detail Drawer          |   ❌    |   ✅    |   ✅    |
+| Trader Rules Engine (Alert + Direct/Inverse Follow MVP)         |   ❌    |   ❌    |   ✅    |
 | Action-Copy Order Execution Engine                              |   ❌    |   ❌    |   ✅    |
 | Market Polling Transport (3-second TanStack Query)              |   ✅    |   ✅    | Review  |
 

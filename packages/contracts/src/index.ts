@@ -2,6 +2,7 @@ import { z } from "zod";
 export * from "./login-input";
 export * from "./market";
 export * from "./telegram";
+export * from "./trader-rules";
 export interface Identity {
   telegramUserId: string;
   firstName?: string;

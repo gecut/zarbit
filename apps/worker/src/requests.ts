@@ -56,12 +56,8 @@ export function createRequestExecutor(
     if (!started.count || !started.row) {
       if (!claimed)
         throw new AppError(
-          started.reason === "FINANCIAL_REVIEW_REQUIRED"
-            ? "FINANCIAL_REVIEW_REQUIRED"
-            : "REQUEST_CONFLICT",
-          started.reason === "FINANCIAL_REVIEW_REQUIRED"
-            ? "عملیات گروه به دلیل بررسی مالی متوقف شده است."
-            : "درخواست لغو شده یا در حال اجراست.",
+          "REQUEST_CONFLICT",
+          "درخواست لغو شده یا در حال اجراست.",
         );
       workerLog.info("request.returned_to_waiting_or_cancelled", {
         requestId: id,
@@ -76,9 +72,13 @@ export function createRequestExecutor(
     let failure: RequestFailure = "unknown";
     let sending = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let price = row.targetPrice;
     try {
       sending = true;
-      const price = row.targetPrice;
+      price =
+        row.priceMode === "LAST_TRADE" && row.triggeredPrice !== null
+          ? row.triggeredPrice
+          : row.targetPrice;
       const send =
         row.action === "ALERT"
           ? delivery.private(
@@ -182,7 +182,7 @@ export function createRequestExecutor(
             groupText:
               row.action === "ALERT"
                 ? undefined
-                : formatGroupMessage(row.action, row.units!, row.targetPrice),
+                : formatGroupMessage(row.action, row.units!, price),
           }),
           {
             requestId: id,

@@ -68,7 +68,7 @@ tabs: older web bundles still multiply monetary P&L by 100.
 
 ## Automatic request trigger
 
-Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses targetPrice, not triggeredPrice. SENDING with an uncertain outcome must never be automatically retried.
+Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses `targetPrice` by default (`priceMode: TARGET_PRICE`), or `triggeredPrice` if configured to execute at the triggering trade price (`priceMode: LAST_TRADE`). SENDING with an uncertain outcome must never be automatically retried.
 
 ## Trader rules (Follow & Alert)
 

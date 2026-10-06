@@ -142,6 +142,16 @@ export function RequestDetailsDrawer({
               label="قیمت هدف"
               value={formatNumber(request.targetPrice)}
             />
+            {request.action !== "ALERT" && (
+              <DetailRow
+                label="مظنه ارسالی"
+                value={
+                  request.priceMode === "LAST_TRADE"
+                    ? "مظنه آخرین معامله"
+                    : "مظنه تعیین‌شده"
+                }
+              />
+            )}
             <DetailRow
               label="تعداد"
               value={

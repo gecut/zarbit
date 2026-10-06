@@ -131,6 +131,11 @@ enum RequestAction {
   SELL
 }
 
+enum RequestPriceMode {
+  TARGET_PRICE
+  LAST_TRADE
+}
+
 enum RequestStatus {
   ACTIVE
   DONE
@@ -146,6 +151,7 @@ model Request {
   action              RequestAction
   targetPrice         Int
   units               Int?
+  priceMode           RequestPriceMode       @default(TARGET_PRICE)
   status              RequestStatus          @default(ACTIVE)
   executionPhase      RequestExecutionPhase  @default(WAITING_TRADE)
   outcomeCode         String?

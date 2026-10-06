@@ -11,10 +11,12 @@ export function computeCreationPayloadHash(input: {
   action: string;
   targetPrice: number;
   units: number | null;
+  priceMode?: string;
 }): string {
   const canonical = JSON.stringify({
     action: input.action,
     condition: input.condition,
+    priceMode: input.priceMode ?? "TARGET_PRICE",
     targetPrice: input.targetPrice,
     units: input.action === "ALERT" ? null : input.units,
   });
@@ -61,6 +63,7 @@ export async function findRequestCreation(
     action: input.action,
     targetPrice: input.targetPrice,
     units: input.units,
+    priceMode: input.priceMode ?? "TARGET_PRICE",
     status: identity.status,
     executionPhase:
       identity.status === "ACTIVE" ? "WAITING_TRADE" : identity.status,

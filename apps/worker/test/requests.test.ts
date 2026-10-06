@@ -203,18 +203,17 @@ test("private alert rejection cannot be recorded as successful delivery", async 
   assert.match(run.results[0]!.failureReason!, /ارسال پیام خصوصی را نپذیرفت/);
 });
 
-test("manual execution fails closed when financial review is required", async () => {
+test("manual execution fails with conflict when markSending does not start", async () => {
   const run = setup({
     markSendingResult: {
       count: 0,
       row: null,
-      reason: "FINANCIAL_REVIEW_REQUIRED",
     },
   });
   await assert.rejects(
     run.executor.execute("user-1", example.id),
     (err: unknown) =>
-      err instanceof AppError && err.code === "FINANCIAL_REVIEW_REQUIRED",
+      err instanceof AppError && err.code === "REQUEST_CONFLICT",
   );
   assert.equal(run.messages.length, 0);
   assert.equal(run.groups.length, 0);

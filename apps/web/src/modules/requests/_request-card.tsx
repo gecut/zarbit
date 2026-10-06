@@ -132,6 +132,12 @@ export function RequestCard({
         >
           <Chip.Label>{requestStatusLabel(row.status)}</Chip.Label>
         </Chip>
+
+        {row.action !== "ALERT" && row.priceMode === "LAST_TRADE" && (
+          <Chip color="default" variant="secondary">
+            <Chip.Label>مظنه آخرین معامله</Chip.Label>
+          </Chip>
+        )}
       </Card.Header>
 
       <Card.Content className="flex w-full flex-row items-end justify-between gap-2.5">

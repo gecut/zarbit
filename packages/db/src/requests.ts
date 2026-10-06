@@ -79,6 +79,7 @@ export function requestView(row: RequestViewRow): RequestDetail {
     completedAt: row.completedAt?.toISOString() ?? null,
     failureReason: row.failureReason,
     cancellationReason: row.cancellationReason,
+    priceMode: row.priceMode,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -199,6 +200,7 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
             data: {
               userId,
               ...input,
+              priceMode: input.priceMode ?? "TARGET_PRICE",
               creationKey,
               creationPayloadHash: payloadHash,
               ...armed,
@@ -234,7 +236,12 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       connected(userId, async (tx) => {
         const result = await tx.request.updateMany({
           where: { id, userId, status: "ACTIVE", claimToken: null },
-          data: { ...input, ...(await arm(tx)), ...emptyTrigger },
+          data: {
+            ...input,
+            ...(input.priceMode ? { priceMode: input.priceMode } : {}),
+            ...(await arm(tx)),
+            ...emptyTrigger,
+          },
         });
         if (!result.count) throw conflict();
         return tx.request.findUniqueOrThrow({ where: { id } });
@@ -283,10 +290,6 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
       db.$transaction(async (tx) => {
         const chatId = BigInt(groupId);
         await lockTradeStream(tx, chatId);
-        const ingestion = await tx.groupIngestionState.findUnique({
-          where: { chatId },
-        });
-        if (ingestion?.gateStatus === "REVIEW_REQUIRED") return;
         const cursor = await tx.tradeRequestCursor.findUniqueOrThrow({
           where: { chatId },
         });
@@ -424,30 +427,6 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
               : null;
         if (targetChatId !== null) {
           await lockTradeStream(tx, targetChatId);
-          const ingestion = await tx.groupIngestionState.findUnique({
-            where: { chatId: targetChatId },
-          });
-          if (ingestion?.gateStatus === "REVIEW_REQUIRED") {
-            await tx.request.updateMany({
-              where: {
-                id,
-                claimToken,
-                status: "ACTIVE",
-                executionPhase: "CLAIMED",
-                deliveryStartedAt: null,
-              },
-              data: {
-                executionPhase: "WAITING_TRADE",
-                claimToken: null,
-                ...emptyTrigger,
-              },
-            });
-            return {
-              count: 0,
-              row: null,
-              reason: "FINANCIAL_REVIEW_REQUIRED" as const,
-            };
-          }
         }
         await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${initial.userId} FOR UPDATE`;
         await tx.$queryRaw`SELECT "id" FROM "Request" WHERE "id" = ${id} FOR UPDATE`;

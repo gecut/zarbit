@@ -1,3 +1,5 @@
+import type { RequestPriceMode } from "@zarbit/contracts";
+
 export interface RequestCreationIntent {
   userId: string;
   creationKey: string;
@@ -5,6 +7,7 @@ export interface RequestCreationIntent {
   condition: "LTE" | "GTE";
   targetPrice: number;
   units: number | null;
+  priceMode?: RequestPriceMode;
   createdAt: number;
 }
 
@@ -64,10 +67,12 @@ export function getOrCreateCreationIntent(
     condition: "LTE" | "GTE";
     targetPrice: number;
     units: number | null;
+    priceMode?: RequestPriceMode;
   },
 ): RequestCreationIntent {
   const storage = getStorage();
   const normalizedUnits = payload.action === "ALERT" ? null : payload.units;
+  const normalizedPriceMode = payload.priceMode ?? "TARGET_PRICE";
   const existing = loadCreationIntent(userId);
 
   if (
@@ -75,7 +80,8 @@ export function getOrCreateCreationIntent(
     existing.action === payload.action &&
     existing.condition === payload.condition &&
     existing.targetPrice === payload.targetPrice &&
-    existing.units === normalizedUnits
+    existing.units === normalizedUnits &&
+    (existing.priceMode ?? "TARGET_PRICE") === normalizedPriceMode
   ) {
     return existing;
   }
@@ -87,6 +93,7 @@ export function getOrCreateCreationIntent(
     condition: payload.condition,
     targetPrice: payload.targetPrice,
     units: normalizedUnits,
+    priceMode: normalizedPriceMode,
     createdAt: Date.now(),
   };
 

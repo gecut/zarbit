@@ -12,7 +12,11 @@ import {
 } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
 import { AddCircleIcon } from "@solar-icons/react/linear/add-circle";
-import { type CreateRequestInput } from "@zarbit/contracts";
+import {
+  type CreateRequestInput,
+  type RequestPriceMode,
+} from "@zarbit/contracts";
+import { formatNumber } from "@zarbit/format";
 
 import { useApi } from "../../shared/api/api-context";
 import { DrawerSheet } from "../../shared/ui/drawer";
@@ -52,10 +56,14 @@ export function RequestFormDrawer({
   const api = useApi(identity.telegramUserId);
   const queryClient = useQueryClient();
   const { create } = useRequestActions();
+
+  const defaultCondition = initialAction === "SELL" ? "GTE" : "LTE";
+
   const [action, setAction] =
     useState<CreateRequestInput["action"]>(initialAction);
   const [condition, setCondition] =
-    useState<CreateRequestInput["condition"]>("LTE");
+    useState<CreateRequestInput["condition"]>(defaultCondition);
+  const [priceMode, setPriceMode] = useState<RequestPriceMode>("TARGET_PRICE");
   const [price, setPrice] = useState(emptyTargetPrice);
   const [units, setUnits] = useState(1);
   const [pending, setPending] = useState(false);
@@ -65,9 +73,11 @@ export function RequestFormDrawer({
   const initialPriceRef = useRef(emptyTargetPrice);
   const priceEditedRef = useRef(false);
   const quoteRequestRef = useRef(0);
+
   const isDirty =
     action !== initialAction ||
-    condition !== "LTE" ||
+    condition !== defaultCondition ||
+    priceMode !== "TARGET_PRICE" ||
     !Object.is(price, initialPriceRef.current) ||
     units > 0;
 
@@ -80,6 +90,7 @@ export function RequestFormDrawer({
       setCondition(saved.condition);
       setPrice(saved.targetPrice);
       setUnits(saved.units ?? 1);
+      if (saved.priceMode) setPriceMode(saved.priceMode);
       priceEditedRef.current = true;
       initialPriceRef.current = saved.targetPrice;
       setError(null);
@@ -87,6 +98,8 @@ export function RequestFormDrawer({
     }
 
     setAction(initialAction);
+    setCondition(initialAction === "SELL" ? "GTE" : "LTE");
+    setPriceMode("TARGET_PRICE");
     const requestId = ++quoteRequestRef.current;
     priceEditedRef.current = false;
     initialPriceRef.current = emptyTargetPrice;
@@ -129,17 +142,20 @@ export function RequestFormDrawer({
   const reset = () => {
     clearCreationIntent(identity.telegramUserId);
     setAction(initialAction);
-    setCondition("LTE");
+    setCondition(initialAction === "SELL" ? "GTE" : "LTE");
+    setPriceMode("TARGET_PRICE");
     initialPriceRef.current = emptyTargetPrice;
     priceEditedRef.current = false;
     setPrice(emptyTargetPrice);
     setUnits(0);
     setError(null);
   };
+
   const close = () => {
     reset();
     onOpenChange(false);
   };
+
   const requestClose = () => {
     if (pending) return;
     if (isDirty) {
@@ -147,6 +163,19 @@ export function RequestFormDrawer({
       return;
     }
     close();
+  };
+
+  const adjustPrice = (delta: number) => {
+    priceEditedRef.current = true;
+    setPrice((prev) => {
+      const base =
+        Number.isSafeInteger(prev) && prev > 0
+          ? prev
+          : initialPriceRef.current > 0
+            ? initialPriceRef.current
+            : 100_000;
+      return Math.max(10, Math.round(base + delta));
+    });
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -177,6 +206,7 @@ export function RequestFormDrawer({
       condition,
       targetPrice,
       units: action === "ALERT" ? null : requestedUnits,
+      priceMode: action === "ALERT" ? "TARGET_PRICE" : priceMode,
     });
 
     try {
@@ -185,6 +215,7 @@ export function RequestFormDrawer({
         condition: intent.condition,
         targetPrice: intent.targetPrice,
         units: intent.units,
+        priceMode: intent.priceMode,
         creationKey: intent.creationKey,
       });
       clearCreationIntent(identity.telegramUserId);
@@ -248,6 +279,7 @@ export function RequestFormDrawer({
           id="create-request-form"
           onSubmit={submit}
         >
+          {/* Action selection */}
           <div
             className={cn(
               "flex flex-col gap-2",
@@ -268,7 +300,11 @@ export function RequestFormDrawer({
                     data-base-ui-swipe-ignore
                     key={value}
                     aria-pressed={action === value}
-                    onPress={() => setAction(value)}
+                    onPress={() => {
+                      setAction(value);
+                      if (value === "BUY") setCondition("LTE");
+                      else if (value === "SELL") setCondition("GTE");
+                    }}
                     className="flex h-auto flex-1 flex-col gap-1 py-2 text-sm"
                     type="button"
                     variant={action === value ? "primary" : "secondary"}
@@ -282,6 +318,7 @@ export function RequestFormDrawer({
             </div>
           </div>
 
+          {/* Condition selection */}
           <div
             className={cn(
               "flex flex-col gap-2",
@@ -308,30 +345,147 @@ export function RequestFormDrawer({
             </div>
           </div>
 
-          <NumberField
-            formatOptions={compactPriceFormatOptions}
-            name="targetPrice"
-            variant="secondary"
-            step={10}
-            value={price}
-            className="h-auto"
-            onChange={(value) => {
-              priceEditedRef.current = true;
-              setPrice(value);
-            }}
-          >
-            <Label>قیمت هدف (هزار تومان)</Label>
+          {/* Target Price input and quick increment/decrement buttons */}
+          <div className="flex flex-col gap-2">
+            <NumberField
+              formatOptions={compactPriceFormatOptions}
+              name="targetPrice"
+              variant="secondary"
+              step={10}
+              value={price}
+              className="h-auto"
+              onChange={(value) => {
+                priceEditedRef.current = true;
+                setPrice(value);
+              }}
+            >
+              <Label>قیمت هدف (هزار تومان)</Label>
 
-            <NumberField.Group className="ring-0! flex h-12">
-              <NumberField.IncrementButton className="w-12 rounded-e-none rounded-s-2xl border-e border-s-0" />
-              <NumberField.Input
-                data-base-ui-swipe-ignore
-                className="flex-1 text-center"
-              />
-              <NumberField.DecrementButton className="w-12 rounded-e-2xl rounded-s-none border-e-0 border-s" />
-            </NumberField.Group>
-          </NumberField>
+              <NumberField.Group className="ring-0! flex h-12">
+                <NumberField.IncrementButton className="w-12 rounded-e-none rounded-s-2xl border-e border-s-0" />
+                <NumberField.Input
+                  data-base-ui-swipe-ignore
+                  className="flex-1 text-center"
+                />
+                <NumberField.DecrementButton className="w-12 rounded-e-2xl rounded-s-none border-e-0 border-s" />
+              </NumberField.Group>
+            </NumberField>
 
+            {/* Quick ±50, ±100, ±500 adjustment chips */}
+            <div className="flex flex-col gap-1.5 pt-1">
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(50)}
+                >
+                  +۵۰
+                </Button>
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(100)}
+                >
+                  +۱۰۰
+                </Button>
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(500)}
+                >
+                  +۵۰۰
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(-50)}
+                >
+                  -۵۰
+                </Button>
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(-100)}
+                >
+                  -۱۰۰
+                </Button>
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
+                  onPress={() => adjustPrice(-500)}
+                >
+                  -۵۰۰
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Submission Price Mode (Target Price vs Last Trade) */}
+          {action !== "ALERT" && (
+            <div
+              className={cn(
+                "flex flex-col gap-2",
+                pending && "pointer-events-none opacity-70",
+              )}
+            >
+              <h3 className="text-sm font-medium">مظنه ارسالی به گروه</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  onPress={() => setPriceMode("TARGET_PRICE")}
+                  className="flex h-auto flex-col items-start gap-1 p-3 text-start"
+                  variant={
+                    priceMode === "TARGET_PRICE" ? "primary" : "secondary"
+                  }
+                >
+                  <span className="text-xs font-bold">مظنه تعیین‌شده</span>
+                  <span className="text-[11px] opacity-80">
+                    ارسال با قیمت هدف شما (
+                    {Number.isFinite(price) && price > 0
+                      ? formatNumber(price)
+                      : "—"}
+                    )
+                  </span>
+                </Button>
+
+                <Button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  onPress={() => setPriceMode("LAST_TRADE")}
+                  className="flex h-auto flex-col items-start gap-1 p-3 text-start"
+                  variant={priceMode === "LAST_TRADE" ? "primary" : "secondary"}
+                >
+                  <span className="text-xs font-bold">مظنه آخرین معامله</span>
+                  <span className="text-[11px] opacity-80">
+                    ارسال با مظنه معامله محرک
+                  </span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Units input */}
           <NumberField
             name="units"
             variant="secondary"

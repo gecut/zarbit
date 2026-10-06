@@ -5,6 +5,7 @@ import {
   formatAlertMessage,
   formatRequestResultMessage,
   formatSessionMessage,
+  formatTraderRuleAlertMessage,
   formatWelcomeMessage,
   groupMessageUrl,
   type SessionNotification,
@@ -155,4 +156,25 @@ test("buttons only use valid HTTPS app targets and supported group message links
   assert.equal(url.searchParams.get("requestId"), "request/a?b");
   assert.equal(url.searchParams.has("old"), false);
   assert.equal(url.hash, "");
+});
+
+test("formatTraderRuleAlertMessage produces clean 2-line notification without redundant labels", () => {
+  const alert = formatTraderRuleAlertMessage({
+    traderAlias: "سناتور",
+    trigger: "TRADE_CONFIRMED",
+    side: "BUY",
+    quantity: 2,
+    price: 105020,
+    announcedAt: new Date("2026-09-08T11:02:00Z"),
+  });
+  const lines = alert.split("\n");
+  assert.equal(lines.length, 2);
+  assert.match(lines[0]!, /سناتور/);
+  assert.match(lines[0]!, /خرید/);
+  assert.match(lines[0]!, /۲.*واحد/);
+  assert.match(lines[0]!, /۱۰۵٬۰۲۰/);
+  assert.match(lines[1]!, /معامله قطعی/);
+  assert.match(lines[1]!, /۱۴:۳۲/);
+  // Ensure no cluttered labels
+  assert.doesNotMatch(alert, /رویداد:|جهت:|حجم:|قیمت:|زمان:/);
 });

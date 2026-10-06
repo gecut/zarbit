@@ -46,12 +46,15 @@ export const requestResolutionStateSchema = z.enum([
   "NOT_APPLICABLE",
   "UNRESOLVED",
 ]);
+export const requestPriceModeSchema = z.enum(["TARGET_PRICE", "LAST_TRADE"]);
+export type RequestPriceMode = z.infer<typeof requestPriceModeSchema>;
 const baseRequestFields = z
   .object({
     condition: requestConditionSchema,
     action: requestActionSchema,
     targetPrice: requestInteger,
     units: requestInteger.nullable(),
+    priceMode: requestPriceModeSchema.default("TARGET_PRICE"),
   })
   .strict();
 
@@ -78,8 +81,8 @@ export const createRequestInputSchema = baseRequestFields
     },
   );
 
-export type CreateRequestInput = z.infer<typeof createRequestInputSchema>;
-export type UpdateRequestInput = z.infer<typeof updateRequestInputSchema>;
+export type CreateRequestInput = z.input<typeof createRequestInputSchema>;
+export type UpdateRequestInput = z.input<typeof updateRequestInputSchema>;
 export const requestSchema = baseRequestFields.extend({
   id: z.string(),
   status: requestStatusSchema,

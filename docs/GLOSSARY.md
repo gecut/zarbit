@@ -102,6 +102,10 @@ _Avoid_: order status, workflow, وضعیت سفارش
 An explicit user command that bypasses automatic trade threshold matching and immediately claims and dispatches the formatted order command to the Telegram group.
 _Avoid_: market order, instant execution, خرید فوری
 
+**Submission Price Mode (حالت مظنه ارسالی)**:
+The pricing determination mode for outbound group orders: `TARGET_PRICE` (مظنه تعیین‌شده: orders dispatch at the participant's configured target threshold) or `LAST_TRADE` (مظنه آخرین معامله: orders dispatch at the compact price of the trade receipt that triggered the condition).
+_Avoid_: slippage mode, execution type, نوع قیمت
+
 **Telegram Session (سشن تلگرام)**:
 An isolated MTProto client instance authenticated under a verified user's Telegram credentials, stored in SQLite on the worker volume, and governed by an OS file lock.
 _Avoid_: bot token, web session, نشست وب

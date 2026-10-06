@@ -130,14 +130,22 @@ export function createSettlementStore(db: PrismaClient) {
                     : "CONFLICTING_RECEIPT",
               },
             });
-            await tx.groupIngestionState.upsert({
+            const state = await tx.groupIngestionState.findUnique({
               where: { chatId },
-              create: { chatId, gateStatus: "REVIEW_REQUIRED" },
-              update: {
-                gateStatus: "REVIEW_REQUIRED",
-                analyticsRevision: { increment: 1 },
-              },
             });
+            if (
+              !state ||
+              input.sourceMessageId > state.appliedThroughMessageId
+            ) {
+              await tx.groupIngestionState.upsert({
+                where: { chatId },
+                create: { chatId, gateStatus: "REVIEW_REQUIRED" },
+                update: {
+                  gateStatus: "REVIEW_REQUIRED",
+                  analyticsRevision: { increment: 1 },
+                },
+              });
+            }
           }
         }
       }),
@@ -255,13 +263,19 @@ export function createSettlementStore(db: PrismaClient) {
         ) {
           return false;
         }
+        const after = current?.appliedThroughMessageId ?? 0;
         const [flagged, pending] = await Promise.all([
           tx.financialInbox.count({
-            where: { chatId, errorCode: { not: null } },
+            where: {
+              chatId,
+              sourceMessageId: { gt: after },
+              errorCode: { not: null },
+            },
           }),
           tx.settlement.count({
             where: {
               chatId,
+              sourceMessageId: { gt: after },
               OR: [
                 { status: { not: "APPLIED" } },
                 { reviewReason: { not: null } },

@@ -51,6 +51,16 @@ export const conditionOptions = [
   { value: "GTE", label: conditionLabels.GTE, Icon: CourseUpIcon },
 ] as const;
 
+export const priceModeLabels = {
+  TARGET_PRICE: "مظنه تعیین‌شده",
+  LAST_TRADE: "مظنه آخرین معامله",
+} as const;
+
+export const priceModeDescriptions = {
+  TARGET_PRICE: "ارسال با قیمت هدف تعیین‌شده شما",
+  LAST_TRADE: "ارسال با مظنه معامله‌ای که شرط را فعال کرد",
+} as const;
+
 export function userMessage(error: unknown): string {
   return error instanceof Error
     ? error.message

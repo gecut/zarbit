@@ -29,6 +29,7 @@ const requests: RequestDetail[] = (["BUY", "SELL"] as const).map(
     condition: i === 0 ? "LTE" : "GTE",
     targetPrice: 105030,
     units: 2,
+    priceMode: "TARGET_PRICE" as const,
     status: "ACTIVE",
     executing: false,
     triggeredPrice: null,

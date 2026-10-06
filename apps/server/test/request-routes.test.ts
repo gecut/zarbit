@@ -26,6 +26,7 @@ const baseRow = {
   action: "ALERT" as const,
   targetPrice: 96_000,
   units: null,
+  priceMode: "TARGET_PRICE" as const,
   status: "ACTIVE" as const,
   claimToken: null,
   armedAt: new Date(0),

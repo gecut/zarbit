@@ -788,14 +788,14 @@ if (!isDbTest) {
     assert.equal(rows.length, 3);
   });
 
-  test("trade freshness includes exactly 60 seconds and rejects older or future receipts", async () => {
+  test("trade freshness includes exactly five minutes and rejects older or future receipts", async () => {
     await store.initializeTradeRequests(-1001);
     const row = await tradeRequest();
-    advance(120000);
+    advance(360000);
     for (const [id, age, expected] of [
-      [1, 60001, 0],
+      [1, 300001, 0],
       [2, -1, 0],
-      [3, 60000, 1],
+      [3, 300000, 1],
     ] as const) {
       await receipt(id, 100000, new Date(currentTime.getTime() - age));
       await store.claimTradeRequests(-1001);

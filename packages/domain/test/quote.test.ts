@@ -42,15 +42,15 @@ test("parses context commands and rejects malformed variants", () => {
   assert.equal(parseContextCommand("سلام\nب").status, "unsupported");
 });
 
-test("trade freshness rejects future dates and expires strictly after sixty seconds", async () => {
+test("trade freshness rejects future dates and expires strictly after five minutes", async () => {
   const { isFreshTrade } = await import("../src/index");
   const now = new Date("2026-09-15T12:00:00Z");
   for (const [age, expected] of [
     [-1, false],
     [0, true],
-    [59999, true],
-    [60000, true],
-    [60001, false],
+    [299999, true],
+    [300000, true],
+    [300001, false],
   ] as const) {
     assert.equal(isFreshTrade(new Date(now.getTime() - age), now), expected);
   }

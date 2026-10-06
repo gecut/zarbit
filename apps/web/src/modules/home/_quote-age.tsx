@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TRADE_MAX_AGE_MS } from "@zarbit/domain";
 import { formatRelativeDateTime } from "@zarbit/format";
 
 interface QuoteAgeProps {
@@ -12,7 +13,8 @@ export function QuoteAge({ announcedAt, asOf }: QuoteAgeProps) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const stale = announcedAt != null && now - Date.parse(announcedAt) > 60_000;
+  const stale =
+    announcedAt != null && now - Date.parse(announcedAt) > TRADE_MAX_AGE_MS;
   return (
     <div className="text-muted grid gap-1 text-xs">
       <span>

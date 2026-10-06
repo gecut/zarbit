@@ -94,6 +94,9 @@ export function RequestsPage({
     ? externalCreateOpen
     : internalCreateOpen;
   const setCreateOpen = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setSelectedRequest(null);
+    }
     if (isCreateOpenControlled) {
       externalOnOpenCreateChange?.(nextOpen);
     } else {
@@ -103,6 +106,10 @@ export function RequestsPage({
   const [selectedRequest, setSelectedRequest] = useState<RequestDetail | null>(
     null,
   );
+  const handleSelectRequest = (row: RequestDetail) => {
+    setCreateOpen(false);
+    setSelectedRequest(row);
+  };
   const [activeFilter, setActiveFilter] = useState<FilterAction>("ALL");
 
   const filteredRows = useMemo(() => {
@@ -181,6 +188,7 @@ export function RequestsPage({
         )}
 
         <RequestFormDrawer
+          currentTradePrice={currentTradePrice}
           initialAction={initialAction}
           onDone={async () => {
             setCreateOpen(false);
@@ -217,7 +225,7 @@ export function RequestsPage({
             {filteredRows.map((row) => (
               <RequestCard
                 key={row.id}
-                onDetails={() => setSelectedRequest(row)}
+                onDetails={() => handleSelectRequest(row)}
                 row={row}
                 currentTradePrice={currentTradePrice}
                 compact={!history}
@@ -263,8 +271,8 @@ export function RequestsPage({
             setSelectedRequest(null);
             if (requestId) onCloseLinkedRequest?.();
           }}
-          request={requestId ? null : selectedRequest}
-          requestId={requestId}
+          request={createOpen || requestId ? null : selectedRequest}
+          requestId={createOpen ? undefined : requestId}
         />
       </div>
     </section>

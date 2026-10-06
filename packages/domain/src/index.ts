@@ -60,7 +60,7 @@ export function matchesRequest(
   return condition === "GTE" ? quote >= targetPrice : quote <= targetPrice;
 }
 
-export const TRADE_MAX_AGE_MS = 60_000;
+export const TRADE_MAX_AGE_MS = 5 * 60_000;
 
 export function isFreshTrade(announcedAt: Date, receivedAt: Date): boolean {
   const age = receivedAt.getTime() - announcedAt.getTime();
@@ -69,7 +69,7 @@ export function isFreshTrade(announcedAt: Date, receivedAt: Date): boolean {
 
 export function isFreshQuote(announcedAt: Date, receivedAt: Date): boolean {
   const age = receivedAt.getTime() - announcedAt.getTime();
-  return age >= 0 && age <= 60_000;
+  return age >= 0 && age <= TRADE_MAX_AGE_MS;
 }
 
 export function formatGroupMessage(

@@ -7,7 +7,9 @@ export class ReadCapacity {
 
   constructor(
     private readonly limit = 3,
-    private readonly timeoutMs = 3000,
+    private readonly timeoutMs = process.env.NODE_ENV === "development"
+      ? 15_000
+      : 3000,
   ) {}
 
   get activeCount(): number {

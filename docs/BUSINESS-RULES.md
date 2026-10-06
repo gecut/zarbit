@@ -68,7 +68,9 @@ tabs: older web bundles still multiply monetary P&L by 100.
 
 ## Automatic request trigger
 
-Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 60-second freshness limit, and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses `targetPrice` by default (`priceMode: TARGET_PRICE`), or `triggeredPrice` if configured to execute at the triggering trade price (`priceMode: LAST_TRADE`). SENDING with an uncertain outcome must never be automatically retried.
+Only a confirmed `NORMAL` Trade can trigger a request. Canonical QuoteHistory remains authoritative for official-price display and shorthand parsing, but never triggers automatic requests. Requests use inclusive GTE/LTE comparisons, a 5-minute freshness limit (۵ دقیقه / ۳۰۰ ثانیه), and creation/edit fences. Before SENDING, the latest committed `NORMAL` trade must still qualify; otherwise the request returns to WAITING_TRADE. Sending uses `targetPrice` by default (`priceMode: TARGET_PRICE`), or `triggeredPrice` if configured to execute at the triggering trade price (`priceMode: LAST_TRADE`). SENDING with an uncertain outcome must never be automatically retried.
+
+When an unsettled trade receipt is deleted in Telegram, the trade is automatically treated as rescinded/void (معامله فسخ‌شده); its `Trade` and `FinancialInbox` entries are removed without locking the group gate (`gateStatus` remains `OPEN`). Deleted receipts belonging to previously applied settlements continue to require manual financial review (`REVIEW_REQUIRED`).
 
 ## Trader rules (Follow & Alert)
 

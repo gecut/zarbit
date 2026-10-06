@@ -1,15 +1,7 @@
-import { isFreshTrade } from "@zarbit/domain";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIdentity } from "../../shared/auth/auth";
 import { useRequestActions } from "./_use-request-actions";
-import {
-  AlertDialog,
-  Button,
-  cn,
-  Form,
-  Label,
-  NumberField,
-} from "@heroui/react";
+import { AlertDialog, Button, cn, Form } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
 import { AddCircleIcon } from "@solar-icons/react/linear/add-circle";
 import {
@@ -31,26 +23,36 @@ import {
   getOrCreateCreationIntent,
   loadCreationIntent,
 } from "./_request-creation-intent";
-
-const compactPriceFormatOptions = {
-  style: "decimal",
-  useGrouping: true,
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-} satisfies Intl.NumberFormatOptions;
+import { RequestPreviewCard } from "./_request-preview-card";
 
 const emptyTargetPrice = Number.NaN;
+
+const conditionDescriptions: Record<
+  CreateRequestInput["condition"],
+  { title: string; desc: string }
+> = {
+  LTE: {
+    title: "مظنه کمتر یا مساوی (≤)",
+    desc: "اجرا هنگام رسیدن یا افت قیمت بازار به کمتر از قیمت هدف",
+  },
+  GTE: {
+    title: "مظنه بیشتر یا مساوی (≥)",
+    desc: "اجرا هنگام رسیدن یا رشد قیمت بازار به بیشتر از قیمت هدف",
+  },
+};
 
 export function RequestFormDrawer({
   open,
   onOpenChange,
   onDone,
   initialAction = "ALERT",
+  currentTradePrice,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: () => Promise<void>;
   initialAction?: CreateRequestInput["action"];
+  currentTradePrice?: number;
 }) {
   const identity = useIdentity();
   const api = useApi(identity.telegramUserId);
@@ -70,19 +72,34 @@ export function RequestFormDrawer({
   const [error, setError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
   const submittingRef = useRef(false);
+  const forceClosingRef = useRef(false);
+  const wasOpenRef = useRef(false);
   const initialPriceRef = useRef(emptyTargetPrice);
   const priceEditedRef = useRef(false);
   const quoteRequestRef = useRef(0);
 
   const isDirty =
-    action !== initialAction ||
-    condition !== defaultCondition ||
-    priceMode !== "TARGET_PRICE" ||
-    !Object.is(price, initialPriceRef.current) ||
-    units > 0;
+    !forceClosingRef.current &&
+    (action !== initialAction ||
+      condition !== defaultCondition ||
+      priceMode !== "TARGET_PRICE" ||
+      (Number.isFinite(price) &&
+        Number.isFinite(initialPriceRef.current) &&
+        price !== initialPriceRef.current) ||
+      units !== 1);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    // If the drawer was already open, do not re-initialize on background prop changes
+    if (wasOpenRef.current) {
+      return;
+    }
+    wasOpenRef.current = true;
+    forceClosingRef.current = false;
 
     const saved = loadCreationIntent(identity.telegramUserId);
     if (saved) {
@@ -100,11 +117,20 @@ export function RequestFormDrawer({
     setAction(initialAction);
     setCondition(initialAction === "SELL" ? "GTE" : "LTE");
     setPriceMode("TARGET_PRICE");
+    setUnits(1);
     const requestId = ++quoteRequestRef.current;
     priceEditedRef.current = false;
-    initialPriceRef.current = emptyTargetPrice;
-    setPrice(emptyTargetPrice);
     setError(null);
+
+    const fallbackPrice =
+      typeof currentTradePrice === "number" &&
+      Number.isSafeInteger(currentTradePrice) &&
+      currentTradePrice > 0
+        ? currentTradePrice
+        : emptyTargetPrice;
+
+    initialPriceRef.current = fallbackPrice;
+    setPrice(fallbackPrice);
 
     void queryClient
       .fetchQuery(api.market.snapshot.queryOptions())
@@ -112,46 +138,56 @@ export function RequestFormDrawer({
         if (requestId !== quoteRequestRef.current || priceEditedRef.current)
           return;
 
-        const latestPrice =
-          dashboard.trade &&
-          isFreshTrade(new Date(dashboard.trade.announcedAt), new Date())
-            ? dashboard.trade.compactPrice
-            : undefined;
+        const latestPrice = dashboard.trade?.compactPrice;
         const nextPrice =
           typeof latestPrice === "number" &&
           Number.isSafeInteger(latestPrice) &&
           latestPrice > 0
             ? latestPrice
-            : emptyTargetPrice;
-        initialPriceRef.current = nextPrice;
-        setPrice(nextPrice);
+            : fallbackPrice;
+
+        if (Number.isFinite(nextPrice) && nextPrice > 0) {
+          initialPriceRef.current = nextPrice;
+          setPrice(nextPrice);
+        }
       })
       .catch(() => {
         if (requestId !== quoteRequestRef.current || priceEditedRef.current)
           return;
-
-        initialPriceRef.current = emptyTargetPrice;
-        setPrice(emptyTargetPrice);
+        initialPriceRef.current = fallbackPrice;
+        setPrice(fallbackPrice);
       });
 
     return () => {
       quoteRequestRef.current += 1;
     };
-  }, [api, identity.telegramUserId, initialAction, open, queryClient]);
+  }, [
+    api,
+    currentTradePrice,
+    identity.telegramUserId,
+    initialAction,
+    open,
+    queryClient,
+  ]);
 
   const reset = () => {
     clearCreationIntent(identity.telegramUserId);
     setAction(initialAction);
     setCondition(initialAction === "SELL" ? "GTE" : "LTE");
     setPriceMode("TARGET_PRICE");
-    initialPriceRef.current = emptyTargetPrice;
+    const defaultP =
+      typeof currentTradePrice === "number" && currentTradePrice > 0
+        ? currentTradePrice
+        : emptyTargetPrice;
+    initialPriceRef.current = defaultP;
     priceEditedRef.current = false;
-    setPrice(emptyTargetPrice);
-    setUnits(0);
+    setPrice(defaultP);
+    setUnits(1);
     setError(null);
   };
 
   const close = () => {
+    forceClosingRef.current = true;
     reset();
     onOpenChange(false);
   };
@@ -165,6 +201,13 @@ export function RequestFormDrawer({
     close();
   };
 
+  const handleDiscard = () => {
+    forceClosingRef.current = true;
+    setDiscardOpen(false);
+    reset();
+    onOpenChange(false);
+  };
+
   const adjustPrice = (delta: number) => {
     priceEditedRef.current = true;
     setPrice((prev) => {
@@ -173,7 +216,9 @@ export function RequestFormDrawer({
           ? prev
           : initialPriceRef.current > 0
             ? initialPriceRef.current
-            : 100_000;
+            : typeof currentTradePrice === "number" && currentTradePrice > 0
+              ? currentTradePrice
+              : 100_000;
       return Math.max(10, Math.round(base + delta));
     });
   };
@@ -218,6 +263,7 @@ export function RequestFormDrawer({
         priceMode: intent.priceMode,
         creationKey: intent.creationKey,
       });
+      forceClosingRef.current = true;
       clearCreationIntent(identity.telegramUserId);
       reset();
       try {
@@ -240,12 +286,15 @@ export function RequestFormDrawer({
     <>
       <DrawerSheet
         onOpenChange={(nextOpen, details) => {
-          if (!nextOpen && (pending || isDirty)) {
+          if (!nextOpen && !forceClosingRef.current && (pending || isDirty)) {
             details.cancel();
             if (!pending) setDiscardOpen(true);
             return;
           }
-          if (!nextOpen) reset();
+          if (!nextOpen) {
+            forceClosingRef.current = false;
+            reset();
+          }
           onOpenChange(nextOpen);
         }}
         open={open}
@@ -253,13 +302,14 @@ export function RequestFormDrawer({
         title="ثبت درخواست جدید"
         description="با معاملهٔ تأییدشدهٔ بعدی، شرط بررسی و سفارش با قیمت هدف شما ارسال می‌شود."
         footer={
-          <div className="flex w-full gap-4">
+          <div className="flex w-full gap-3">
             <Button
               data-base-ui-swipe-ignore
               form="create-request-form"
               isPending={pending}
               type="submit"
-              fullWidth
+              className="flex-1 grow"
+              variant="primary"
             >
               ذخیره درخواست
             </Button>
@@ -267,6 +317,7 @@ export function RequestFormDrawer({
               data-base-ui-swipe-ignore
               isDisabled={pending}
               onPress={requestClose}
+              className="flex-1 grow"
               variant="secondary"
             >
               انصراف
@@ -275,7 +326,7 @@ export function RequestFormDrawer({
         }
       >
         <Form
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-5 py-1"
           id="create-request-form"
           onSubmit={submit}
         >
@@ -286,157 +337,256 @@ export function RequestFormDrawer({
               pending && "pointer-events-none opacity-70",
             )}
           >
-            <h3 className="text-sm font-medium">نوع درخواست</h3>
+            <h3 className="text-foreground text-xs font-semibold">
+              نوع درخواست
+            </h3>
 
-            <div className="flex gap-4">
+            <div className="flex w-full gap-2">
               {(
                 Object.keys(actionLabels) as CreateRequestInput["action"][]
               ).map((value) => {
                 const Icon = actionIcons[value];
                 const label = actionLabels[value];
+                const isSelected = action === value;
 
                 return (
                   <Button
                     data-base-ui-swipe-ignore
                     key={value}
-                    aria-pressed={action === value}
+                    aria-pressed={isSelected}
                     onPress={() => {
                       setAction(value);
                       if (value === "BUY") setCondition("LTE");
                       else if (value === "SELL") setCondition("GTE");
                     }}
-                    className="flex h-auto flex-1 flex-col gap-1 py-2 text-sm"
+                    className={cn(
+                      "flex h-auto flex-1 grow flex-col gap-1 py-2.5 text-xs font-semibold transition-all",
+                      isSelected &&
+                        value === "BUY" &&
+                        "border-success bg-success/15 text-success",
+                      isSelected &&
+                        value === "SELL" &&
+                        "border-danger bg-danger/15 text-danger",
+                      isSelected &&
+                        value === "ALERT" &&
+                        "border-warning bg-warning/15 text-warning",
+                    )}
                     type="button"
-                    variant={action === value ? "primary" : "secondary"}
+                    variant={isSelected ? "primary" : "secondary"}
                   >
-                    <Icon className="size-6" />
-
-                    {label}
+                    <Icon className="size-5" />
+                    <span>{label}</span>
                   </Button>
                 );
               })}
             </div>
           </div>
 
-          {/* Condition selection */}
+          {/* Condition selection: 1 button per row with short title and compact description */}
           <div
             className={cn(
               "flex flex-col gap-2",
               pending && "pointer-events-none opacity-70",
             )}
           >
-            <h3 className="text-sm font-medium">شرط اجرا</h3>
+            <h3 className="text-foreground text-xs font-semibold">شرط اجرا</h3>
 
-            <div className="flex flex-col gap-4">
-              {conditionOptions.map((option) => (
-                <Button
-                  data-base-ui-swipe-ignore
-                  key={option.value}
-                  onPress={() => setCondition(option.value)}
-                  type="button"
-                  className="flex h-auto w-full gap-4 py-2 text-sm"
-                  variant={condition === option.value ? "primary" : "secondary"}
-                >
-                  <option.Icon className="size-6" />
+            <div className="flex flex-col gap-2">
+              {conditionOptions.map((option) => {
+                const isSelected = condition === option.value;
+                const details = conditionDescriptions[option.value];
+                const Icon = option.Icon;
 
-                  {option.label}
-                </Button>
-              ))}
+                return (
+                  <Button
+                    data-base-ui-swipe-ignore
+                    key={option.value}
+                    onPress={() => setCondition(option.value)}
+                    type="button"
+                    className={cn(
+                      "flex h-auto w-full items-center justify-between gap-3 rounded-2xl p-3 text-start transition-all",
+                      isSelected
+                        ? "border-accent bg-accent/12 text-foreground shadow-xs border"
+                        : "border-border bg-surface-secondary/50 text-muted hover:text-foreground border",
+                    )}
+                    variant={isSelected ? "primary" : "secondary"}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          "grid size-9 shrink-0 place-items-center rounded-xl",
+                          isSelected
+                            ? "bg-accent/20 text-accent"
+                            : "bg-surface-tertiary text-muted",
+                        )}
+                      >
+                        <Icon className="size-5" />
+                      </span>
+
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-foreground text-xs font-bold">
+                          {details.title}
+                        </span>
+                        <span className="text-muted text-[11px] leading-relaxed">
+                          {details.desc}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      className={cn(
+                        "size-4 shrink-0 rounded-full border-2 transition-all",
+                        isSelected
+                          ? "border-accent bg-accent ring-accent/30 ring-2"
+                          : "border-muted/40 bg-transparent",
+                      )}
+                    />
+                  </Button>
+                );
+              })}
             </div>
           </div>
 
           {/* Target Price input and quick increment/decrement buttons */}
           <div className="flex flex-col gap-2">
-            <NumberField
-              formatOptions={compactPriceFormatOptions}
-              name="targetPrice"
-              variant="secondary"
-              step={10}
-              value={price}
-              className="h-auto"
-              onChange={(value) => {
-                priceEditedRef.current = true;
-                setPrice(value);
-              }}
-            >
-              <Label>قیمت هدف (هزار تومان)</Label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="target-price-input"
+                className="text-foreground text-xs font-semibold"
+              >
+                قیمت هدف (هزار تومان)
+              </label>
+              {Number.isFinite(price) && price > 0 && (
+                <span className="text-muted text-[11px] tabular-nums">
+                  معادل {formatNumber(price * 1000)} تومان
+                </span>
+              )}
+            </div>
 
-              <NumberField.Group className="ring-0! flex h-12">
-                <NumberField.IncrementButton className="w-12 rounded-e-none rounded-s-2xl border-e border-s-0" />
-                <NumberField.Input
-                  data-base-ui-swipe-ignore
-                  className="flex-1 text-center"
-                />
-                <NumberField.DecrementButton className="w-12 rounded-e-2xl rounded-s-none border-e-0 border-s" />
-              </NumberField.Group>
-            </NumberField>
+            {/* Custom Stepper Input Group */}
+            <div className="border-border bg-surface-secondary/50 focus-within:border-accent relative flex h-12 w-full items-stretch rounded-2xl border transition-colors">
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                aria-label="افزایش ۱۰ هزار تومان"
+                onClick={() => adjustPrice(10)}
+                className="text-muted hover:text-foreground active:bg-surface-secondary border-border flex w-12 shrink-0 select-none items-center justify-center rounded-s-2xl border-e text-lg font-bold transition-colors"
+              >
+                +
+              </button>
 
-            {/* Quick ±50, ±100, ±500 adjustment chips */}
-            <div className="flex flex-col gap-1.5 pt-1">
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(50)}
-                >
-                  +۵۰
-                </Button>
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(100)}
-                >
-                  +۱۰۰
-                </Button>
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-success/30 bg-success/10 text-success hover:bg-success/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(500)}
-                >
-                  +۵۰۰
-                </Button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(-50)}
-                >
-                  -۵۰
-                </Button>
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(-100)}
-                >
-                  -۱۰۰
-                </Button>
-                <Button
-                  data-base-ui-swipe-ignore
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 h-8 rounded-xl border text-xs font-bold transition-colors"
-                  onPress={() => adjustPrice(-500)}
-                >
-                  -۵۰۰
-                </Button>
-              </div>
+              <input
+                data-base-ui-swipe-ignore
+                id="target-price-input"
+                type="text"
+                inputMode="numeric"
+                value={
+                  Number.isFinite(price)
+                    ? price === 0
+                      ? ""
+                      : formatNumber(price)
+                    : ""
+                }
+                onChange={(e) => {
+                  priceEditedRef.current = true;
+                  const raw = e.target.value.replace(/[^0-9]/g, "");
+                  if (!raw) {
+                    setPrice(emptyTargetPrice);
+                    return;
+                  }
+                  const val = Number.parseInt(raw, 10);
+                  setPrice(Number.isSafeInteger(val) ? val : emptyTargetPrice);
+                }}
+                placeholder="مثلاً: ۲۴,۱۵۰"
+                className="text-foreground min-w-0 flex-1 bg-transparent px-3 text-center text-base font-bold tabular-nums tracking-wide outline-none"
+              />
+
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                aria-label="کاهش ۱۰ هزار تومان"
+                onClick={() => adjustPrice(-10)}
+                className="text-muted hover:text-foreground active:bg-surface-secondary border-border flex w-12 shrink-0 select-none items-center justify-center rounded-e-2xl border-s text-lg font-bold transition-colors"
+              >
+                −
+              </button>
+            </div>
+
+            {/* Quick Delta Chips: [۵۰۰-] [۱۰۰-] [۵۰-] [مظنه بازار] [۵۰+] [۱۰۰+] [۵۰۰+] */}
+            <div className="flex w-full items-center gap-1 pt-0.5">
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(-500)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۵۰۰-</bdi>
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(-100)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۱۰۰-</bdi>
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(-50)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۵۰-</bdi>
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                disabled={
+                  (currentTradePrice == null || currentTradePrice <= 0) &&
+                  (initialPriceRef.current == null ||
+                    initialPriceRef.current <= 0)
+                }
+                onClick={() => {
+                  const marketP =
+                    currentTradePrice && currentTradePrice > 0
+                      ? currentTradePrice
+                      : initialPriceRef.current > 0
+                        ? initialPriceRef.current
+                        : undefined;
+                  if (marketP) {
+                    priceEditedRef.current = true;
+                    setPrice(marketP);
+                  }
+                }}
+                className="border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 flex h-8 flex-1 grow select-none items-center justify-center whitespace-nowrap rounded-xl border px-1 text-[11px] font-bold transition-all active:scale-95 disabled:opacity-40"
+                title="تنظیم مجدد قیمت به آخرین معامله بازار"
+              >
+                مظنه بازار
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(50)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۵۰+</bdi>
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(100)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۱۰۰+</bdi>
+              </button>
+              <button
+                data-base-ui-swipe-ignore
+                type="button"
+                onClick={() => adjustPrice(500)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+              >
+                <bdi dir="rtl">۵۰۰+</bdi>
+              </button>
             </div>
           </div>
 
@@ -448,20 +598,22 @@ export function RequestFormDrawer({
                 pending && "pointer-events-none opacity-70",
               )}
             >
-              <h3 className="text-sm font-medium">مظنه ارسالی به گروه</h3>
-              <div className="grid grid-cols-2 gap-2">
+              <h3 className="text-foreground text-xs font-semibold">
+                مظنه ارسالی به گروه
+              </h3>
+              <div className="flex w-full gap-2">
                 <Button
                   data-base-ui-swipe-ignore
                   type="button"
                   onPress={() => setPriceMode("TARGET_PRICE")}
-                  className="flex h-auto flex-col items-start gap-1 p-3 text-start"
+                  className="flex h-auto flex-1 grow flex-col items-start gap-1 p-2.5 text-start"
                   variant={
                     priceMode === "TARGET_PRICE" ? "primary" : "secondary"
                   }
                 >
                   <span className="text-xs font-bold">مظنه تعیین‌شده</span>
                   <span className="text-[11px] opacity-80">
-                    ارسال با قیمت هدف شما (
+                    ارسال با قیمت هدف (
                     {Number.isFinite(price) && price > 0
                       ? formatNumber(price)
                       : "—"}
@@ -473,7 +625,7 @@ export function RequestFormDrawer({
                   data-base-ui-swipe-ignore
                   type="button"
                   onPress={() => setPriceMode("LAST_TRADE")}
-                  className="flex h-auto flex-col items-start gap-1 p-3 text-start"
+                  className="flex h-auto flex-1 grow flex-col items-start gap-1 p-2.5 text-start"
                   variant={priceMode === "LAST_TRADE" ? "primary" : "secondary"}
                 >
                   <span className="text-xs font-bold">مظنه آخرین معامله</span>
@@ -485,30 +637,81 @@ export function RequestFormDrawer({
             </div>
           )}
 
-          {/* Units input */}
-          <NumberField
-            name="units"
-            variant="secondary"
-            minValue={1}
-            value={units}
-            className={cn(
-              "h-auto overflow-hidden",
-              "transition-[max-height,opacity] delay-150 duration-300",
-              action === "ALERT" ? "max-h-0 opacity-0" : "max-h-18 opacity-100",
-            )}
-            onChange={(value) => setUnits(value)}
-          >
-            <Label>تعداد واحد</Label>
+          {/* Units input (for BUY / SELL) */}
+          {action !== "ALERT" && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="units-input"
+                  className="text-foreground text-xs font-semibold"
+                >
+                  تعداد واحد طلا
+                </label>
+                <span className="text-muted text-[11px] tabular-nums">
+                  حجم کل: {formatNumber(units)} واحد
+                </span>
+              </div>
 
-            <NumberField.Group className="ring-0! flex h-12 shrink-0">
-              <NumberField.IncrementButton className="w-12 rounded-e-none rounded-s-2xl border-e border-s-0" />
-              <NumberField.Input
-                data-base-ui-swipe-ignore
-                className="flex-1 text-center"
-              />
-              <NumberField.DecrementButton className="w-12 rounded-e-2xl rounded-s-none border-e-0 border-s" />
-            </NumberField.Group>
-          </NumberField>
+              <div className="border-border bg-surface-secondary/50 focus-within:border-accent relative flex h-12 w-full items-stretch rounded-2xl border transition-colors">
+                <button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  aria-label="افزایش یک واحد"
+                  onClick={() => setUnits((u) => u + 1)}
+                  className="text-muted hover:text-foreground active:bg-surface-secondary border-border flex w-14 shrink-0 select-none items-center justify-center rounded-s-2xl border-e text-lg font-bold transition-colors"
+                >
+                  +
+                </button>
+
+                <input
+                  data-base-ui-swipe-ignore
+                  id="units-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={units === 0 ? "" : formatNumber(units)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, "");
+                    if (!raw) {
+                      setUnits(0);
+                      return;
+                    }
+                    const val = Number.parseInt(raw, 10);
+                    if (Number.isSafeInteger(val)) {
+                      setUnits(val);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (units < 1) {
+                      setUnits(1);
+                    }
+                  }}
+                  className="text-foreground min-w-0 flex-1 bg-transparent px-3 text-center text-base font-bold tabular-nums outline-none"
+                />
+
+                <button
+                  data-base-ui-swipe-ignore
+                  type="button"
+                  aria-label="کاهش یک واحد"
+                  disabled={units <= 1}
+                  onClick={() => setUnits((u) => Math.max(1, u - 1))}
+                  className="text-muted hover:text-foreground active:bg-surface-secondary border-border flex w-14 shrink-0 select-none items-center justify-center rounded-e-2xl border-s text-lg font-bold transition-colors disabled:opacity-30"
+                >
+                  −
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Live Request Preview */}
+          <RequestPreviewCard
+            action={action}
+            condition={condition}
+            targetPrice={price}
+            units={action === "ALERT" ? null : units}
+            priceMode={priceMode}
+            currentTradePrice={currentTradePrice}
+          />
 
           {error ? (
             <p className="border-danger bg-danger-soft text-danger-soft-foreground rounded-xl border px-3 py-2 text-sm">
@@ -533,15 +736,14 @@ export function RequestFormDrawer({
               <AlertDialog.Footer>
                 <Button
                   onPress={() => setDiscardOpen(false)}
+                  className="flex-1 grow"
                   variant="secondary"
                 >
                   بازگشت
                 </Button>
                 <Button
-                  onPress={() => {
-                    setDiscardOpen(false);
-                    close();
-                  }}
+                  onPress={handleDiscard}
+                  className="flex-1 grow"
                   variant="danger"
                 >
                   دور ریختن

@@ -116,36 +116,109 @@ export function createSettlementStore(db: PrismaClient) {
             },
           });
           if (trade) {
-            await tx.financialInbox.updateMany({
+            if (input.eventKind === "DELETE") {
+              const state = await tx.groupIngestionState.findUnique({
+                where: { chatId },
+              });
+              const isSettled =
+                trade.settlementMessageId !== null ||
+                (state !== null &&
+                  input.sourceMessageId <= state.appliedThroughMessageId);
+
+              if (isSettled) {
+                await tx.financialInbox.updateMany({
+                  where: {
+                    chatId,
+                    sourceMessageId: input.sourceMessageId,
+                    eventKind: input.eventKind,
+                    payloadHash: input.payloadHash,
+                  },
+                  data: {
+                    errorCode: "DELETED_RECEIPT",
+                  },
+                });
+                await tx.groupIngestionState.upsert({
+                  where: { chatId },
+                  create: { chatId, gateStatus: "REVIEW_REQUIRED" },
+                  update: {
+                    gateStatus: "REVIEW_REQUIRED",
+                    analyticsRevision: { increment: 1 },
+                  },
+                });
+              } else {
+                await tx.trade.deleteMany({
+                  where: {
+                    chatId,
+                    sourceMessageId: input.sourceMessageId,
+                  },
+                });
+                await tx.financialInbox.deleteMany({
+                  where: {
+                    chatId,
+                    sourceMessageId: input.sourceMessageId,
+                  },
+                });
+                await tx.tradingAction.updateMany({
+                  where: {
+                    chatId,
+                    confirmedByMessageId: input.sourceMessageId,
+                  },
+                  data: {
+                    confirmedByMessageId: null,
+                    status: "OBSERVED",
+                  },
+                });
+                await tx.groupIngestionState.upsert({
+                  where: { chatId },
+                  create: { chatId, gateStatus: "OPEN" },
+                  update: {
+                    analyticsRevision: { increment: 1 },
+                  },
+                });
+              }
+            } else {
+              await tx.financialInbox.updateMany({
+                where: {
+                  chatId,
+                  sourceMessageId: input.sourceMessageId,
+                  eventKind: input.eventKind,
+                  payloadHash: input.payloadHash,
+                },
+                data: {
+                  errorCode: "CONFLICTING_RECEIPT",
+                },
+              });
+              const state = await tx.groupIngestionState.findUnique({
+                where: { chatId },
+              });
+              if (
+                !state ||
+                input.sourceMessageId > state.appliedThroughMessageId
+              ) {
+                await tx.groupIngestionState.upsert({
+                  where: { chatId },
+                  create: { chatId, gateStatus: "REVIEW_REQUIRED" },
+                  update: {
+                    gateStatus: "REVIEW_REQUIRED",
+                    analyticsRevision: { increment: 1 },
+                  },
+                });
+              }
+            }
+          } else if (input.eventKind === "DELETE") {
+            await tx.financialInbox.deleteMany({
               where: {
                 chatId,
                 sourceMessageId: input.sourceMessageId,
-                eventKind: input.eventKind,
-                payloadHash: input.payloadHash,
-              },
-              data: {
-                errorCode:
-                  input.eventKind === "DELETE"
-                    ? "DELETED_RECEIPT"
-                    : "CONFLICTING_RECEIPT",
               },
             });
-            const state = await tx.groupIngestionState.findUnique({
+            await tx.groupIngestionState.upsert({
               where: { chatId },
+              create: { chatId, gateStatus: "OPEN" },
+              update: {
+                analyticsRevision: { increment: 1 },
+              },
             });
-            if (
-              !state ||
-              input.sourceMessageId > state.appliedThroughMessageId
-            ) {
-              await tx.groupIngestionState.upsert({
-                where: { chatId },
-                create: { chatId, gateStatus: "REVIEW_REQUIRED" },
-                update: {
-                  gateStatus: "REVIEW_REQUIRED",
-                  analyticsRevision: { increment: 1 },
-                },
-              });
-            }
           }
         }
       }),

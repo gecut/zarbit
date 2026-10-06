@@ -209,6 +209,50 @@ if (!isDbTest) {
     assert.equal(await prisma.trade.count(), 4);
   });
 
+  test("deleting an unsettled trade receipt rescinds trade and keeps gate open", async () => {
+    const chatId = -1001n;
+    const announcedAt = new Date("2026-09-07T12:00:00.000Z");
+    const sourceMessageId = 55;
+    const payloadHash = "e".repeat(64);
+
+    await store.observeFinancialMessage({
+      chatId,
+      sourceMessageId,
+      senderId: "55",
+      rawText: "normal receipt to be cancelled",
+      eventKind: "NEW",
+      payloadHash,
+    });
+    const recorded = await store.recordTrade({
+      chatId,
+      sourceMessageId,
+      buyerAlias: "buyer1",
+      sellerAlias: "seller1",
+      quantity: 2,
+      compactPrice: 100_000,
+      rawPrice: 100_000_000n,
+      announcedAt,
+    });
+    assert.equal(recorded?.tradeRecorded, true);
+    assert.equal(await store.normalTradeExists(chatId, sourceMessageId), true);
+
+    await store.observeFinancialMessage({
+      chatId,
+      sourceMessageId,
+      senderId: "55",
+      rawText: null,
+      eventKind: "DELETE",
+      payloadHash: "f".repeat(64),
+    });
+
+    assert.equal(await store.normalTradeExists(chatId, sourceMessageId), false);
+    assert.equal((await store.ingestionState(chatId))?.gateStatus, "OPEN");
+    const inboxRows = await prisma.financialInbox.count({
+      where: { chatId, sourceMessageId },
+    });
+    assert.equal(inboxRows, 0);
+  });
+
   test.beforeEach(async () => {
     currentTime = new Date("2026-09-07T12:00:00.000Z");
     await clean();

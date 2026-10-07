@@ -102,7 +102,7 @@ export function createMarketIngestion(
       }
 
       if (result.outcome === "conflict") {
-        workerLog.warn("telegram.participant_identity.conflict", {
+        workerLog.debug("telegram.participant_identity.conflict", {
           canonicalMessageId: canonical.messageId,
           chatId: canonical.chatId,
           participantAlias: canonical.order.participantAlias,

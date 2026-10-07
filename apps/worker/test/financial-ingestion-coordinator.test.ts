@@ -428,3 +428,56 @@ test("regular settlement is applied automatically when interval coverage is veri
   assert.equal(applied[0]?.review?.reviewedBy, "SYSTEM_AUTOMATION");
   assert.equal(applied[0]?.review?.coverageDigest, "digest:10:50");
 });
+
+test("recovery chunks large historical gaps into bounded intervals", async () => {
+  const historyCalls: Array<{ after: number; before: number }> = [];
+  const scannedMarks: number[] = [];
+  const store = {
+    beginFinancialRecovery: async () => {},
+    completeFinancialRecovery: async () => true,
+    pendingSettlements: async () => [],
+    appliedSettlements: async () => [],
+    unprocessedFinancialMessages: async () => [],
+    ingestionState: async () => ({
+      appliedThroughMessageId: 0,
+      scannedThroughMessageId: 100,
+    }),
+    markHistoryScanned: async (_group: number, mark: number) => {
+      scannedMarks.push(mark);
+    },
+  } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[0];
+
+  const coordinator = createFinancialIngestionCoordinator(
+    store,
+    {
+      latestMessageId: async () => 550,
+      history: async (after: number, before: number) => {
+        historyCalls.push({ after, before });
+        return [
+          {
+            chatId: -1001,
+            messageId: before - 1,
+            text: "msg",
+            date: new Date(),
+            senderId: "99",
+          },
+        ];
+      },
+    } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[1],
+    {
+      groupId: -1001,
+      quoteSenderId: "55",
+      settlementSenderId: "77",
+      settlementEnabled: true,
+    },
+    async () => undefined,
+  );
+
+  await coordinator.recover("session-a", 1);
+
+  assert.equal(historyCalls.length, 3);
+  assert.deepEqual(historyCalls[0], { after: 100, before: 301 });
+  assert.deepEqual(historyCalls[1], { after: 300, before: 501 });
+  assert.deepEqual(historyCalls[2], { after: 500, before: 551 });
+  assert.deepEqual(scannedMarks, [300, 500, 550]);
+});

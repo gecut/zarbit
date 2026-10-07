@@ -34,7 +34,7 @@ import {
 export function createOrpcRouter(
   deps: AppDependencies,
   runtime: MarketRuntime = createMarketRuntime(deps.store),
-  analyticsCapacity = new ReadCapacity(1, 3000),
+  analyticsCapacity = new ReadCapacity(4, 6000),
 ) {
   const metrics = new RpcMetrics((snapshot) =>
     serverLog.info({ event: "rpc.metrics", ...snapshot }, "rpc.metrics"),

@@ -393,10 +393,14 @@ export function createMarketDataStore(
             create: { id: input.participantId },
             update: {},
           });
+          const recentConflictWindowStart = new Date(
+            input.confirmedAt.getTime() - 24 * 60 * 60 * 1000,
+          );
           const participantWithSameTelegramId = await tx.participant.findFirst({
             where: {
               telegramUserId: input.senderId,
               id: { not: input.participantId },
+              updatedAt: { gte: recentConflictWindowStart },
             },
           });
           const participantActionWithDifferentSender =
@@ -405,6 +409,7 @@ export function createMarketDataStore(
                 participantId: input.participantId,
                 senderId: { not: input.senderId },
                 confirmedByMessageId: { not: null },
+                observedAt: { gte: recentConflictWindowStart },
               },
             });
           const differentParticipantActionWithSameSender =
@@ -413,6 +418,7 @@ export function createMarketDataStore(
                 participantId: { not: input.participantId },
                 senderId: input.senderId,
                 confirmedByMessageId: { not: null },
+                observedAt: { gte: recentConflictWindowStart },
               },
             });
           const participantWithSameTelegramEvidence =
@@ -425,7 +431,8 @@ export function createMarketDataStore(
                 });
           const hasAliasConflict =
             (participant.telegramUserId !== null &&
-              participant.telegramUserId !== input.senderId) ||
+              participant.telegramUserId !== input.senderId &&
+              participant.updatedAt >= recentConflictWindowStart) ||
             participantActionWithDifferentSender !== null;
           const conflictingParticipant =
             participantWithSameTelegramId ??
@@ -435,7 +442,6 @@ export function createMarketDataStore(
           if (
             hasAliasConflict ||
             hasTelegramConflict ||
-            participant.resolutionStatus === "CONFLICT" ||
             participant.resolutionStatus === "CONFLICT_FLAGGED"
           ) {
             await tx.tradingAction.updateMany({
@@ -494,7 +500,10 @@ export function createMarketDataStore(
             return { outcome: "duplicate" };
           }
 
-          const confirmationCount = participant.confirmationCount + 1;
+          const wasInConflict = participant.resolutionStatus === "CONFLICT";
+          const confirmationCount = wasInConflict
+            ? 1
+            : participant.confirmationCount + 1;
           const verified =
             confirmationCount >= participantIdentityConfirmationThreshold;
           await tx.participant.update({
@@ -524,6 +533,21 @@ export function createMarketDataStore(
         }
         throw error;
       }
+    },
+
+    purgeOldEphemeralTradingActions: async (
+      retentionDays = 30,
+    ): Promise<{ count: number }> => {
+      const cutoff = new Date(
+        _now().getTime() - retentionDays * 24 * 60 * 60 * 1000,
+      );
+      const result = await db.tradingAction.deleteMany({
+        where: {
+          status: { in: ["AMBIGUOUS", "UNRESOLVED_TARGET"] },
+          observedAt: { lt: cutoff },
+        },
+      });
+      return { count: result.count };
     },
   };
 }

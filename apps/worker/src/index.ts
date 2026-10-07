@@ -214,14 +214,29 @@ export async function startWorker() {
       syncing = false;
     }
   };
+  const pruneEphemeralActions = async () => {
+    try {
+      const result = await store.purgeOldEphemeralTradingActions(30);
+      if (result.count > 0) {
+        workerLog.info("trading_action.purge_completed", {
+          purgedCount: result.count,
+          retentionDays: 30,
+        });
+      }
+    } catch (error) {
+      workerLog.failure("trading_action.purge_failed", error);
+    }
+  };
   const pruneTimer = setInterval(() => {
     void store
       .pruneRequests()
       .catch((error: unknown) =>
         workerLog.failure("request.prune.failed", error),
       );
+    void pruneEphemeralActions();
   }, 3600_000);
   await store.pruneRequests();
+  await pruneEphemeralActions();
   const timer = setInterval(() => {
     void sync();
   }, 30_000);

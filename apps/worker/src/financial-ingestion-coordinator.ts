@@ -193,14 +193,28 @@ export function createFinancialIngestionCoordinator(
       if (head < after)
         throw new Error("Telegram history head precedes the durable cursor");
       if (head > after) {
-        const history = await sessions.history(after, head + 1);
-        if (!history.some((event) => event.messageId === head))
-          throw new Error("Telegram history snapshot head is unavailable");
-        for (const event of history) {
-          if (event.messageId > after && event.messageId <= head)
-            await process(userId, revision, event, true);
+        const CHUNK_SIZE = 200;
+        let currentAfter = after;
+        while (currentAfter < head) {
+          const chunkBefore = Math.min(currentAfter + CHUNK_SIZE + 1, head + 1);
+          const history = await sessions.history(currentAfter, chunkBefore);
+          if (
+            chunkBefore >= head + 1 &&
+            !history.some((event) => event.messageId === head)
+          ) {
+            throw new Error("Telegram history snapshot head is unavailable");
+          }
+          for (const event of history) {
+            if (event.messageId > currentAfter && event.messageId <= head) {
+              await process(userId, revision, event, true);
+            }
+          }
+          currentAfter = Math.min(currentAfter + CHUNK_SIZE, head);
+          await store.markHistoryScanned(config.groupId, currentAfter);
+          if (currentAfter < head) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
         }
-        await store.markHistoryScanned(config.groupId, head);
       }
       if (
         config.settlementBootstrapMessageId &&

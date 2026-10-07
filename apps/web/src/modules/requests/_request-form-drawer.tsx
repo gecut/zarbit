@@ -9,6 +9,7 @@ import {
   type RequestPriceMode,
 } from "@zarbit/contracts";
 import { formatNumber } from "@zarbit/format";
+import { toAsciiDigits } from "@zarbit/domain";
 
 import { useApi } from "../../shared/api/api-context";
 import { DrawerSheet } from "../../shared/ui/drawer";
@@ -329,6 +330,7 @@ export function RequestFormDrawer({
           className="flex flex-col gap-5 py-1"
           id="create-request-form"
           onSubmit={submit}
+          validationBehavior="aria"
         >
           {/* Action selection */}
           <div
@@ -489,7 +491,10 @@ export function RequestFormDrawer({
                 }
                 onChange={(e) => {
                   priceEditedRef.current = true;
-                  const raw = e.target.value.replace(/[^0-9]/g, "");
+                  const raw = toAsciiDigits(e.target.value).replace(
+                    /[^0-9]/g,
+                    "",
+                  );
                   if (!raw) {
                     setPrice(emptyTargetPrice);
                     return;
@@ -668,10 +673,12 @@ export function RequestFormDrawer({
                   id="units-input"
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   value={units === 0 ? "" : formatNumber(units)}
                   onChange={(e) => {
-                    const raw = e.target.value.replace(/[^0-9]/g, "");
+                    const raw = toAsciiDigits(e.target.value).replace(
+                      /[^0-9]/g,
+                      "",
+                    );
                     if (!raw) {
                       setUnits(0);
                       return;

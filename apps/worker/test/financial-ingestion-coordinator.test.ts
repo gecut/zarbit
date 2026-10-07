@@ -357,3 +357,74 @@ test("restart replays a durable unprocessed receipt from Telegram history", asyn
   await coordinator.recover("session-a", 1);
   assert.deepEqual(processed, [11]);
 });
+
+test("regular settlement is applied automatically when interval coverage is verified", async () => {
+  const applied: {
+    chatId: number;
+    messageId: number;
+    review?: { coverageDigest: string; reviewedBy: string };
+  }[] = [];
+  const announcement = {
+    chatId: -1001,
+    senderId: "77",
+    messageId: 50,
+    text: "fixture announcement",
+    date: new Date(),
+  };
+  const store = {
+    beginFinancialRecovery: async () => {},
+    completeFinancialRecovery: async () => true,
+    pendingSettlements: async () => [
+      {
+        chatId: -1001n,
+        sourceMessageId: 50,
+        senderId: "77",
+        payloadHash: createHash("sha256")
+          .update(announcement.text)
+          .digest("hex"),
+        isBootstrap: false,
+        status: "RECEIVED",
+        reviewReason: null,
+      },
+    ],
+    appliedSettlements: async () => [],
+    unprocessedFinancialMessages: async () => [],
+    ingestionState: async () => ({
+      appliedThroughMessageId: 10,
+      scannedThroughMessageId: 60,
+    }),
+    markHistoryScanned: async () => {},
+    coverageEvidence: async (_chat: number, after: number, before: number) => ({
+      digest: `digest:${after}:${before}`,
+      observationCount: 10,
+      tradeCount: 10,
+      unresolvedCount: 0,
+    }),
+    applySettlement: async (
+      chatId: number,
+      messageId: number,
+      review?: { coverageDigest: string; reviewedBy: string },
+    ) => {
+      applied.push({ chatId, messageId, review });
+    },
+  } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[0];
+  const coordinator = createFinancialIngestionCoordinator(
+    store,
+    {
+      latestMessageId: async () => 60,
+      history: async () => [announcement],
+    } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[1],
+    {
+      groupId: -1001,
+      quoteSenderId: "55",
+      settlementSenderId: "77",
+      settlementEnabled: true,
+    },
+    async () => undefined,
+  );
+  await coordinator.recover("session-a", 1);
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0]?.messageId, 50);
+  assert.equal(applied[0]?.review?.reviewedBy, "SYSTEM_AUTOMATION");
+  assert.equal(applied[0]?.review?.coverageDigest, "digest:10:50");
+});

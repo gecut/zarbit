@@ -103,153 +103,174 @@ export function applySettlement(
     reviewedBy: string;
   },
 ) {
-  return db.$transaction(async (tx) => {
-    await lockTradeStream(tx, chatId);
-    const settlement = await tx.settlement.findUniqueOrThrow({
-      where: { chatId_sourceMessageId: { chatId, sourceMessageId } },
-    });
-    if (settlement.status === "APPLIED") return settlement;
-    if (
-      settlement.reviewReason &&
-      settlement.reviewReason !== "COVERAGE_NOT_PROVEN"
-    ) {
-      throw new Error("Settlement conflict requires manual reconciliation");
-    }
-    const state = await tx.groupIngestionState.findUniqueOrThrow({
-      where: { chatId },
-    });
-    if (state.historyRecoveryRequired)
-      throw new Error("Telegram history recovery is incomplete");
-    const [flaggedObservation, flaggedSettlement] = await Promise.all([
-      tx.financialInbox.findFirst({
-        where: { chatId, errorCode: { not: null } },
-        select: { id: true },
-      }),
-      tx.settlement.findFirst({
-        where: {
-          chatId,
-          reviewReason: { not: null },
-          id: { not: settlement.id },
-        },
-        select: { id: true },
-      }),
-    ]);
-    if (flaggedObservation || flaggedSettlement) {
-      throw new Error(
-        "Financial review must be reconciled before applying settlement",
-      );
-    }
-    if (sourceMessageId <= state.appliedThroughMessageId) {
-      throw new Error("Settlement boundary cannot move backwards");
-    }
-    const previous = await tx.settlement.findFirst({
-      where: { chatId, sourceMessageId: { lt: sourceMessageId } },
-      orderBy: { sourceMessageId: "desc" },
-    });
-    if (previous && previous.status !== "APPLIED")
-      throw new Error("Earlier settlement is pending");
-    if (settlement.isBootstrap !== (previous === null))
-      throw new Error("Bootstrap boundary mismatch");
-    if (previous && state.scannedThroughMessageId < sourceMessageId) {
-      throw new Error("History scan is incomplete");
-    }
-    if (previous && (!review?.coverageDigest || !review.reviewedBy)) {
-      throw new Error("Reviewed receipt coverage is required");
-    }
-    if (previous) {
-      const coverage = await settlementCoverageEvidence(
-        tx,
-        chatId,
-        previous.sourceMessageId,
-        sourceMessageId,
-      );
-      if (coverage.unresolvedCount > 0)
-        throw new Error("Financial observations require review");
-      if (coverage.digest !== review?.coverageDigest) {
+  return db.$transaction(
+    async (tx) => {
+      await lockTradeStream(tx, chatId);
+      const settlement = await tx.settlement.findUniqueOrThrow({
+        where: { chatId_sourceMessageId: { chatId, sourceMessageId } },
+      });
+      if (settlement.status === "APPLIED") return settlement;
+      if (
+        settlement.reviewReason &&
+        settlement.reviewReason !== "COVERAGE_NOT_PROVEN"
+      ) {
+        throw new Error("Settlement conflict requires manual reconciliation");
+      }
+      const state = await tx.groupIngestionState.findUniqueOrThrow({
+        where: { chatId },
+      });
+      if (
+        state.historyRecoveryRequired &&
+        state.scannedThroughMessageId < sourceMessageId
+      ) {
+        throw new Error("Telegram history recovery is incomplete");
+      }
+      if (sourceMessageId <= state.appliedThroughMessageId) {
+        throw new Error("Settlement boundary cannot move backwards");
+      }
+      const previous = await tx.settlement.findFirst({
+        where: { chatId, sourceMessageId: { lt: sourceMessageId } },
+        orderBy: { sourceMessageId: "desc" },
+      });
+      if (previous && previous.status !== "APPLIED")
+        throw new Error("Earlier settlement is pending");
+      if (settlement.isBootstrap !== (previous === null))
+        throw new Error("Bootstrap boundary mismatch");
+      if (previous && state.scannedThroughMessageId < sourceMessageId) {
+        throw new Error("History scan is incomplete");
+      }
+
+      const previousMessageId = previous?.sourceMessageId ?? 0;
+      const [flaggedObservation, flaggedSettlement] = await Promise.all([
+        tx.financialInbox.findFirst({
+          where: {
+            chatId,
+            sourceMessageId: { gt: previousMessageId, lt: sourceMessageId },
+            errorCode: { not: null },
+          },
+          select: { id: true },
+        }),
+        tx.settlement.findFirst({
+          where: {
+            chatId,
+            sourceMessageId: { gt: previousMessageId, lt: sourceMessageId },
+            reviewReason: { not: null },
+            id: { not: settlement.id },
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (flaggedObservation || flaggedSettlement) {
         throw new Error(
-          "Coverage review no longer matches the observed interval",
+          "Financial review must be reconciled before applying settlement",
         );
       }
-    }
 
-    if (previous) {
-      const rows = await tx.trade.findMany({
-        where: {
+      let finalCoverageDigest = review?.coverageDigest ?? null;
+      let finalReviewedBy = review?.reviewedBy ?? null;
+
+      if (previous) {
+        const coverage = await settlementCoverageEvidence(
+          tx,
           chatId,
-          type: "NORMAL",
-          sourceMessageId: {
-            gt: previous.sourceMessageId,
-            lt: sourceMessageId,
-          },
-        },
-        orderBy: [{ sourceMessageId: "asc" }, { id: "asc" }],
-      });
-      const units = new Map<string, { buyUnits: number; sellUnits: number }>();
-      const states = new Map<
-        string,
-        ReturnType<typeof createInitialPositionState>
-      >();
-      for (const row of rows) {
-        if (
-          row.sourceMessageId === null ||
-          !row.buyerParticipantId ||
-          !row.sellerParticipantId
-        ) {
-          throw new Error("Malformed NORMAL trade");
-        }
-        const sides = [
-          { participantId: row.buyerParticipantId, side: "BUY" as const },
-          { participantId: row.sellerParticipantId, side: "SELL" as const },
-        ];
-        for (const { participantId, side } of sides) {
-          const count = units.get(participantId) ?? {
-            buyUnits: 0,
-            sellUnits: 0,
-          };
-          count[side === "BUY" ? "buyUnits" : "sellUnits"] += row.quantity;
-          units.set(participantId, count);
-          const transition = calculatePositionTransition(
-            states.get(participantId) ??
-              createInitialPositionState({ hasZeroCrossing: true }),
-            {
-              id: row.id,
-              sourceMessageId: row.sourceMessageId,
-              side,
-              quantity: row.quantity,
-              compactPrice: row.compactPrice,
-              announcedAt: row.announcedAt,
-            },
-          );
-          states.set(participantId, transition.nextPosition);
-        }
-      }
-      const synthetic = calculateSettlementTrades(
-        [...units].map(([participantId, counts]) => ({
-          participantId,
-          ...counts,
-        })),
-        settlement.compactPrice,
-      );
-      for (const trade of synthetic) {
-        const before = states.get(trade.participantId);
-        const signedQuantity =
-          trade.side === "SELL" ? trade.quantity : -trade.quantity;
-        if (!before || before.netQuantity !== signedQuantity)
-          throw new Error("Settlement position mismatch");
-        const next = calculatePositionTransition(before, {
-          id: `${settlement.id}:${trade.participantId}`,
+          previous.sourceMessageId,
           sourceMessageId,
-          side: trade.side,
-          quantity: trade.quantity,
-          compactPrice: settlement.compactPrice,
-          announcedAt: settlement.announcedAt,
-        }).nextPosition;
-        if (next.netQuantity !== 0 || next.costBasis !== 0)
-          throw new Error("Settlement close failed");
-        await tx.trade.create({
-          data: {
+        );
+        if (coverage.unresolvedCount > 0)
+          throw new Error("Financial observations require review");
+        if (
+          review?.coverageDigest &&
+          coverage.digest !== review.coverageDigest
+        ) {
+          throw new Error(
+            "Coverage review no longer matches the observed interval",
+          );
+        }
+        finalCoverageDigest = coverage.digest;
+        finalReviewedBy = review?.reviewedBy ?? "SYSTEM_AUTOMATION";
+      }
+
+      if (previous) {
+        const rows = await tx.trade.findMany({
+          where: {
             chatId,
-            type: "SETTLEMENT",
+            type: "NORMAL",
+            sourceMessageId: {
+              gt: previous.sourceMessageId,
+              lt: sourceMessageId,
+            },
+          },
+          orderBy: [{ sourceMessageId: "asc" }, { id: "asc" }],
+        });
+        const units = new Map<
+          string,
+          { buyUnits: number; sellUnits: number }
+        >();
+        const states = new Map<
+          string,
+          ReturnType<typeof createInitialPositionState>
+        >();
+        for (const row of rows) {
+          if (
+            row.sourceMessageId === null ||
+            !row.buyerParticipantId ||
+            !row.sellerParticipantId
+          ) {
+            throw new Error("Malformed NORMAL trade");
+          }
+          const sides = [
+            { participantId: row.buyerParticipantId, side: "BUY" as const },
+            { participantId: row.sellerParticipantId, side: "SELL" as const },
+          ];
+          for (const { participantId, side } of sides) {
+            const count = units.get(participantId) ?? {
+              buyUnits: 0,
+              sellUnits: 0,
+            };
+            count[side === "BUY" ? "buyUnits" : "sellUnits"] += row.quantity;
+            units.set(participantId, count);
+            const transition = calculatePositionTransition(
+              states.get(participantId) ??
+                createInitialPositionState({ hasZeroCrossing: true }),
+              {
+                id: row.id,
+                sourceMessageId: row.sourceMessageId,
+                side,
+                quantity: row.quantity,
+                compactPrice: row.compactPrice,
+                announcedAt: row.announcedAt,
+              },
+            );
+            states.set(participantId, transition.nextPosition);
+          }
+        }
+        const synthetic = calculateSettlementTrades(
+          [...units].map(([participantId, counts]) => ({
+            participantId,
+            ...counts,
+          })),
+          settlement.compactPrice,
+        );
+        const tradesToCreate = [];
+        for (const trade of synthetic) {
+          const before = states.get(trade.participantId);
+          const signedQuantity =
+            trade.side === "SELL" ? trade.quantity : -trade.quantity;
+          if (!before || before.netQuantity !== signedQuantity)
+            throw new Error("Settlement position mismatch");
+          const next = calculatePositionTransition(before, {
+            id: `${settlement.id}:${trade.participantId}`,
+            sourceMessageId,
+            side: trade.side,
+            quantity: trade.quantity,
+            compactPrice: settlement.compactPrice,
+            announcedAt: settlement.announcedAt,
+          }).nextPosition;
+          if (next.netQuantity !== 0 || next.costBasis !== 0)
+            throw new Error("Settlement close failed");
+          tradesToCreate.push({
+            chatId,
+            type: "SETTLEMENT" as const,
             settlementMessageId: sourceMessageId,
             buyerParticipantId:
               trade.side === "BUY" ? trade.participantId : null,
@@ -259,50 +280,57 @@ export function applySettlement(
             compactPrice: settlement.compactPrice,
             rawPrice: BigInt(settlement.compactPrice) * 1_000n,
             announcedAt: settlement.announcedAt,
-          },
-        });
+          });
+        }
+        if (tradesToCreate.length > 0) {
+          await tx.trade.createMany({
+            data: tradesToCreate,
+          });
+        }
       }
-    }
-    const applied = await tx.settlement.update({
-      where: { id: settlement.id },
-      data: {
-        status: "APPLIED",
-        reviewReason: null,
-        coverageDigest: review?.coverageDigest ?? null,
-        coverageReviewedBy: review?.reviewedBy ?? null,
-      },
-    });
-    const laterPending = await tx.settlement.findFirst({
-      where: {
-        chatId,
-        sourceMessageId: { gt: sourceMessageId },
-        status: { not: "APPLIED" },
-      },
-      select: { id: true },
-    });
-    await tx.groupIngestionState.update({
-      where: { chatId },
-      data: {
-        appliedThroughMessageId: sourceMessageId,
-        gateStatus: laterPending ? "REVIEW_REQUIRED" : "OPEN",
-        ...(review
-          ? {
-              coverageVerifiedThroughMessageId: sourceMessageId,
-              coverageDigest: review.coverageDigest,
-            }
-          : {}),
-        analyticsRevision: { increment: 1 },
-      },
-    });
-    await tx.financialInbox.updateMany({
-      where: {
-        chatId,
-        sourceMessageId,
-        eventKind: "NEW",
-        payloadHash: settlement.payloadHash,
-      },
-      data: { processedAt: new Date() },
-    });
-    return applied;
-  });
+      const applied = await tx.settlement.update({
+        where: { id: settlement.id },
+        data: {
+          status: "APPLIED",
+          reviewReason: null,
+          coverageDigest: finalCoverageDigest,
+          coverageReviewedBy: finalReviewedBy,
+        },
+      });
+      const laterPending = await tx.settlement.findFirst({
+        where: {
+          chatId,
+          sourceMessageId: { gt: sourceMessageId },
+          status: { not: "APPLIED" },
+        },
+        select: { id: true },
+      });
+      await tx.groupIngestionState.update({
+        where: { chatId },
+        data: {
+          appliedThroughMessageId: sourceMessageId,
+          historyRecoveryRequired: false,
+          gateStatus: laterPending ? "REVIEW_REQUIRED" : "OPEN",
+          ...(finalReviewedBy
+            ? {
+                coverageVerifiedThroughMessageId: sourceMessageId,
+                coverageDigest: finalCoverageDigest,
+              }
+            : {}),
+          analyticsRevision: { increment: 1 },
+        },
+      });
+      await tx.financialInbox.updateMany({
+        where: {
+          chatId,
+          sourceMessageId,
+          eventKind: "NEW",
+          payloadHash: settlement.payloadHash,
+        },
+        data: { processedAt: new Date() },
+      });
+      return applied;
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  );
 }

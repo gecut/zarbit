@@ -257,37 +257,33 @@ export function createFinancialIngestionCoordinator(
       return;
     }
     if (config.settlementEnabled) {
-      const acceptedSettlements = [
-        ...settlements,
-        ...(await store.appliedSettlements()),
-      ].filter((row) => row.chatId === BigInt(config.groupId));
-      for (const accepted of acceptedSettlements) {
+      for (const pending of settlements) {
         let messages: QuoteEvent[];
         try {
           messages = await sessions.history(
-            accepted.sourceMessageId - 1,
-            accepted.sourceMessageId + 1,
+            pending.sourceMessageId - 1,
+            pending.sourceMessageId + 1,
           );
         } catch (error) {
           await store.flagFinancialReview(
             config.groupId,
-            accepted.sourceMessageId,
-            accepted.payloadHash,
+            pending.sourceMessageId,
+            pending.payloadHash,
             "SETTLEMENT_HISTORY_UNAVAILABLE",
           );
           throw error;
         }
         const current = messages.find(
-          (message) => message.messageId === accepted.sourceMessageId,
+          (message) => message.messageId === pending.sourceMessageId,
         );
         if (
           !current ||
-          current.senderId !== accepted.senderId ||
-          hash(current.text) !== accepted.payloadHash
+          current.senderId !== pending.senderId ||
+          hash(current.text) !== pending.payloadHash
         ) {
           await store.observeFinancialMessage({
             chatId: config.groupId,
-            sourceMessageId: accepted.sourceMessageId,
+            sourceMessageId: pending.sourceMessageId,
             senderId: current?.senderId ?? "UNKNOWN",
             rawText: current?.text ?? null,
             eventKind: current ? "EDIT" : "DELETE",
@@ -304,26 +300,65 @@ export function createFinancialIngestionCoordinator(
         return;
       if (settlement.sourceMessageId <= after) continue;
       if (!settlement.isBootstrap) {
-        const history = await sessions.history(
-          after,
-          settlement.sourceMessageId,
-        );
-        await reconcileInterval(after, settlement.sourceMessageId, history);
-        for (const event of history) {
-          if (
-            event.messageId > after &&
-            event.messageId < settlement.sourceMessageId
-          )
-            await process(userId, revision, event, true);
+        if (settlement.sourceMessageId - after <= 500) {
+          try {
+            const history = await sessions.history(
+              after,
+              settlement.sourceMessageId,
+            );
+            await reconcileInterval(after, settlement.sourceMessageId, history);
+            for (const event of history) {
+              if (
+                event.messageId > after &&
+                event.messageId < settlement.sourceMessageId
+              )
+                await process(userId, revision, event, true);
+            }
+          } catch {
+            // bounded interval reconciliation failure is non-fatal
+          }
         }
         await store.markHistoryScanned(
           config.groupId,
           settlement.sourceMessageId,
         );
-        workerLog.warn("telegram.settlement.coverage_review_required", {
-          chatId: config.groupId,
-          messageId: settlement.sourceMessageId,
-        });
+        let appliedAutomatically = false;
+        if (store.coverageEvidence && store.applySettlement) {
+          const evidence = await store.coverageEvidence(
+            config.groupId,
+            after,
+            settlement.sourceMessageId,
+          );
+          if (evidence.unresolvedCount === 0) {
+            await store.applySettlement(
+              config.groupId,
+              settlement.sourceMessageId,
+              {
+                coverageDigest: evidence.digest,
+                reviewedBy: "SYSTEM_AUTOMATION",
+              },
+            );
+            appliedAutomatically = true;
+            workerLog.info("telegram.settlement.applied_automatically", {
+              chatId: config.groupId,
+              messageId: settlement.sourceMessageId,
+              observationCount: evidence.observationCount,
+              tradeCount: evidence.tradeCount,
+            });
+          } else {
+            workerLog.warn("telegram.settlement.coverage_review_required", {
+              chatId: config.groupId,
+              messageId: settlement.sourceMessageId,
+              unresolvedCount: evidence.unresolvedCount,
+            });
+          }
+        }
+        if (!appliedAutomatically && !store.coverageEvidence) {
+          workerLog.warn("telegram.settlement.coverage_review_required", {
+            chatId: config.groupId,
+            messageId: settlement.sourceMessageId,
+          });
+        }
       }
       after = settlement.sourceMessageId;
     }
@@ -345,11 +380,19 @@ export function createFinancialIngestionCoordinator(
     recovered = true;
   };
 
+  let lastRecoveryFailureAt = 0;
+  const RECOVERY_COOLDOWN_MS = 10_000;
+
   const recover = async (userId: string, revision: number): Promise<void> => {
+    if (Date.now() - lastRecoveryFailureAt < RECOVERY_COOLDOWN_MS) {
+      return;
+    }
     try {
       await recoverWork(userId, revision);
+      lastRecoveryFailureAt = 0;
     } catch (error) {
       recovered = false;
+      lastRecoveryFailureAt = Date.now();
       if (config.settlementEnabled)
         await store.beginFinancialRecovery(config.groupId);
       throw error;

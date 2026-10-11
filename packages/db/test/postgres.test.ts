@@ -602,7 +602,23 @@ if (!isDbTest) {
     const cancelAllResult = await store.cancelAllRequests(owner.id);
     assert.equal(cancelAllResult.count, 2);
     const activeLeft = await store.activeRequests(owner.id);
-    assert.equal(activeLeft.length, 0);
+    assert.equal(activeLeft.length, 1);
+    assert.equal(activeLeft[0]?.id, sending.id);
+
+    const cleanOwner = await store.user({ telegramUserId: "clean-cancel-all" });
+    await prisma.request.create({
+      data: {
+        userId: cleanOwner.id,
+        action: "BUY",
+        condition: "LTE",
+        targetPrice: 95000,
+        executionPhase: "WAITING_TRADE",
+      },
+    });
+    const cleanCancelResult = await store.cancelAllRequests(cleanOwner.id);
+    assert.equal(cleanCancelResult.count, 1);
+    const cleanActiveLeft = await store.activeRequests(cleanOwner.id);
+    assert.equal(cleanActiveLeft.length, 0);
   });
 
   test("session fences reject stale activation and heartbeat preserves change time", async () => {

@@ -50,3 +50,29 @@ test("parses canonical bot orders (margin call automatic orders)", () => {
     assert.equal(marginCallSell.data.remaining, 5);
   }
 });
+
+test("parses canonical bot orders with fractional / decimal prices", () => {
+  const fractionalOrder = parseCanonicalBotOrder(
+    "🔵 أمیر 1 خ 113750.37 (مانده: 1)",
+  );
+  assert.equal(fractionalOrder.status, "parsed");
+  if (fractionalOrder.status === "parsed") {
+    assert.equal(fractionalOrder.data.participantAlias, "أمیر");
+    assert.equal(fractionalOrder.data.quantity, 1);
+    assert.equal(fractionalOrder.data.side, "BUY");
+    assert.equal(fractionalOrder.data.compactPrice, 113750.37);
+    assert.equal(fractionalOrder.data.remaining, 1);
+  }
+
+  const filledOrder = parseCanonicalBotOrder(
+    "🔵 أمیر 1 خ 113750.37 (مانده: 0)",
+  );
+  assert.equal(filledOrder.status, "parsed");
+  if (filledOrder.status === "parsed") {
+    assert.equal(filledOrder.data.participantAlias, "أمیر");
+    assert.equal(filledOrder.data.quantity, 1);
+    assert.equal(filledOrder.data.side, "BUY");
+    assert.equal(filledOrder.data.compactPrice, 113750.37);
+    assert.equal(filledOrder.data.remaining, 0);
+  }
+});

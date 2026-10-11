@@ -50,7 +50,7 @@ export const traderRecentTradeSchema = z
     sourceMessageId: z.number().int(),
     side: z.enum(["BUY", "SELL"]),
     quantity: z.number().int().positive(),
-    compactPrice: z.number().int().positive(),
+    compactPrice: z.number().positive(),
     counterpartyAlias: z.string().min(1),
     announcedAt: z.string(),
   })

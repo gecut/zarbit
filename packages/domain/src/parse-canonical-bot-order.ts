@@ -2,7 +2,7 @@ import { normalizeProtocolText } from "./normalize";
 import type { CanonicalBotOrder, ParseResult, TradingSide } from "./types";
 
 const CANONICAL_ORDER_REGEX =
-  /^(?:[.\s]*)(🔵|🔴)\s*(?:⚠️\s*کال\s*مارجین\s*\(?)?\s*(.+?)\s+(\d+)\s+([خف])\s+(\d+)\s+\(مانده:\s*(\d+)\)(?:\s*\)?(?:\s*🤖\s*آگهی\s*خودکار)?)?\s*$/u;
+  /^(?:[.\s]*)(🔵|🔴)\s*(?:⚠️\s*کال\s*مارجین\s*\(?)?\s*(.+?)\s+(\d+)\s+([خف])\s+(\d+(?:[.,/٫]\d+)?)\s+\(مانده:\s*(\d+)\)(?:\s*\)?(?:\s*🤖\s*آگهی\s*خودکار)?)?\s*$/u;
 
 /**
  * Parses authoritative canonical bot order messages from the group.
@@ -89,11 +89,11 @@ export function parseCanonicalBotOrder(
     };
   }
 
-  const compactPrice = Number(priceRaw);
-  if (!Number.isSafeInteger(compactPrice) || compactPrice <= 0) {
+  const compactPrice = Number(priceRaw.replace(/[,/٫]/g, "."));
+  if (!Number.isFinite(compactPrice) || compactPrice <= 0) {
     return {
       status: "unsupported",
-      reason: "Order price must be a positive safe integer",
+      reason: "Order price must be a positive finite number",
     };
   }
 

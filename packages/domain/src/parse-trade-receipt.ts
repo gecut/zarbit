@@ -130,18 +130,11 @@ export function parseTradeReceipt(rawText: string): ParseResult<TradeReceipt> {
     };
   }
 
-  if (displayedPrice % 1_000 !== 0) {
-    return {
-      status: "ambiguous",
-      reason: "Receipt displayed price must be a multiple of 1000",
-    };
-  }
-
   const compactPrice = displayedPrice / 1_000;
-  if (!Number.isSafeInteger(compactPrice) || compactPrice <= 0) {
+  if (!Number.isFinite(compactPrice) || compactPrice <= 0) {
     return {
       status: "unsupported",
-      reason: "Receipt compact price must be a positive safe integer",
+      reason: "Receipt compact price must be a positive finite number",
     };
   }
 

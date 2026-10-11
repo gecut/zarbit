@@ -54,16 +54,16 @@ export function parseSettlementAnnouncement(
   const rawPriceText = match[1].replace(/[,٬]/g, "");
   const rawNominalPrice = Number(rawPriceText);
 
-  if (
-    !Number.isSafeInteger(rawNominalPrice) ||
-    rawNominalPrice <= 0 ||
-    rawNominalPrice % 1000 !== 0
-  ) {
+  if (!Number.isSafeInteger(rawNominalPrice) || rawNominalPrice <= 0) {
     return null;
   }
 
-  const compactPrice = Math.floor(rawNominalPrice / 1000);
-  if (compactPrice <= 0 || compactPrice > 2_147_483_647) {
+  const compactPrice = rawNominalPrice / 1000;
+  if (
+    !Number.isFinite(compactPrice) ||
+    compactPrice <= 0 ||
+    compactPrice > 2_147_483_647
+  ) {
     return null;
   }
 

@@ -3,7 +3,7 @@ import type { CanonicalBotQuote, ParseResult } from "./types";
 
 const CANONICAL_QUOTE_KEYWORD_REGEX = /(?:^|[^\p{L}])مظنه:/u;
 const CANONICAL_QUOTE_REGEX =
-  /^(?:[.\s]*)(?:🟡|\u{1F7E1})?\s*مظنه:\s*(\d{4,9})\s*(?:🟡|\u{1F7E1})?\s*$/u;
+  /^(?:[.\s]*)(?:🟡|\u{1F7E1})?\s*مظنه:\s*(\d{4,9}(?:[.,/٫]\d+)?)\s*(?:🟡|\u{1F7E1})?\s*$/u;
 
 /**
  * Parses authoritative canonical bot quote announcements from the group.
@@ -40,11 +40,11 @@ export function parseCanonicalBotQuote(
     };
   }
 
-  const compactQuote = Number(quoteRaw);
-  if (!Number.isSafeInteger(compactQuote) || compactQuote <= 0) {
+  const compactQuote = Number(quoteRaw.replace(/[,/٫]/g, "."));
+  if (!Number.isFinite(compactQuote) || compactQuote <= 0) {
     return {
       status: "unsupported",
-      reason: "Compact quote must be a positive safe integer",
+      reason: "Compact quote must be a positive finite number",
     };
   }
 

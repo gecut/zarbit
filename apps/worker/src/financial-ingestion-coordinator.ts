@@ -85,6 +85,18 @@ export function createFinancialIngestionCoordinator(
       /(?:خریدار|فروشنده|شماره\s*حواله|تعداد)\s*:/u.test(
         normalizeProtocolText(event.text),
       );
+    const orderCandidate =
+      event.senderId === config.quoteSenderId &&
+      !receiptCandidate &&
+      (event.text.includes("🔵") || event.text.includes("🔴")) &&
+      (event.text.includes("خ") ||
+        event.text.includes("ف") ||
+        event.text.includes("مانده"));
+    const quoteCandidate =
+      event.senderId === config.quoteSenderId &&
+      !receiptCandidate &&
+      (event.text.includes("مظنه") || event.text.includes("🟡"));
+
     if (!settlement && !receipt) {
       const knownMessage =
         event.senderId === config.quoteSenderId &&
@@ -92,6 +104,8 @@ export function createFinancialIngestionCoordinator(
           parseCanonicalBotOrder(event.text).status === "parsed");
       if (
         knownMessage ||
+        orderCandidate ||
+        quoteCandidate ||
         (!config.settlementEnabled &&
           !trustedSettlementSender &&
           !receiptCandidate)

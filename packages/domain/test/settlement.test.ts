@@ -183,14 +183,25 @@ test("parseSettlementAnnouncement handles formatting variations: Persian digits,
   assert.equal(parsedComma.compactPrice, 113670);
 });
 
-test("parseSettlementAnnouncement rejects non-settlement or malformed messages", () => {
-  // Price not a multiple of 1000
+test("parseSettlementAnnouncement parses fractional settlement price and rejects invalid messages", () => {
+  // Price not a multiple of 1000 parses with fraction
+  const fractionalSettlement = parseSettlementAnnouncement({
+    chatId: -1001,
+    sourceMessageId: 1,
+    senderId: "8287779777",
+    rawText: `✅ تسویه با موفقیت انجام شد.\n💰 مبلغ تسویه: 113670500`,
+    announcedAt: new Date(),
+  });
+  assert.ok(fractionalSettlement !== null);
+  assert.equal(fractionalSettlement.compactPrice, 113670.5);
+
+  // Zero or invalid price
   assert.equal(
     parseSettlementAnnouncement({
       chatId: -1001,
       sourceMessageId: 1,
       senderId: "8287779777",
-      rawText: `✅ تسویه با موفقیت انجام شد.\n💰 مبلغ تسویه: 113670500`,
+      rawText: `✅ تسویه با موفقیت انجام شد.\n💰 مبلغ تسویه: 0`,
       announcedAt: new Date(),
     }),
     null,

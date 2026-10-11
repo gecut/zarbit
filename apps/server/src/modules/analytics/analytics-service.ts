@@ -67,13 +67,17 @@ export class AnalyticsService {
 
     for (const trade of allTrades) {
       if (!isNormalTrade(trade)) continue;
+      const price =
+        trade.rawPrice !== null && trade.rawPrice !== undefined
+          ? Number(trade.rawPrice) / 1_000
+          : trade.compactPrice;
       if (tradesByAlias.has(trade.buyerParticipantId)) {
         tradesByAlias.get(trade.buyerParticipantId)!.push({
           id: trade.id,
           sourceMessageId: trade.sourceMessageId,
           side: "BUY",
           quantity: trade.quantity,
-          compactPrice: trade.compactPrice,
+          compactPrice: price,
           announcedAt: trade.announcedAt,
         });
       }
@@ -83,7 +87,7 @@ export class AnalyticsService {
           sourceMessageId: trade.sourceMessageId,
           side: "SELL",
           quantity: trade.quantity,
-          compactPrice: trade.compactPrice,
+          compactPrice: price,
           announcedAt: trade.announcedAt,
         });
       }
@@ -172,13 +176,17 @@ export class AnalyticsService {
 
     const participantTrades: ParticipantTrade[] = [];
     for (const t of rawTrades) {
+      const price =
+        t.rawPrice !== null && t.rawPrice !== undefined
+          ? Number(t.rawPrice) / 1_000
+          : t.compactPrice;
       if (t.buyerParticipantId === alias) {
         participantTrades.push({
           id: t.id,
           sourceMessageId: t.sourceMessageId,
           side: "BUY",
           quantity: t.quantity,
-          compactPrice: t.compactPrice,
+          compactPrice: price,
           announcedAt: t.announcedAt,
         });
       }
@@ -188,7 +196,7 @@ export class AnalyticsService {
           sourceMessageId: t.sourceMessageId,
           side: "SELL",
           quantity: t.quantity,
-          compactPrice: t.compactPrice,
+          compactPrice: price,
           announcedAt: t.announcedAt,
         });
       }

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const marketQuoteSchema = z
   .object({
-    compactPrice: z.number().int().positive().safe(),
+    compactPrice: z.number().positive().safe(),
     announcedAt: z.string().datetime(),
     sourceMessageId: z.number().int().positive().safe(),
   })
@@ -19,7 +19,7 @@ export const marketSnapshotSchema = z
     quote: marketQuoteSchema.nullable(),
     trade: marketTradeSchema.nullable(),
     recentTrades: z.array(marketTradeSchema).max(10).default([]),
-    tradeQuoteDifference: z.number().int().safe().nullable(),
+    tradeQuoteDifference: z.number().safe().nullable(),
     asOf: z.string().datetime(),
   })
   .strict();

@@ -33,6 +33,12 @@ function ordered(rows: TradeRow[]): TradeRow[] {
   );
 }
 
+function effectivePrice(row: TradeRow): number {
+  return row.rawPrice !== null && row.rawPrice !== undefined
+    ? Number(row.rawPrice) / 1_000
+    : row.compactPrice;
+}
+
 function participantTrades(row: TradeRow, alias: string): ParticipantTrade[] {
   if (row.buyerParticipantId !== alias && row.sellerParticipantId !== alias) {
     throw new Error("Trade does not belong to participant");
@@ -41,13 +47,14 @@ function participantTrades(row: TradeRow, alias: string): ParticipantTrade[] {
     ...(row.buyerParticipantId === alias ? ["BUY" as const] : []),
     ...(row.sellerParticipantId === alias ? ["SELL" as const] : []),
   ];
+  const price = effectivePrice(row);
   return sides.map((side) => ({
     id: row.id,
     sourceMessageId: effectiveMessageId(row),
     type: row.type,
     side,
     quantity: row.quantity,
-    compactPrice: row.compactPrice,
+    compactPrice: price,
     announcedAt: row.announcedAt,
   }));
 }
@@ -61,7 +68,7 @@ function recentTrade(
     id: row.id,
     side,
     quantity: row.quantity,
-    compactPrice: row.compactPrice,
+    compactPrice: effectivePrice(row),
     announcedAt: row.announcedAt.toISOString(),
   };
   if (row.type === "SETTLEMENT") {

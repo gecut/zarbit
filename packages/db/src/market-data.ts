@@ -128,7 +128,7 @@ export function createMarketDataStore(
       const rawPrice =
         input.rawPrice !== undefined
           ? BigInt(input.rawPrice)
-          : BigInt(input.compactPrice) * 1_000n;
+          : BigInt(Math.round(input.compactPrice * 1_000));
 
       return db.$transaction(async (tx) => {
         await lockTradeStream(tx, chatId);
@@ -195,7 +195,7 @@ export function createMarketDataStore(
             buyerParticipantId: input.buyerAlias,
             sellerParticipantId: input.sellerAlias,
             quantity: input.quantity,
-            compactPrice: input.compactPrice,
+            compactPrice: Math.round(input.compactPrice),
             rawPrice,
             receiptTimeText: input.receiptTimeText ?? null,
             announcedAt: input.announcedAt,
@@ -273,7 +273,10 @@ export function createMarketDataStore(
             side: input.side ?? null,
             rawText: input.rawText,
             quantity: input.quantity ?? null,
-            compactPrice: input.compactPrice ?? null,
+            compactPrice:
+              input.compactPrice !== null && input.compactPrice !== undefined
+                ? Math.round(input.compactPrice)
+                : null,
             replyToMessageId: input.replyToMessageId ?? null,
             replyToSenderId: input.replyToSenderId ?? null,
             targetOrderMessageId: input.targetOrderMessageId ?? null,

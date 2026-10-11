@@ -481,3 +481,53 @@ test("recovery chunks large historical gaps into bounded intervals", async () =>
   assert.deepEqual(historyCalls[2], { after: 500, before: 551 });
   assert.deepEqual(scannedMarks, [300, 500, 550]);
 });
+
+test("canonical bot orders with fractional price or remaining 0 route to ingest without financial review", async () => {
+  const steps: string[] = [];
+  const store = {
+    observeFinancialMessage: async () => {
+      steps.push("observe");
+    },
+    flagFinancialReview: async () => {
+      steps.push("review");
+    },
+    ingestionState: async () => null,
+    financialObservationFlagged: async () => false,
+    beginFinancialRecovery: async () => null,
+  } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[0];
+
+  const coordinator = createFinancialIngestionCoordinator(
+    store,
+    {} as Parameters<typeof createFinancialIngestionCoordinator>[1],
+    {
+      groupId: -1001,
+      quoteSenderId: "55",
+      settlementSenderId: "55",
+      settlementEnabled: false,
+    },
+    async () => {
+      steps.push("ingest");
+    },
+  );
+
+  // 1. Order with fractional price and remaining: 1
+  await coordinator.onMessage("session-a", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 100,
+    text: "🔵 أمیر 1 خ 113750.37 (مانده: 1)",
+    date: new Date(),
+  });
+
+  // 2. Order edited/filled to remaining: 0
+  await coordinator.onMessage("session-a", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 100,
+    text: "🔵 أمیر 1 خ 113750.37 (مانده: 0)",
+    date: new Date(),
+  });
+
+  // Both should go directly to ingest and NEVER call observe or review
+  assert.deepEqual(steps, ["ingest", "ingest"]);
+});

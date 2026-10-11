@@ -61,6 +61,7 @@ function fixture() {
     cancelRequest: async () => {
       throw new AppError("NOT_FOUND", "درخواست پیدا نشد.", 404);
     },
+    cancelAllRequests: async () => ({ count: 2 }),
   };
   const app = createApp({
     store,
@@ -250,12 +251,20 @@ test("OpenAPI includes every contract operation and authentication scheme", asyn
         ).length,
       0,
     ),
-    23,
+    24,
   );
+  assert.ok(spec.paths?.["/requests/cancel-all"]);
   assert.ok(spec.paths?.["/analytics/v2/traders"]);
   assert.ok(spec.paths?.["/analytics/v2/traders/{alias}"]);
   assert.ok(spec.paths?.["/trader-rules"]);
   assert.ok(spec.components?.securitySchemes?.telegram);
+});
+
+test("requests.cancelAll cancels all active requests and returns count", async () => {
+  const f = fixture();
+  const client = f.client();
+  const result = await client.requests.cancelAll();
+  assert.equal(result.count, 2);
 });
 
 test("oversized bodies are rejected before procedure work", async () => {

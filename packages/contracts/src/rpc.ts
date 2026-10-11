@@ -103,6 +103,9 @@ export const rpcContract = {
       .route({ method: "POST", path: "/requests/{id}/cancel" })
       .input(idInput)
       .output(requestDetailSchema),
+    cancelAll: base
+      .route({ method: "POST", path: "/requests/cancel-all" })
+      .output(z.object({ count: z.number().int().nonnegative() }).strict()),
     forceSend: base
       .route({ method: "POST", path: "/requests/{id}/force-send" })
       .input(idInput)

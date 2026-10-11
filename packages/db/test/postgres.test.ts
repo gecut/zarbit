@@ -580,6 +580,29 @@ if (!isDbTest) {
       },
     });
     await assert.rejects(store.cancelRequest(owner.id, sending.id));
+
+    await prisma.request.create({
+      data: {
+        userId: owner.id,
+        action: "BUY",
+        condition: "LTE",
+        targetPrice: 95000,
+        executionPhase: "WAITING_TRADE",
+      },
+    });
+    await prisma.request.create({
+      data: {
+        userId: owner.id,
+        action: "SELL",
+        condition: "GTE",
+        targetPrice: 97000,
+        executionPhase: "CLAIMED",
+      },
+    });
+    const cancelAllResult = await store.cancelAllRequests(owner.id);
+    assert.equal(cancelAllResult.count, 2);
+    const activeLeft = await store.activeRequests(owner.id);
+    assert.equal(activeLeft.length, 0);
   });
 
   test("session fences reject stale activation and heartbeat preserves change time", async () => {

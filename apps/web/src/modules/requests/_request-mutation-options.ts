@@ -32,6 +32,17 @@ export function requestMutationOptions(api: RpcUtils, client: QueryClient) {
     }),
     update: api.requests.update.mutationOptions(callbacks),
     cancel: api.requests.cancel.mutationOptions(callbacks),
+    cancelAll: api.requests.cancelAll.mutationOptions({
+      onMutate: async () => {
+        await client.cancelQueries({ queryKey: api.requests.key() });
+      },
+      onSuccess: () => {
+        client.setQueryData(api.requests.active.queryKey(), []);
+      },
+      onSettled: async () => {
+        await client.invalidateQueries({ queryKey: api.requests.key() });
+      },
+    }),
     forceSend: api.requests.forceSend.mutationOptions(callbacks),
   };
 }

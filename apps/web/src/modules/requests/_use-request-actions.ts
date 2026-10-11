@@ -10,6 +10,7 @@ export function useRequestActions() {
   const create = useMutation(options.create);
   const update = useMutation(options.update);
   const cancel = useMutation(options.cancel);
+  const cancelAll = useMutation(options.cancelAll);
   const forceSend = useMutation(options.forceSend);
-  return { create, update, cancel, forceSend };
+  return { create, update, cancel, cancelAll, forceSend };
 }

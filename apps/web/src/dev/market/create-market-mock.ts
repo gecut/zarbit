@@ -128,6 +128,17 @@ export function createMarketMock(
           rows.push(row);
           return row;
         }
+        case "requests.cancelAll": {
+          let count = 0;
+          for (const row of rows) {
+            if (row.status === "ACTIVE") {
+              row.status = "CANCELLED";
+              row.completedAt = iso();
+              count++;
+            }
+          }
+          return { count };
+        }
         case "requests.detail":
         case "requests.update":
         case "requests.cancel":

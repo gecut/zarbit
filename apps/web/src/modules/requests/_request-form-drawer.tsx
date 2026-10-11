@@ -517,31 +517,31 @@ export function RequestFormDrawer({
               </button>
             </div>
 
-            {/* Quick Delta Chips: [۵۰۰-] [۱۰۰-] [۵۰-] [مظنه بازار] [۵۰+] [۱۰۰+] [۵۰۰+] */}
+            {/* Quick Delta Chips: [۵۰۰+] [۱۰۰+] [۵۰+] [مظنه بازار] [۵۰-] [۱۰۰-] [۵۰۰-] */}
             <div className="flex w-full items-center gap-1 pt-0.5">
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(-500)}
-                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(500)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۵۰۰-</bdi>
+                <bdi dir="rtl">۵۰۰+</bdi>
               </button>
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(-100)}
-                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(100)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۱۰۰-</bdi>
+                <bdi dir="rtl">۱۰۰+</bdi>
               </button>
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(-50)}
-                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(50)}
+                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۵۰-</bdi>
+                <bdi dir="rtl">۵۰+</bdi>
               </button>
               <button
                 data-base-ui-swipe-ignore
@@ -571,26 +571,26 @@ export function RequestFormDrawer({
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(50)}
-                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(-50)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۵۰+</bdi>
+                <bdi dir="rtl">۵۰-</bdi>
               </button>
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(100)}
-                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(-100)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۱۰۰+</bdi>
+                <bdi dir="rtl">۱۰۰-</bdi>
               </button>
               <button
                 data-base-ui-swipe-ignore
                 type="button"
-                onClick={() => adjustPrice(500)}
-                className="border-success/30 bg-success/10 text-success hover:bg-success/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
+                onClick={() => adjustPrice(-500)}
+                className="border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 flex h-8 flex-1 grow select-none items-center justify-center rounded-xl border text-xs font-bold transition-all active:scale-95"
               >
-                <bdi dir="rtl">۵۰۰+</bdi>
+                <bdi dir="rtl">۵۰۰-</bdi>
               </button>
             </div>
           </div>

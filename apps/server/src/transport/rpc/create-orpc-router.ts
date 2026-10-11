@@ -115,6 +115,7 @@ export function createOrpcRouter(
             "create",
             "update",
             "cancel",
+            "cancelAll",
             "forceSend",
             "command",
           ].includes(path.at(-1) ?? "");

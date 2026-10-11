@@ -24,6 +24,7 @@ export function createRequestsRouter<
   TCreate,
   TUpdate,
   TCancel,
+  TCancelAll,
   TForceSend,
 >(
   builder: {
@@ -74,6 +75,13 @@ export function createRequestsRouter<
         }) => Promise<RequestDetail>,
       ) => TCancel;
     };
+    cancelAll: {
+      handler: (
+        fn: (opt: {
+          context: { user: { id: string } };
+        }) => Promise<{ count: number }>,
+      ) => TCancelAll;
+    };
     forceSend: {
       handler: (
         fn: (opt: {
@@ -91,6 +99,7 @@ export function createRequestsRouter<
   create: TCreate;
   update: TUpdate;
   cancel: TCancel;
+  cancelAll: TCancelAll;
   forceSend: TForceSend;
 } {
   const changeRequest = async <T>(id: string, action: () => Promise<T>) => {
@@ -148,6 +157,11 @@ export function createRequestsRouter<
     cancel: builder.cancel.handler(({ context, input }) =>
       changeRequest(context.user.id, async () =>
         requestView(await deps.store.cancelRequest(context.user.id, input.id)),
+      ),
+    ),
+    cancelAll: builder.cancelAll.handler(({ context }) =>
+      changeRequest(context.user.id, async () =>
+        deps.store.cancelAllRequests(context.user.id),
       ),
     ),
     forceSend: builder.forceSend.handler(({ context, input }) =>

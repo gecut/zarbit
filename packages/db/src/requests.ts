@@ -275,6 +275,41 @@ export function createRequestStore(db: PrismaClient, now: () => Date) {
         });
         return tx.request.findUniqueOrThrow({ where: { id } });
       }),
+    cancelAllRequests: (userId: string) =>
+      db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "TelegramSession" WHERE "userId" = ${userId} FOR UPDATE`;
+        const completedAt = now();
+        const active = await tx.request.findMany({
+          where: {
+            userId,
+            status: "ACTIVE",
+            deliveryStartedAt: null,
+            executionPhase: { in: ["WAITING_TRADE", "CLAIMED"] },
+          },
+          select: { id: true },
+        });
+        if (active.length === 0) {
+          return { count: 0 };
+        }
+        const ids = active.map((r) => r.id);
+        const result = await tx.request.updateMany({
+          where: { id: { in: ids } },
+          data: {
+            status: "CANCELLED",
+            executionPhase: "CANCELLED",
+            completedAt,
+            cancellationReason: "لغو همه توسط کاربر",
+          },
+        });
+        await tx.requestCreationIdentity.updateMany({
+          where: { requestId: { in: ids } },
+          data: {
+            status: "CANCELLED",
+            completedAt,
+          },
+        });
+        return { count: result.count };
+      }),
     initializeTradeRequests: (groupId: number | bigint) =>
       db.$transaction(async (tx) => {
         const chatId = BigInt(groupId);

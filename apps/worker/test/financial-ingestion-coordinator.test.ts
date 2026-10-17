@@ -531,3 +531,155 @@ test("canonical bot orders with fractional price or remaining 0 route to ingest 
   // Both should go directly to ingest and NEVER call observe or review
   assert.deepEqual(steps, ["ingest", "ingest"]);
 });
+
+test("receipt observation requires normalTradeExists before completing", async () => {
+  const steps: string[] = [];
+  let tradeExists = false;
+  const store = {
+    observeFinancialMessage: async () => {
+      steps.push("observe");
+    },
+    flagFinancialReview: async () => {
+      steps.push("review");
+    },
+    ingestionState: async () => ({ appliedThroughMessageId: 10 }),
+    financialObservationFlagged: async () => false,
+    normalTradeExists: async () => tradeExists,
+    completeFinancialMessage: async () => {
+      steps.push("complete");
+    },
+  } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[0];
+
+  const coordinator = createFinancialIngestionCoordinator(
+    store,
+    {} as Parameters<typeof createFinancialIngestionCoordinator>[1],
+    {
+      groupId: -1001,
+      quoteSenderId: "55",
+      settlementSenderId: "77",
+      settlementEnabled: false,
+    },
+    async () => {
+      steps.push("ingest");
+    },
+  );
+
+  const receiptText = `.
+🔵 خریدار : تست خریدار
+🔴 فروشنده : تست فروشنده
+✅ تعداد: 1 قیمت: 112٬000٬000 ✅
+⏱️ ساعت: 10:00:00 1405/07/21
+🔖 شماره حواله: 1234`;
+
+  // First call: trade does NOT exist -> should not complete
+  tradeExists = false;
+  await coordinator.onMessage("session-a", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 20,
+    text: receiptText,
+    date: new Date(),
+  });
+  assert.deepEqual(steps, ["observe", "ingest"]);
+
+  // Second call: trade exists -> should complete
+  tradeExists = true;
+  await coordinator.onMessage("session-a", 1, {
+    chatId: -1001,
+    senderId: "55",
+    messageId: 21,
+    text: receiptText,
+    date: new Date(),
+  });
+  assert.deepEqual(steps, [
+    "observe",
+    "ingest",
+    "observe",
+    "ingest",
+    "complete",
+  ]);
+});
+
+test("settlement recovery self-heals missing trades from observation interval before applying settlement", async () => {
+  const steps: string[] = [];
+  let tradeRecorded = false;
+  let unresolvedCount = 1;
+
+  const store = {
+    beginFinancialRecovery: async () => 1,
+    completeFinancialRecovery: async () => true,
+    observeFinancialMessage: async () => undefined,
+    ingestionState: async () => ({
+      appliedThroughMessageId: 100,
+      scannedThroughMessageId: 500,
+    }),
+    markHistoryScanned: async () => undefined,
+    pendingSettlements: async () => [
+      {
+        chatId: -1001n,
+        sourceMessageId: 300,
+        senderId: "77",
+        compactPrice: 112000,
+        status: "RECEIVED",
+        isBootstrap: false,
+        reviewReason: null,
+      },
+    ],
+    unprocessedFinancialMessages: async () => [],
+    coverageEvidence: async () => ({
+      digest: "digest-1",
+      unresolvedCount,
+      observationCount: 1,
+      tradeCount: tradeRecorded ? 1 : 0,
+    }),
+    financialMessagesInInterval: async () => [
+      {
+        chatId: -1001n,
+        sourceMessageId: 200,
+        senderId: "55",
+        rawText: `.
+🔵 خریدار : علی
+🔴 فروشنده : رضا
+✅ تعداد: 1 قیمت: 112٬000٬000 ✅
+⏱️ ساعت: 10:00:00 1405/07/21
+🔖 شماره حواله: 5555`,
+        receivedAt: new Date(),
+        payloadHash: "hash-1",
+      },
+    ],
+    normalTradeExists: async () => tradeRecorded,
+    completeFinancialMessage: async () => {
+      steps.push("complete-healed-message");
+    },
+    applySettlement: async () => {
+      steps.push("apply-settlement");
+    },
+  } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[0];
+
+  const coordinator = createFinancialIngestionCoordinator(
+    store,
+    {
+      latestMessageId: async () => 500,
+      history: async () => [],
+    } as unknown as Parameters<typeof createFinancialIngestionCoordinator>[1],
+    {
+      groupId: -1001,
+      quoteSenderId: "55",
+      settlementSenderId: "77",
+      settlementEnabled: true,
+    },
+    async (_userId, _rev, event) => {
+      steps.push(`ingest-${event.messageId}`);
+      tradeRecorded = true;
+      unresolvedCount = 0;
+    },
+  );
+
+  await coordinator.recover("session-a", 1);
+
+  assert.deepEqual(steps, [
+    "ingest-200",
+    "complete-healed-message",
+    "apply-settlement",
+  ]);
+});

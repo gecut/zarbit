@@ -145,13 +145,14 @@ export function createFinancialIngestionCoordinator(
       event.messageId,
       payloadHash,
     );
-    if (
+    const canComplete =
       !flagged &&
-      (!state ||
-        event.messageId > state.appliedThroughMessageId ||
-        (receipt &&
-          (await store.normalTradeExists(event.chatId, event.messageId))))
-    ) {
+      (!state || event.messageId > state.appliedThroughMessageId) &&
+      (!receipt ||
+        (store.normalTradeExists
+          ? await store.normalTradeExists(event.chatId, event.messageId)
+          : true));
+    if (canComplete) {
       await store.completeFinancialMessage(
         event.chatId,
         event.messageId,
@@ -352,11 +353,66 @@ export function createFinancialIngestionCoordinator(
         );
         let appliedAutomatically = false;
         if (store.coverageEvidence && store.applySettlement) {
-          const evidence = await store.coverageEvidence(
+          let evidence = await store.coverageEvidence(
             config.groupId,
             after,
             settlement.sourceMessageId,
           );
+          if (
+            evidence.unresolvedCount > 0 &&
+            store.financialMessagesInInterval
+          ) {
+            const observations = await store.financialMessagesInInterval(
+              config.groupId,
+              after,
+              settlement.sourceMessageId,
+            );
+            let healedAny = false;
+            for (const obs of observations) {
+              if (!obs.rawText) continue;
+              const isReceipt =
+                obs.senderId === config.quoteSenderId &&
+                parseTradeReceipt(obs.rawText).status === "parsed";
+              if (isReceipt) {
+                const tradeExists = store.normalTradeExists
+                  ? await store.normalTradeExists(
+                      config.groupId,
+                      obs.sourceMessageId,
+                    )
+                  : false;
+                if (!tradeExists) {
+                  await ingest(userId, revision, {
+                    chatId: config.groupId,
+                    senderId: obs.senderId,
+                    messageId: obs.sourceMessageId,
+                    text: obs.rawText,
+                    date: obs.receivedAt,
+                  });
+                  if (
+                    store.normalTradeExists &&
+                    (await store.normalTradeExists(
+                      config.groupId,
+                      obs.sourceMessageId,
+                    ))
+                  ) {
+                    await store.completeFinancialMessage(
+                      config.groupId,
+                      obs.sourceMessageId,
+                      obs.payloadHash,
+                    );
+                    healedAny = true;
+                  }
+                }
+              }
+            }
+            if (healedAny) {
+              evidence = await store.coverageEvidence(
+                config.groupId,
+                after,
+                settlement.sourceMessageId,
+              );
+            }
+          }
           if (evidence.unresolvedCount === 0) {
             await store.applySettlement(
               config.groupId,
